@@ -10,7 +10,7 @@ import {
   FaArrowRight
 } from 'react-icons/fa';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 const PartDaftarKegiatan = () => {
   const [kegiatanList, setKegiatanList] = useState([]);
@@ -56,7 +56,7 @@ const PartDaftarKegiatan = () => {
         if (storedUser) {
           const user = JSON.parse(storedUser);
           try {
-            const resMitra = await axios.get(`${API_URL}/api/mitra/un/user/${user.id}`);
+            const resMitra = await axios.get(`${API_URL}/api/mitra/un/users/${user.id}`);
             const myMitra = resMitra.data;
             if (myMitra) {
               setMitraData(myMitra);

@@ -41,7 +41,7 @@ const EditUser = () => {
             try {
                 setLoading(true);
                 const response = await axios.get(
-                    `http://localhost:3000/api/users/${id}`, 
+                    `http://127.0.0.1:8000/api/users/${id}`, 
                     { headers: { 'Authorization': `Bearer ${token}` } }
                 );
 
@@ -80,7 +80,7 @@ const EditUser = () => {
 
         try {
             await axios.put(
-                `http://localhost:3000/api/users/${id}`, 
+                `http://127.0.0.1:8000/api/users/${id}`, 
                 updateData,
                 { headers: { 'Authorization': `Bearer ${token}` } }
             );

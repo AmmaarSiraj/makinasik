@@ -37,7 +37,7 @@ const AddUser = () => {
 
     try {
       await axios.post(
-        'http://localhost:3000/api/users/register', 
+        'http://127.0.0.1:8000/api/users/register', 
         {
           username,
           email,

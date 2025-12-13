@@ -5,7 +5,7 @@ import { FaCalendarAlt, FaSave, FaTrash, FaCheck } from 'react-icons/fa';
 import Swal from 'sweetalert2';
 import PartManageHonor from './PartManageHonor';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 const PartEditSubKegiatan = ({ sub, onDelete, onUpdateSuccess }) => {
   // State lokal untuk form edit info

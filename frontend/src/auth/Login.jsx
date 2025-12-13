@@ -14,8 +14,14 @@ const Login = () => {
 
     try {
       const response = await axios.post(
-        'http://localhost:3000/api/users/login',
-        { email, password }
+        'http://127.0.0.1:8000/api/users/login',
+        { email, password },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json', // <--- PENTING! Mencegah redirect ke 404 saat error validasi
+          }
+        }
       );
 
       const { token, user } = response.data;

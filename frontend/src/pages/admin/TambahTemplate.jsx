@@ -4,7 +4,7 @@ import axios from 'axios';
 import Swal from 'sweetalert2';
 import { FaSave, FaArrowLeft, FaPlus, FaTrash, FaCopy, FaFileAlt, FaInfoCircle, FaTable, FaTimes } from 'react-icons/fa';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 const VARIABLES = [
   { code: '{{NAMA_MITRA}}', desc: 'Nama Lengkap Mitra' },

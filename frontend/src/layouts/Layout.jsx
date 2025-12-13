@@ -4,7 +4,7 @@ import Footer from '../components/Footer';
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 const Layout = () => {
   const location = useLocation();
@@ -29,7 +29,7 @@ const Layout = () => {
 
         if (user && user.role === 'user') {
           try {
-            await axios.get(`${API_URL}/api/mitra/un/user/${user.id}`);
+            await axios.get(`${API_URL}/api/mitra/un/users/${user.id}`);
             setShowProfileAlert(false);
             return; 
           } catch (mitraErr) {
@@ -40,7 +40,7 @@ const Layout = () => {
 
           try {
             const pengajuanRes = await axios.get(
-              `${API_URL}/api/manajemen-mitra/user/${user.id}`
+              `${API_URL}/api/manajemen-mitra/users/${user.id}`
             );
             
             const { status } = pengajuanRes.data;

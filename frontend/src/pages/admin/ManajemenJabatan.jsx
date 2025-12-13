@@ -20,7 +20,7 @@ const ManajemenJabatan = () => {
     try {
       setLoading(true);
       // Endpoint sesuai backend
-      const response = await axios.get('http://localhost:3000/api/jabatan-mitra');
+      const response = await axios.get('http://127.0.0.1:8000/api/jabatan-mitra');
       setJabatanList(response.data);
       setLoading(false);
     } catch (err) {
@@ -46,7 +46,7 @@ const ManajemenJabatan = () => {
     }
 
     try {
-      await axios.post('http://localhost:3000/api/jabatan-mitra', formData);
+      await axios.post('http://127.0.0.1:8000/api/jabatan-mitra', formData);
       setSuccess('Jabatan berhasil ditambahkan.');
       setFormData({ kode_jabatan: '', nama_jabatan: '' }); // Reset form
       fetchJabatan(); // Refresh tabel
@@ -61,7 +61,7 @@ const ManajemenJabatan = () => {
     if (!window.confirm(`Apakah Anda yakin ingin menghapus jabatan dengan kode ${kode}?`)) return;
 
     try {
-      await axios.delete(`http://localhost:3000/api/jabatan-mitra/${kode}`);
+      await axios.delete(`http://127.0.0.1:8000/api/jabatan-mitra/${kode}`);
       setSuccess('Jabatan berhasil dihapus.');
       fetchJabatan();
     } catch (err) {

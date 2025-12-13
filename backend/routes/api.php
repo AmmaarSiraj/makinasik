@@ -21,7 +21,7 @@ use App\Http\Controllers\MasterTemplateSPKController;
 use App\Http\Controllers\TemplateBagianTeksController;
 use App\Http\Controllers\TemplatePasalController;
 
-Route::get('/user', function (Request $request) {
+Route::get('/users', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
 
@@ -29,7 +29,7 @@ Route::get('/test', function () {
     return response()->json(['message' => 'Backend Laravel Berhasil Terhubung!']);
 });
 
-Route::post('/login', [AuthController::class, 'login']);
+Route::post('/users/login', [AuthController::class, 'login']);
 
 
 // --- PROTECTED ROUTES (Harus login / punya Token) ---

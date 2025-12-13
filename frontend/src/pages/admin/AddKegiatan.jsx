@@ -6,7 +6,7 @@ import Swal from 'sweetalert2';
 import PartSubKegiatan from '../../components/admin/PartSubKegiatan';
 import { FaArrowLeft, FaPlus, FaCheck, FaLayerGroup, FaArrowRight } from 'react-icons/fa';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 const AddKegiatan = () => {
   const navigate = useNavigate();

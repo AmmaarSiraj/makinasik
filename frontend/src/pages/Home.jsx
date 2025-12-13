@@ -5,7 +5,7 @@ import { FaChartLine, FaUsers, FaClipboardList, FaArrowDown, FaUserCheck } from 
 import PartDaftarKegiatan from '../components/PartDaftarKegiatan';
 import Footer from '../components/Footer';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 const Home = () => {
   // State untuk menyimpan data statistik
