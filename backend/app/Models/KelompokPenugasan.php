@@ -42,7 +42,7 @@ class KelompokPenugasan extends Model
     {
         // return $this->belongsTo(Mitra::class, 'id_mitra', 'id');
         // SEMENTARA asumsi ke User jika belum ada model Mitra
-         return $this->belongsTo(User::class, 'id_mitra', 'id');
+        return $this->belongsTo(Mitra::class, 'id_mitra', 'id');
     }
 
     public function jabatan()

@@ -13,7 +13,7 @@ return new class extends Migration
             
             // Relasi ke tabel users
             $table->foreignId('user_id')
-                  ->constrained('users') // Pastikan nama tabel user Anda 'users'
+                  ->constrained('mitra')
                   ->onDelete('cascade'); 
 
             $table->string('tahun', 4);

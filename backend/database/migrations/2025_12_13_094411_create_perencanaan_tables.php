@@ -21,7 +21,7 @@ return new class extends Migration
 
             // Relasi ke Pengawas (User)
             $table->foreignId('id_pengawas')
-                  ->constrained('users')
+                  ->constrained('user')
                   ->onDelete('cascade');
 
             $table->timestamps();

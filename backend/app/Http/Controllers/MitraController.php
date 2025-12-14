@@ -3,64 +3,110 @@
 namespace App\Http\Controllers;
 
 use App\Models\Mitra;
+use App\Models\TahunAktif;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class MitraController extends Controller
 {
     /**
-     * Tampilkan semua data mitra
+     * 1. GET ALL MITRA
      */
     public function index(Request $request)
     {
-        // Bisa tambah fitur pencarian by Nama/NIK
         $query = Mitra::query();
 
-        if ($request->has('search')) {
+        if ($request->has('search') && $request->search != '') {
             $search = $request->search;
-            $query->where('nama_lengkap', 'like', "%{$search}%")
+            $query->where(function($q) use ($search) {
+                $q->where('nama_lengkap', 'like', "%{$search}%")
                   ->orWhere('nik', 'like', "%{$search}%")
                   ->orWhere('sobat_id', 'like', "%{$search}%");
+            });
         }
 
-        $data = $query->orderBy('nama_lengkap', 'asc')->get();
+        $mitra = $query->orderBy('nama_lengkap', 'asc')->get();
+
+        $mitra->map(function ($item) {
+            $years = TahunAktif::where('user_id', $item->id)
+                        ->orderBy('tahun', 'desc')
+                        ->pluck('tahun')
+                        ->toArray();
+            
+            $item->riwayat_tahun = implode(', ', $years);
+            return $item;
+        });
 
         return response()->json([
             'status' => 'success',
-            'data' => $data
+            'data' => $mitra
         ]);
     }
 
     /**
-     * Tambah Mitra Baru
+     * 2. TAMBAH MITRA MANUAL
      */
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'nama_lengkap' => 'required|string|max:255',
-            'nik'          => 'required|string|max:50|unique:mitra,nik',
-            'sobat_id'     => 'nullable|string|max:50',
-            'email'        => 'nullable|email|max:100',
-            'nomor_hp'     => 'nullable|string|max:20',
-            'jenis_kelamin'=> 'nullable|in:L,P',
-            // Field lain opsional, tidak perlu validasi ketat
+            'nik'          => 'required|string|max:50',
+            'nomor_hp'     => 'required|string|max:20',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $mitra = Mitra::create($request->all());
+        $targetYear = $request->input('tahun_daftar', date('Y'));
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Mitra berhasil ditambahkan',
-            'data' => $mitra
-        ], 201);
+        DB::beginTransaction();
+        try {
+            $mitra = Mitra::updateOrCreate(
+                ['nik' => $request->nik],
+                [
+                    'nama_lengkap' => $request->nama_lengkap,
+                    'sobat_id'     => $request->sobat_id,
+                    'alamat'       => $request->alamat,
+                    'jenis_kelamin'=> $request->jenis_kelamin,
+                    'pendidikan'   => $request->pendidikan,
+                    'pekerjaan'    => $request->pekerjaan,
+                    'deskripsi_pekerjaan_lain' => $request->deskripsi_pekerjaan_lain,
+                    'nomor_hp'     => $request->nomor_hp,
+                    'email'        => $request->email,
+                ]
+            );
+
+            $isActive = TahunAktif::where('user_id', $mitra->id)
+                                  ->where('tahun', $targetYear)
+                                  ->exists();
+
+            if (!$isActive) {
+                TahunAktif::create([
+                    'user_id' => $mitra->id,
+                    'tahun'   => $targetYear,
+                    'status'  => 'aktif'
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Mitra berhasil disimpan dan diaktifkan.',
+                'data' => $mitra
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
     }
 
     /**
-     * Detail Mitra
+     * 3. DETAIL MITRA
      */
     public function show($id)
     {
@@ -70,28 +116,24 @@ class MitraController extends Controller
             return response()->json(['message' => 'Mitra tidak ditemukan'], 404);
         }
 
+        $mitra->list_tahun_aktif = TahunAktif::where('user_id', $id)
+                                            ->orderBy('tahun', 'desc')
+                                            ->get();
+
         return response()->json(['status' => 'success', 'data' => $mitra]);
     }
 
     /**
-     * Update Mitra
+     * 4. UPDATE PROFIL
      */
     public function update(Request $request, $id)
     {
         $mitra = Mitra::find($id);
-
-        if (!$mitra) {
-            return response()->json(['message' => 'Mitra tidak ditemukan'], 404);
-        }
+        if (!$mitra) return response()->json(['message' => 'Mitra tidak ditemukan'], 404);
 
         $validator = Validator::make($request->all(), [
             'nama_lengkap' => 'required|string|max:255',
-            // Unique tapi abaikan ID diri sendiri
             'nik'          => 'required|string|max:50|unique:mitra,nik,'.$id,
-            'sobat_id'     => 'nullable|string|max:50',
-            'email'        => 'nullable|email|max:100',
-            'nomor_hp'     => 'nullable|string|max:20',
-            'jenis_kelamin'=> 'nullable|in:L,P',
         ]);
 
         if ($validator->fails()) {
@@ -102,29 +144,162 @@ class MitraController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Data mitra berhasil diperbarui',
+            'message' => 'Data profil diperbarui',
             'data' => $mitra
         ]);
     }
 
     /**
-     * Hapus Mitra
+     * 5. DELETE
      */
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
         $mitra = Mitra::find($id);
+        if (!$mitra) return response()->json(['message' => 'Mitra tidak ditemukan'], 404);
 
-        if (!$mitra) {
-            return response()->json(['message' => 'Mitra tidak ditemukan'], 404);
+        $tahunTarget = $request->query('tahun');
+
+        DB::beginTransaction();
+        try {
+            $count = TahunAktif::where('user_id', $id)->count();
+
+            if ($count > 1 && $tahunTarget) {
+                TahunAktif::where('user_id', $id)->where('tahun', $tahunTarget)->delete();
+                $msg = "Status aktif tahun {$tahunTarget} berhasil dihapus.";
+            } else {
+                $mitra->delete();
+                $msg = "Data mitra dihapus permanen.";
+            }
+
+            DB::commit();
+            return response()->json(['status' => 'success', 'message' => $msg]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 6. IMPORT EXCEL
+     */
+    public function import(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'file' => 'required|mimes:xlsx,xls,csv',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // Hati-hati: Jika ada relasi CASCADE di database, 
-        // menghapus mitra akan menghapus dia dari semua kelompok_penugasan
-        $mitra->delete();
+        $file = $request->file('file');
+        $currentYear = $request->input('tahun_daftar', date('Y'));
+        
+        $successCount = 0;
+        $skipCount = 0;
+        $failCount = 0;
+        $errors = [];
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Mitra berhasil dihapus'
-        ]);
+        DB::beginTransaction();
+
+        try {
+            $spreadsheet = IOFactory::load($file->getPathname());
+            $sheet = $spreadsheet->getActiveSheet();
+            $rows = $sheet->toArray();
+
+            $header = array_map(function($h) { return trim(strtolower($h)); }, array_shift($rows)); 
+            
+            $colMap = [
+                'nama' => $this->findHeaderIndex($header, ['nama lengkap', 'nama']),
+                'nik'  => $this->findHeaderIndex($header, ['nik']),
+                'sobat' => $this->findHeaderIndex($header, ['sobat id', 'sobat_id']),
+                'alamat' => $this->findHeaderIndex($header, ['alamat detail', 'alamat']),
+                'hp' => $this->findHeaderIndex($header, ['no telp', 'no hp', 'nomor hp', 'no_hp']),
+                'email' => $this->findHeaderIndex($header, ['email']),
+                'jk' => $this->findHeaderIndex($header, ['jenis kelamin', 'jk']),
+                'pend' => $this->findHeaderIndex($header, ['pendidikan']),
+                'job' => $this->findHeaderIndex($header, ['pekerjaan']),
+                'desc' => $this->findHeaderIndex($header, ['deskripsi pekerjaan lain']),
+            ];
+
+            foreach ($rows as $index => $row) {
+                $rowNumber = $index + 2;
+                $nama = $this->getValue($row, $colMap['nama']);
+                $rawNik = $this->getValue($row, $colMap['nik']);
+                $nik = $rawNik ? trim(str_replace("'", "", (string)$rawNik)) : '';
+
+                if (empty($nama) || empty($nik)) {
+                    if (empty(implode('', $row))) continue;
+                    $failCount++;
+                    $errors[] = "Baris {$rowNumber}: Nama atau NIK kosong.";
+                    continue;
+                }
+
+                try {
+                    $mitra = Mitra::updateOrCreate(
+                        ['nik' => $nik],
+                        [
+                            'nama_lengkap' => $nama,
+                            'sobat_id' => $this->getValue($row, $colMap['sobat']),
+                            'alamat' => $this->getValue($row, $colMap['alamat']),
+                            'nomor_hp' => $this->getValue($row, $colMap['hp']),
+                            'email' => $this->getValue($row, $colMap['email']),
+                            'jenis_kelamin' => $this->getValue($row, $colMap['jk']),
+                            'pendidikan' => $this->getValue($row, $colMap['pend']),
+                            'pekerjaan' => $this->getValue($row, $colMap['job']),
+                            'deskripsi_pekerjaan_lain' => $this->getValue($row, $colMap['desc']),
+                        ]
+                    );
+
+                    $isActive = TahunAktif::where('user_id', $mitra->id)
+                                          ->where('tahun', $currentYear)
+                                          ->exists();
+
+                    if ($isActive) {
+                        $skipCount++;
+                    } else {
+                        TahunAktif::create([
+                            'user_id' => $mitra->id,
+                            'tahun' => $currentYear,
+                            'status' => 'aktif'
+                        ]);
+                        $successCount++;
+                    }
+
+                } catch (\Exception $e) {
+                    $failCount++;
+                    $errors[] = "Baris {$rowNumber} ({$nama}): " . $e->getMessage();
+                }
+            }
+
+            DB::commit();
+
+            // JSON RESPONSE DIPERBAIKI (camelCase)
+            return response()->json([
+                'status' => 'success',
+                'message' => "Import Selesai (Tahun {$currentYear}).",
+                'successCount' => $successCount, 
+                'skipCount' => $skipCount,
+                'failCount' => $failCount,
+                'errors' => $errors
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['status'=>'error', 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    // --- Helpers ---
+    private function findHeaderIndex($headers, $keywords) {
+        foreach ($headers as $index => $header) {
+            if (in_array($header, $keywords)) return $index;
+        }
+        return -1;
+    }
+
+    private function getValue($row, $index) {
+        return ($index >= 0 && isset($row[$index])) ? trim($row[$index]) : null;
     }
 }

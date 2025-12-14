@@ -4,89 +4,72 @@ namespace App\Http\Controllers;
 
 use App\Models\KelompokPenugasan;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 
 class KelompokPenugasanController extends Controller
 {
+    // GET: Ambil semua data kelompok penugasan (Flattened untuk Frontend)
     public function index()
     {
-        $data = KelompokPenugasan::with(['mitra', 'jabatan', 'penugasan'])->latest()->get();
-        return response()->json(['status' => 'success', 'data' => $data]);
+        // Load relasi yang diperlukan
+        // Pastikan Model KelompokPenugasan memiliki method: mitra(), penugasan(), jabatan()
+        $data = KelompokPenugasan::with([
+                    'mitra', 
+                    'penugasan.subkegiatan.kegiatan', 
+                    'penugasan.pengawas',
+                    'jabatan' // Relasi ke JabatanMitra (jika ada di model)
+                ])
+                ->latest()
+                ->get();
+
+        // Transformasi data agar 'flat' sesuai kebutuhan Frontend React
+        $formatted = $data->map(function($item) {
+            return [
+                'id_kelompok'       => $item->id,
+                'id_penugasan'      => $item->id_penugasan,
+                
+                // DATA MITRA (PENTING: Frontend mencari 'nama_lengkap' atau 'nama_mitra')
+                'id_mitra'          => $item->id_mitra,
+                'nama_mitra'        => $item->mitra ? $item->mitra->nama_lengkap : 'Mitra Terhapus',
+                'nama_lengkap'      => $item->mitra ? $item->mitra->nama_lengkap : 'Mitra Terhapus',
+                'nik_mitra'         => $item->mitra ? $item->mitra->nik : '-',
+                
+                // Data Jabatan & Tugas
+                'kode_jabatan'      => $item->kode_jabatan,
+                'nama_jabatan'      => $item->jabatan ? $item->jabatan->nama_jabatan : ($item->kode_jabatan ?? '-'),
+                'volume_tugas'      => $item->volume_tugas,
+                
+                // Data Parent (Info Kegiatan untuk konteks)
+                'nama_sub_kegiatan' => $item->penugasan && $item->penugasan->subkegiatan ? $item->penugasan->subkegiatan->nama_sub_kegiatan : '-',
+                'nama_kegiatan'     => $item->penugasan && $item->penugasan->subkegiatan && $item->penugasan->subkegiatan->kegiatan 
+                                        ? $item->penugasan->subkegiatan->kegiatan->nama_kegiatan 
+                                        : '-',
+                'nama_pengawas'     => $item->penugasan && $item->penugasan->pengawas ? $item->penugasan->pengawas->username : '-',
+            ];
+        });
+
+        return response()->json(['status' => 'success', 'data' => $formatted]);
     }
 
-    public function store(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'id_penugasan' => 'required|exists:penugasan,id',
-            'id_mitra'     => 'required|exists:mitra,id',
-            'kode_jabatan' => 'required|exists:jabatan_mitra,kode_jabatan',
-            'volume_tugas' => 'required|integer|min:0',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
-        $exists = KelompokPenugasan::where('id_penugasan', $request->id_penugasan)
-                                   ->where('id_mitra', $request->id_mitra)
-                                   ->exists();
-        
-        if ($exists) {
-            return response()->json(['message' => 'Mitra ini sudah ada di dalam tim penugasan tersebut'], 422);
-        }
-
-        $anggota = KelompokPenugasan::create($request->all());
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Mitra berhasil ditambahkan ke penugasan',
-            'data' => $anggota
-        ], 201);
-    }
-
-    public function show($id)
-    {
-        $data = KelompokPenugasan::with(['mitra', 'jabatan', 'penugasan'])->find($id);
-
-        if (!$data) {
-            return response()->json(['message' => 'Data anggota tidak ditemukan'], 404);
-        }
-
-        return response()->json(['status' => 'success', 'data' => $data]);
-    }
-
+    // Update Kelompok Penugasan (Misal: Edit Volume / Jabatan)
     public function update(Request $request, $id)
     {
-        $anggota = KelompokPenugasan::find($id);
-        if (!$anggota) return response()->json(['message' => 'Data tidak ditemukan'], 404);
+        $kp = KelompokPenugasan::find($id);
+        if (!$kp) return response()->json(['message' => 'Data tidak ditemukan'], 404);
 
-        $validator = Validator::make($request->all(), [
-            'kode_jabatan' => 'sometimes|exists:jabatan_mitra,kode_jabatan',
-            'volume_tugas' => 'sometimes|integer|min:0',
-        ]);
+        $kp->update($request->only(['kode_jabatan', 'volume_tugas']));
 
-        if ($validator->fails()) return response()->json(['errors' => $validator->errors()], 422);
-
-        $anggota->update($request->only(['kode_jabatan', 'volume_tugas']));
-
-        return response()->json(['status' => 'success', 'message' => 'Data anggota diperbarui', 'data' => $anggota]);
+        return response()->json(['status' => 'success', 'message' => 'Data berhasil diperbarui']);
     }
 
+    // Hapus Mitra dari Penugasan
     public function destroy($id)
     {
-        $anggota = KelompokPenugasan::find($id);
-        if (!$anggota) return response()->json(['message' => 'Data tidak ditemukan'], 404);
+        $kp = KelompokPenugasan::find($id);
+        if (!$kp) return response()->json(['message' => 'Data tidak ditemukan'], 404);
 
-        $anggota->delete();
-        return response()->json(['status' => 'success', 'message' => 'Mitra dihapus dari penugasan']);
-    }
+        $kp->delete();
 
-    public function getByPenugasan($idPenugasan)
-    {
-        $data = KelompokPenugasan::where('id_penugasan', $idPenugasan)
-                                 ->with(['mitra', 'jabatan'])
-                                 ->get();
-
-        return response()->json(['status' => 'success', 'data' => $data]);
+        return response()->json(['status' => 'success', 'message' => 'Mitra berhasil dihapus dari penugasan.']);
     }
 }

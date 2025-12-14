@@ -25,7 +25,7 @@ const AddMitra = () => {
     nik: '',
     sobat_id: '',
     alamat: '',
-    no_hp: '',
+    nomor_hp: '',
     email: '',
     jenis_kelamin: '',
     pendidikan: '',
@@ -54,7 +54,7 @@ const AddMitra = () => {
     e.preventDefault();
     setLoading(true);
 
-    if (!formData.nama_lengkap || !formData.nik || !formData.no_hp || !formData.tahun_daftar) {
+    if (!formData.nama_lengkap || !formData.nik || !formData.nomor_hp || !formData.tahun_daftar) {
         setLoading(false);
         return Swal.fire('Gagal', 'Nama Lengkap, NIK, No HP, dan Tahun wajib diisi.', 'warning');
     }
@@ -246,10 +246,10 @@ const AddMitra = () => {
                         <div className="relative">
                             <span className="absolute left-3 top-3 text-gray-400"><FaPhone /></span>
                             <input 
-                                type="text" name="no_hp" 
+                                type="text" name="nomor_hp" 
                                 className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1A2A80] outline-none transition"
                                 placeholder="0812..."
-                                value={formData.no_hp} onChange={handleChange} required
+                                value={formData.nomor_hp} onChange={handleChange} required
                             />
                         </div>
                     </div>

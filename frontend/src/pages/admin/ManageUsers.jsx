@@ -2,14 +2,14 @@
 import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import Swal from 'sweetalert2'; // 1. IMPORT SWEETALERT2
-// 1. IMPORT ICON
+import Swal from 'sweetalert2'; 
 import { FaDownload, FaFileUpload, FaPlus, FaEdit, FaTrash } from 'react-icons/fa';
 
 const API_URL = 'http://127.0.0.1:8000/api';
 const getToken = () => localStorage.getItem('token');
 
 const ManageUsers = () => {
+    // 1. STATE MANAGEMENT
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
@@ -17,6 +17,7 @@ const ManageUsers = () => {
     const navigate = useNavigate();
     const fileInputRef = useRef(null);
 
+    // 2. FETCH USERS (READ)
     const fetchUsers = async () => {
         setLoading(true);
         setError(null);
@@ -25,7 +26,16 @@ const ManageUsers = () => {
             const response = await axios.get(`${API_URL}/users`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
-            setUsers(response.data);
+
+            // Perbaikan Logika Data: Ambil dari response.data.data
+            const fetchedData = response.data.data || response.data;
+            
+            if (Array.isArray(fetchedData)) {
+                setUsers(fetchedData);
+            } else {
+                setUsers([]);
+            }
+            
         } catch (err) {
             console.error(err);
             if (err.response && err.response.status === 401) {
@@ -39,18 +49,17 @@ const ManageUsers = () => {
         }
     };
 
-    // 2. FUNGSI DELETE DENGAN POPUP SWEETALERT
+    // 3. DELETE USER
     const handleDelete = async (id) => {
         const result = await Swal.fire({
             title: 'Apakah Anda yakin?',
             text: "Data pengguna ini akan dihapus permanen!",
             icon: 'warning',
             showCancelButton: true,
-            
-            // --- PENGATURAN POSISI & WARNA ---
-            reverseButtons: true, // INI YANG MEMBUAT TOMBOL HAPUS PINDAH KE KANAN
-            confirmButtonColor: '#d33', // Merah untuk Hapus
-            cancelButtonColor: '#3085d6', // Biru untuk Batal
+            // Style Asli (Tombol Hapus di Kanan)
+            reverseButtons: true, 
+            confirmButtonColor: '#d33', 
+            cancelButtonColor: '#3085d6', 
             confirmButtonText: 'Ya, Hapus!',
             cancelButtonText: 'Batal'
         });
@@ -62,44 +71,58 @@ const ManageUsers = () => {
                     headers: { Authorization: `Bearer ${token}` },
                 });
                 
-                await Swal.fire(
-                    'Terhapus!',
-                    'Data pengguna berhasil dihapus.',
-                    'success'
-                );
-                
-                fetchUsers();
+                await Swal.fire('Terhapus!', 'Data pengguna berhasil dihapus.', 'success');
+                fetchUsers(); // Refresh data
             } catch (err) {
-                Swal.fire(
-                    'Gagal!',
-                    'Terjadi kesalahan saat menghapus pengguna.',
-                    'error'
-                );
+                Swal.fire('Gagal!', 'Terjadi kesalahan saat menghapus pengguna.', 'error');
             }
         }
     };
 
-    const handleDownloadTemplate = () => {
-        const csvHeader = "username,email,password,role";
-        const csvRows = [
-            "user_satu,user1@gmail.com,rahasia123,user",
-            "admin_baru,admin@gmail.com,admin123,admin",
-            "budi_santoso,budi@yahoo.com,katasandi,user"
-        ];
-        const csvContent = "data:text/csv;charset=utf-8," + csvHeader + "\n" + csvRows.join("\n");
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", "template_import_users.csv");
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+    // 4. DOWNLOAD TEMPLATE EXCEL
+    const handleDownloadTemplate = async () => {
+        try {
+            const token = getToken();
+            setLoading(true); // Opsional: Tampilkan loading jika perlu
+
+            const response = await axios.get(`${API_URL}/users/template`, {
+                headers: { Authorization: `Bearer ${token}` },
+                responseType: 'blob', // <--- PENTING: Agar dibaca sebagai file binary
+            });
+
+            // Membuat link virtual untuk men-trigger download
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            
+            // Nama file saat didownload user
+            link.setAttribute('download', 'template_import_users.xlsx'); 
+            
+            document.body.appendChild(link);
+            link.click();
+            
+            // Bersihkan memori
+            link.parentNode.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            
+            setLoading(false);
+
+        } catch (err) {
+            console.error(err);
+            setLoading(false);
+            Swal.fire(
+                'Gagal!', 
+                'Gagal mendownload template dari server. Pastikan file tersedia.', 
+                'error'
+            );
+        }
     };
 
     const handleImportClick = () => {
         fileInputRef.current.click();
     };
 
+    // 5. IMPORT FILE (EXCEL/CSV)
     const handleFileChange = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -110,6 +133,7 @@ const ManageUsers = () => {
         setUploading(true);
         try {
             const token = getToken();
+            // Endpoint import yang baru ditambahkan
             const response = await axios.post(`${API_URL}/users/import`, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
@@ -119,7 +143,7 @@ const ManageUsers = () => {
 
             const { successCount, failCount, errors } = response.data;
             
-            // Gunakan Swal untuk notifikasi import juga agar konsisten
+            // Format Pesan Notifikasi
             let msgHTML = `<b>Sukses:</b> ${successCount}<br/><b>Gagal:</b> ${failCount}`;
             if (errors && errors.length > 0) {
                 msgHTML += `<br/><br/><div style="text-align:left; max-height:100px; overflow-y:auto; font-size:12px; background:#f9f9f9; padding:5px;">${errors.slice(0, 3).join('<br/>')}${errors.length > 3 ? '<br/>...' : ''}</div>`;
@@ -131,14 +155,14 @@ const ManageUsers = () => {
                 icon: failCount > 0 ? 'warning' : 'success'
             });
 
-            fetchUsers();
+            fetchUsers(); // Refresh tabel setelah import
 
         } catch (err) {
             console.error(err);
             Swal.fire('Error', err.response?.data?.message || "Gagal import user.", 'error');
         } finally {
             setUploading(false);
-            e.target.value = null;
+            e.target.value = null; // Reset input file
         }
     };
 
@@ -146,6 +170,7 @@ const ManageUsers = () => {
         fetchUsers();
     }, []);
 
+    // Helper: Format Tanggal
     const formatDate = (dateString) => {
         if (!dateString) return '';
         return new Date(dateString).toLocaleDateString('id-ID', {
@@ -158,7 +183,14 @@ const ManageUsers = () => {
 
     return (
         <div className="w-full">
-            <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv, .xlsx, .xls" className="hidden" />
+            {/* Input File Tersembunyi (Support Excel & CSV) */}
+            <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileChange} 
+                accept=".csv, .xlsx, .xls" 
+                className="hidden" 
+            />
 
             {/* Header Actions */}
             <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
@@ -171,7 +203,7 @@ const ManageUsers = () => {
                         onClick={handleDownloadTemplate}
                         className="flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 transition shadow-sm"
                     >
-                        <FaDownload /> Template CSV
+                        <FaDownload /> Template Excel
                     </button>
                     <button 
                         onClick={handleImportClick}
@@ -189,7 +221,7 @@ const ManageUsers = () => {
                 </div>
             </div>
 
-            {/* Tabel */}
+            {/* Tabel Data User */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">

@@ -21,12 +21,10 @@ const ManajemenMitra = () => {
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState(null);
   
-  // --- STATE TAHUN DINAMIS ---
   const currentYear = new Date().getFullYear();
   const [importYear, setImportYear] = useState(currentYear);
   const [showYearDropdown, setShowYearDropdown] = useState(false);
   
-  // Ref untuk elemen tahun terpilih di dalam list
   const selectedYearRef = useRef(null);
 
   const yearsRange = Array.from({ length: 101 }, (_, i) => currentYear - 50 + i);
@@ -43,7 +41,13 @@ const ManajemenMitra = () => {
       const response = await axios.get(`${API_URL}/api/mitra`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setMitraList(response.data);
+      
+      const data = response.data.data || [];
+      if (Array.isArray(data)) {
+        setMitraList(data);
+      } else {
+        setMitraList([]);
+      }
     } catch (err) {
       console.error(err);
       setError("Gagal memuat data mitra.");
@@ -54,7 +58,6 @@ const ManajemenMitra = () => {
 
   useEffect(() => { fetchMitra(); }, []);
 
-  // --- EFEK AUTO SCROLL KE TENGAH (MODAL) ---
   useEffect(() => {
     if (showYearDropdown && selectedYearRef.current) {
       selectedYearRef.current.scrollIntoView({ block: 'center' });
@@ -185,7 +188,7 @@ const ManajemenMitra = () => {
       "Pendidikan": m.pendidikan || '',
       "Pekerjaan": m.pekerjaan || '',
       "Deskripsi Pekerjaan Lain": m.deskripsi_pekerjaan_lain || '',
-      "No Telp": m.no_hp,
+      "No Telp": m.nomor_hp,
       "SOBAT ID": m.sobat_id || '',
       "Email": m.email || ''
     }));
@@ -271,7 +274,6 @@ const ManajemenMitra = () => {
                 </div>
                 <div className="p-6 space-y-6">
                     
-                    {/* --- COMBOBOX TAHUN AKTIF --- */}
                     <div className="relative">
                         <label className="block text-sm font-bold text-gray-700 mb-1">Tahun Aktif</label>
                         <div className="relative">
@@ -286,7 +288,6 @@ const ManajemenMitra = () => {
                             />
                             <FaChevronDown className="absolute right-3 top-3 text-gray-400 pointer-events-none text-xs" />
                             
-                            {/* List Dropdown */}
                             {showYearDropdown && (
                                 <ul className="absolute z-50 w-full bg-white border border-gray-300 mt-1 rounded shadow-lg max-h-48 overflow-y-auto">
                                     {yearsRange.map(year => {
@@ -307,7 +308,6 @@ const ManajemenMitra = () => {
                         </div>
                         <p className="text-xs text-gray-500 mt-1">Data yang diimport akan ditandai aktif pada tahun ini.</p>
                     </div>
-                    {/* --------------------------- */}
 
                     <div onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop} onClick={() => fileInputRef.current.click()} className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center gap-3 ${isDragging ? 'border-green-500 bg-green-50 scale-[1.02]' : 'border-gray-300 hover:border-green-400 hover:bg-gray-50'} ${importFile ? 'bg-green-50/50 border-green-500' : 'bg-white'}`}>
                         <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept=".xlsx, .xls" className="hidden" />

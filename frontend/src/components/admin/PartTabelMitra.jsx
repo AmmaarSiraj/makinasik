@@ -160,7 +160,7 @@ const PartTableMitra = ({ data, onEdit, onDelete, onDetail }) => {
 
                       {/* Kolom Kontak */}
                       <td className="px-6 py-4 text-sm text-gray-900">
-                        <div className="font-bold">{mitra.no_hp}</div>
+                        <div className="font-bold">{mitra.nomor_hp}</div>
                         <div className="text-xs text-gray-400 truncate max-w-[200px]">
                           {mitra.alamat || '-'}
                         </div>

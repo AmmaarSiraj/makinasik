@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-// 1. IMPORT ICON
 import { 
   FaArrowLeft, 
   FaUser, 
@@ -45,10 +44,19 @@ const EditUser = () => {
                     { headers: { 'Authorization': `Bearer ${token}` } }
                 );
 
-                const user = response.data;
-                setUsername(user.username);
-                setEmail(user.email);
-                setRole(user.role);
+                // --- PERBAIKAN DI SINI ---
+                // Respons Laravel: { status: 'success', data: { ...user... } }
+                // Axios membungkusnya dalam .data
+                // Jadi kita butuh: response.data.data
+                const userData = response.data.data;
+
+                if (userData) {
+                    setUsername(userData.username);
+                    setEmail(userData.email);
+                    setRole(userData.role);
+                } else {
+                    setLoadError("Data user tidak ditemukan dalam respons.");
+                }
 
             } catch (err) {
                 console.error("Gagal mengambil data user:", err);
@@ -74,6 +82,7 @@ const EditUser = () => {
             role,
         };
 
+        // Hanya kirim password jika diisi (tidak kosong)
         if (password) {
             updateData.password = password;
         }

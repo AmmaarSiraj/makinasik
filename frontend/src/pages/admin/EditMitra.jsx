@@ -22,7 +22,7 @@ const EditMitra = () => {
     nik: '',
     sobat_id: '',
     alamat: '',
-    no_hp: '',
+    nomor_hp: '',
     email: '',
     jenis_kelamin: '',
     pendidikan: '',
@@ -39,13 +39,15 @@ const EditMitra = () => {
           headers: { Authorization: `Bearer ${token}` }
         });
         
-        const m = res.data;
+        // Ambil data dari .data.data (sesuai struktur backend Laravel)
+        const m = res.data.data || res.data;
+
         setFormData({
             nama_lengkap: m.nama_lengkap || '',
             nik: m.nik || '',
             sobat_id: m.sobat_id || '',
             alamat: m.alamat || '',
-            no_hp: m.no_hp || '',
+            nomor_hp: m.nomor_hp || '',
             email: m.email || '',
             jenis_kelamin: m.jenis_kelamin || '',
             pendidikan: m.pendidikan || '',
@@ -56,6 +58,7 @@ const EditMitra = () => {
       } catch (err) {
         console.error(err);
         Swal.fire('Error', 'Gagal memuat data mitra.', 'error');
+        // REVISI PATH: Kembali ke manajemen-mitra jika error
         navigate('/admin/manajemen-mitra');
       } finally {
         setLoading(false);
@@ -86,8 +89,8 @@ const EditMitra = () => {
         timer: 1500,
         showConfirmButton: false
       }).then(() => {
-         // Opsional: Redirect kembali ke halaman manajemen
-         // navigate('/admin/manajemen-mitra');
+         // REVISI PATH: Redirect ke halaman manajemen mitra yang benar
+         navigate('/admin/manajemen-mitra');
       });
 
     } catch (err) {
@@ -104,6 +107,7 @@ const EditMitra = () => {
     <div className="max-w-4xl mx-auto w-full pb-20">
       
       <div className="flex items-center gap-4 mb-6">
+        {/* REVISI PATH: Link tombol kembali diperbaiki */}
         <Link 
           to="/admin/manajemen-mitra" 
           className="text-gray-500 hover:text-[#1A2A80] transition p-2 rounded-full hover:bg-gray-100"
@@ -146,8 +150,6 @@ const EditMitra = () => {
                             type="text" name="nik" 
                             className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 font-mono" 
                             value={formData.nik} 
-                            // NIK biasanya sebaiknya READONLY saat edit untuk menjaga integritas, 
-                            // tapi jika ingin bisa diedit, hapus properti readOnly di bawah ini.
                             readOnly 
                             title="NIK tidak dapat diubah sembarangan" 
                         />
@@ -163,9 +165,9 @@ const EditMitra = () => {
                     <div className="relative">
                         <span className="absolute left-3 top-3 text-gray-400"><FaPhone size={14}/></span>
                         <input 
-                            type="text" name="no_hp" 
+                            type="text" name="nomor_hp" 
                             className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1A2A80] outline-none transition" 
-                            value={formData.no_hp} onChange={handleChange} 
+                            value={formData.nomor_hp} onChange={handleChange} 
                         />
                     </div>
                 </div>
@@ -271,6 +273,7 @@ const EditMitra = () => {
         </div>
 
         <div className="px-8 py-5 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+            {/* REVISI PATH: Tombol Batal diperbaiki */}
             <button 
                 type="button" 
                 onClick={() => navigate('/admin/manajemen-mitra')}

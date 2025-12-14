@@ -20,6 +20,7 @@ use App\Http\Controllers\SpkSettingController;
 use App\Http\Controllers\MasterTemplateSPKController;
 use App\Http\Controllers\TemplateBagianTeksController;
 use App\Http\Controllers\TemplatePasalController;
+use App\Http\Controllers\TransaksiController;
 
 Route::get('/users', function (Request $request) {
     return $request->user();
@@ -40,7 +41,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/me', [UserController::class, 'me']); // Cek profile sendiri
 
     // Manajemen User
+    Route::post('/users/import', [UserController::class, 'import']);
+    Route::get('/users/template', [UserController::class, 'downloadTemplate']);
     Route::get('/users', [UserController::class, 'index']); // Ambil semua list user
+    Route::post('/users', [UserController::class, 'store']);     // Tambah Baru
+    Route::get('/users/{id}', [UserController::class, 'show']);  // Detail 1 User
+    Route::put('/users/{id}', [UserController::class, 'update']); // Edit User
+    Route::delete('/users/{id}', [UserController::class, 'destroy']);
+    
 
     Route::get('/kegiatan', [KegiatanController::class, 'index']);      // List semua
     Route::post('/kegiatan', [KegiatanController::class, 'store']);     // Buat baru
@@ -82,6 +90,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::put('/aturan-periode/{id}', [AturanPeriodeController::class, 'update']);
     Route::delete('/aturan-periode/{id}', [AturanPeriodeController::class, 'destroy']);
 
+    Route::post('/mitra/import', [MitraController::class, 'import']);
     Route::get('/mitra', [MitraController::class, 'index']);
     Route::post('/mitra', [MitraController::class, 'store']);
     Route::get('/mitra/{id}', [MitraController::class, 'show']);
@@ -139,4 +148,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/template-pasal', [TemplatePasalController::class, 'store']);
     Route::put('/template-pasal/{id}', [TemplatePasalController::class, 'update']);
     Route::delete('/template-pasal/{id}', [TemplatePasalController::class, 'destroy']);
+
+    Route::get('/transaksi', [TransaksiController::class, 'index']);
 });

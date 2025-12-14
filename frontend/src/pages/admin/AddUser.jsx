@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
-// 1. IMPORT ICON
+import Swal from 'sweetalert2'; // Opsional: Agar notifikasi lebih cantik
 import { 
   FaArrowLeft, 
   FaUser, 
@@ -36,21 +36,46 @@ const AddUser = () => {
     }
 
     try {
+      // 1. AMBIL TOKEN DARI LOCAL STORAGE
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        throw new Error("Token tidak ditemukan. Silakan login ulang.");
+      }
+
+      // 2. SERTAKAN HEADER AUTHORIZATION
       await axios.post(
-        'http://127.0.0.1:8000/api/users/register', 
+        'http://127.0.0.1:8000/api/users', 
         {
           username,
           email,
           password,
           role
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`, // <--- PENTING: Token wajib ada di sini
+            'Content-Type': 'application/json'
+          }
         }
       );
 
+      // Berhasil
+      Swal.fire('Sukses', 'User berhasil ditambahkan', 'success');
       navigate('/admin/manage-users');
 
     } catch (err) {
       console.error("Gagal menambah user:", err);
-      setError(err.response?.data?.message || "Gagal menambah user. Silakan coba lagi.");
+      
+      // Handle jika sesi habis (401)
+      if (err.response && err.response.status === 401) {
+          setError("Sesi Anda telah berakhir. Silakan login kembali.");
+          // Opsional: Redirect ke login jika perlu
+          // navigate('/login');
+      } else {
+          setError(err.response?.data?.message || "Gagal menambah user. Silakan coba lagi.");
+      }
+      
       setSubmitting(false);
     }
   };

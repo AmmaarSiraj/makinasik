@@ -12,7 +12,8 @@ return new class extends Migration
             $table->id();
             
             // Periode format YYYY-MM (misal: 2025-12)
-            $table->string('periode', 7); 
+            // Saya tambahkan unique() agar sesuai dengan file SQL (satu periode cuma punya 1 setting)
+            $table->string('periode', 7)->unique(); 
             
             // Format Nomor Surat (misal: 000/33730/SPK.MITRA/MM/YYYY)
             $table->string('nomor_surat_format', 100)->nullable();
@@ -24,6 +25,13 @@ return new class extends Migration
             
             // Text panjang untuk komponen honor (pasal/keterangan pembayaran)
             $table->text('komponen_honor')->nullable();
+
+            // === TAMBAHAN TEMPLATE ID ===
+            // Pastikan tabel 'master_template_spk' sudah dimigrate SEBELUM file ini dijalankan
+            $table->foreignId('template_id')
+                  ->nullable()                          // Boleh kosong
+                  ->constrained('master_template_spk')  // Terhubung ke tabel master_template_spk
+                  ->nullOnDelete();                     // Jika template induk dihapus, ini jadi NULL
 
             $table->timestamps();
         });
