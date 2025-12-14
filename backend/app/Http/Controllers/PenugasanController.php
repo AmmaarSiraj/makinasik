@@ -119,7 +119,7 @@ class PenugasanController extends Controller
                     'm.id as id_mitra',
                     'm.nama_lengkap',
                     'm.nik',
-                    'm.no_hp',
+                    'm.nomor_hp',
                     'kp.id as id_kelompok',
                     'kp.created_at as bergabung_sejak',
                     'kp.kode_jabatan',

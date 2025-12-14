@@ -29,4 +29,9 @@ class Mitra extends Model
     {
         return $this->hasMany(KelompokPenugasan::class, 'id_mitra', 'id');
     }
+
+    public function tahunAktif()
+    {
+        return $this->hasMany(TahunAktif::class, 'user_id', 'id');
+    }
 }

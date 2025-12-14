@@ -57,13 +57,13 @@ const TambahPenugasan = () => {
           axios.get(`${API_URL}/api/subkegiatan`, { headers })
         ]);
 
-        setListKegiatan(resKeg.data);
-        setListMitra(resMitra.data);
-        setListHonorarium(resHonor.data);
-        setListAturan(resAturan.data);
-        setListKelompok(resKelompok.data);
-        setListPenugasan(resPenugasan.data);
-        setAllSubKegiatan(resAllSub.data);
+        setListKegiatan(resKeg.data.data);
+        setListMitra(resMitra.data.data);
+        setListHonorarium(resHonor.data.data);
+        setListAturan(resAturan.data.data);
+        setListKelompok(resKelompok.data.data);
+        setListPenugasan(resPenugasan.data.data);
+        setAllSubKegiatan(resAllSub.data.data);
 
       } catch (err) {
         console.error(err);
@@ -583,7 +583,7 @@ const TambahPenugasan = () => {
                                >
                                  <option value="">-- Pilih --</option>
                                  {availableJabatan.map(h => (
-                                   <option key={h.kode_jabatan} value={h.kode_jabatan}>{h.nama_jabatan}</option>
+                                   <option key={h.kode_jabatan} value={h.kode_jabatan}>{h.jabatan ? h.jabatan.nama_jabatan : 'Nama Jabatan Tidak Ditemukan'}</option>
                                  ))}
                                </select>
                              </div>

@@ -12,30 +12,41 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 class MitraController extends Controller
 {
     /**
-     * 1. GET ALL MITRA
+     * 1. GET ALL MITRA (OPTIMIZED)
+     * Menggunakan Eager Loading & Pagination untuk performa maksimal.
      */
     public function index(Request $request)
     {
         $query = Mitra::query();
 
+        // Fitur Pencarian
         if ($request->has('search') && $request->search != '') {
             $search = $request->search;
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('nama_lengkap', 'like', "%{$search}%")
-                  ->orWhere('nik', 'like', "%{$search}%")
-                  ->orWhere('sobat_id', 'like', "%{$search}%");
+                    ->orWhere('nik', 'like', "%{$search}%")
+                    ->orWhere('sobat_id', 'like', "%{$search}%");
             });
         }
 
-        $mitra = $query->orderBy('nama_lengkap', 'asc')->get();
+        // --- OPTIMASI QUERY ---
+        // 1. with('tahunAktif'): Mengambil data relasi dalam 1 query (Eager Loading)
+        // 2. paginate(20): Membatasi data per halaman agar server tidak berat
+        $mitra = $query->with(['tahunAktif' => function ($q) {
+            $q->orderBy('tahun', 'desc');
+        }])
+            ->orderBy('nama_lengkap', 'asc')
+            ->paginate(20);
 
-        $mitra->map(function ($item) {
-            $years = TahunAktif::where('user_id', $item->id)
-                        ->orderBy('tahun', 'desc')
-                        ->pluck('tahun')
-                        ->toArray();
-            
-            $item->riwayat_tahun = implode(', ', $years);
+        // --- TRANSFORMASI DATA DI MEMORI ---
+        // Menggabungkan tahun aktif menjadi string tanpa query ulang ke DB
+        $mitra->getCollection()->transform(function ($item) {
+            // Ambil dari data yang sudah di-eager-load
+            $item->riwayat_tahun = $item->tahunAktif->pluck('tahun')->implode(', ');
+
+            // Hapus objek relasi untuk meringankan ukuran JSON
+            unset($item->tahunAktif);
+
             return $item;
         });
 
@@ -70,7 +81,7 @@ class MitraController extends Controller
                     'nama_lengkap' => $request->nama_lengkap,
                     'sobat_id'     => $request->sobat_id,
                     'alamat'       => $request->alamat,
-                    'jenis_kelamin'=> $request->jenis_kelamin,
+                    'jenis_kelamin' => $request->jenis_kelamin,
                     'pendidikan'   => $request->pendidikan,
                     'pekerjaan'    => $request->pekerjaan,
                     'deskripsi_pekerjaan_lain' => $request->deskripsi_pekerjaan_lain,
@@ -79,9 +90,10 @@ class MitraController extends Controller
                 ]
             );
 
+            // Cek apakah sudah aktif di tahun ini
             $isActive = TahunAktif::where('user_id', $mitra->id)
-                                  ->where('tahun', $targetYear)
-                                  ->exists();
+                ->where('tahun', $targetYear)
+                ->exists();
 
             if (!$isActive) {
                 TahunAktif::create([
@@ -98,7 +110,6 @@ class MitraController extends Controller
                 'message' => 'Mitra berhasil disimpan dan diaktifkan.',
                 'data' => $mitra
             ], 201);
-
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['message' => $e->getMessage()], 500);
@@ -116,9 +127,10 @@ class MitraController extends Controller
             return response()->json(['message' => 'Mitra tidak ditemukan'], 404);
         }
 
+        // Untuk detail satu item, query tambahan tidak masalah (tidak berat)
         $mitra->list_tahun_aktif = TahunAktif::where('user_id', $id)
-                                            ->orderBy('tahun', 'desc')
-                                            ->get();
+            ->orderBy('tahun', 'desc')
+            ->get();
 
         return response()->json(['status' => 'success', 'data' => $mitra]);
     }
@@ -133,7 +145,7 @@ class MitraController extends Controller
 
         $validator = Validator::make($request->all(), [
             'nama_lengkap' => 'required|string|max:255',
-            'nik'          => 'required|string|max:50|unique:mitra,nik,'.$id,
+            'nik'          => 'required|string|max:50|unique:mitra,nik,' . $id,
         ]);
 
         if ($validator->fails()) {
@@ -161,19 +173,21 @@ class MitraController extends Controller
 
         DB::beginTransaction();
         try {
+            // Hitung total tahun aktif
             $count = TahunAktif::where('user_id', $id)->count();
 
+            // Jika masih aktif di banyak tahun dan user hanya ingin hapus tahun tertentu
             if ($count > 1 && $tahunTarget) {
                 TahunAktif::where('user_id', $id)->where('tahun', $tahunTarget)->delete();
                 $msg = "Status aktif tahun {$tahunTarget} berhasil dihapus.";
             } else {
+                // Hapus permanen jika hanya aktif 1 tahun atau request hapus total
                 $mitra->delete();
                 $msg = "Data mitra dihapus permanen.";
             }
 
             DB::commit();
             return response()->json(['status' => 'success', 'message' => $msg]);
-
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['message' => $e->getMessage()], 500);
@@ -195,7 +209,7 @@ class MitraController extends Controller
 
         $file = $request->file('file');
         $currentYear = $request->input('tahun_daftar', date('Y'));
-        
+
         $successCount = 0;
         $skipCount = 0;
         $failCount = 0;
@@ -208,8 +222,12 @@ class MitraController extends Controller
             $sheet = $spreadsheet->getActiveSheet();
             $rows = $sheet->toArray();
 
-            $header = array_map(function($h) { return trim(strtolower($h)); }, array_shift($rows)); 
-            
+            // Ambil header dan bersihkan spasi/lowercase
+            $header = array_map(function ($h) {
+                return trim(strtolower($h));
+            }, array_shift($rows));
+
+            // Mapping kolom dinamis
             $colMap = [
                 'nama' => $this->findHeaderIndex($header, ['nama lengkap', 'nama']),
                 'nik'  => $this->findHeaderIndex($header, ['nik']),
@@ -229,14 +247,16 @@ class MitraController extends Controller
                 $rawNik = $this->getValue($row, $colMap['nik']);
                 $nik = $rawNik ? trim(str_replace("'", "", (string)$rawNik)) : '';
 
+                // Skip baris kosong / tidak valid
                 if (empty($nama) || empty($nik)) {
-                    if (empty(implode('', $row))) continue;
+                    if (empty(implode('', $row))) continue; // Skip baris benar-benar kosong
                     $failCount++;
                     $errors[] = "Baris {$rowNumber}: Nama atau NIK kosong.";
                     continue;
                 }
 
                 try {
+                    // Update atau Buat Mitra Baru
                     $mitra = Mitra::updateOrCreate(
                         ['nik' => $nik],
                         [
@@ -252,9 +272,10 @@ class MitraController extends Controller
                         ]
                     );
 
+                    // Cek Status Aktif Tahun Ini
                     $isActive = TahunAktif::where('user_id', $mitra->id)
-                                          ->where('tahun', $currentYear)
-                                          ->exists();
+                        ->where('tahun', $currentYear)
+                        ->exists();
 
                     if ($isActive) {
                         $skipCount++;
@@ -266,7 +287,6 @@ class MitraController extends Controller
                         ]);
                         $successCount++;
                     }
-
                 } catch (\Exception $e) {
                     $failCount++;
                     $errors[] = "Baris {$rowNumber} ({$nama}): " . $e->getMessage();
@@ -275,31 +295,47 @@ class MitraController extends Controller
 
             DB::commit();
 
-            // JSON RESPONSE DIPERBAIKI (camelCase)
             return response()->json([
                 'status' => 'success',
                 'message' => "Import Selesai (Tahun {$currentYear}).",
-                'successCount' => $successCount, 
+                'successCount' => $successCount,
                 'skipCount' => $skipCount,
                 'failCount' => $failCount,
                 'errors' => $errors
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['status'=>'error', 'message' => $e->getMessage()], 500);
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
     }
 
     // --- Helpers ---
-    private function findHeaderIndex($headers, $keywords) {
+    private function findHeaderIndex($headers, $keywords)
+    {
         foreach ($headers as $index => $header) {
             if (in_array($header, $keywords)) return $index;
         }
         return -1;
     }
 
-    private function getValue($row, $index) {
+    private function getValue($row, $index)
+    {
         return ($index >= 0 && isset($row[$index])) ? trim($row[$index]) : null;
+    }
+
+    public function mitraAktif(Request $request)
+    {
+        $tahun = $request->tahun;
+
+        $mitra = Mitra::select('id', 'nama_lengkap', 'nik')
+            ->whereHas('tahunAktif', function ($q) use ($tahun) {
+                $q->where('tahun', $tahun);
+            })
+            ->get();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $mitra
+        ]);
     }
 }

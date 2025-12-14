@@ -9,6 +9,23 @@ use Illuminate\Support\Facades\Validator;
 
 class SubkegiatanController extends Controller
 {
+
+    public function index()
+    {
+        // Mengambil semua subkegiatan
+        $subkegiatan = Subkegiatan::latest()->get();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $subkegiatan
+        ]);
+    }
+
+    public function getByKegiatan($id_kegiatan)
+    {
+        $subs = Subkegiatan::where('id_kegiatan', $id_kegiatan)->get();
+        return response()->json($subs); // Return array langsung agar sesuai dengan frontend
+    }
     /**
      * Tambah Sub Kegiatan Baru
      */
@@ -41,9 +58,9 @@ class SubkegiatanController extends Controller
         // Opsional: Kita refresh model untuk mengambil ID yang baru saja dibuat trigger
         // Note: Terkadang Eloquent butuh query ulang untuk dpt ID dari trigger
         $sub = Subkegiatan::where('created_at', $sub->created_at)
-                          ->where('nama_sub_kegiatan', $sub->nama_sub_kegiatan)
-                          ->orderBy('created_at', 'desc')
-                          ->first();
+            ->where('nama_sub_kegiatan', $sub->nama_sub_kegiatan)
+            ->orderBy('created_at', 'desc')
+            ->first();
 
         return response()->json([
             'status' => 'success',

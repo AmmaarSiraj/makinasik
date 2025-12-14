@@ -62,16 +62,26 @@ const DetailPenugasan = () => {
         axios.get(`${API_URL}/api/honorarium`, config)
       ]);
 
-      setPenugasan(penugasanRes.data);
+      // PERBAIKAN 1: Ambil properti .data lagi karena backend membungkusnya
+      // Backend: { status: 'success', data: { ... } }
+      const detailPenugasan = penugasanRes.data.data; 
+      setPenugasan(detailPenugasan);
+
+      // Anggota dikembalikan array langsung oleh controller (lihat getAnggota di Controller)
       setAnggota(anggotaRes.data || []);
       
-      // Filter honorarium hanya untuk kegiatan (sub) ini
-      const currentSubId = penugasanRes.data.id_subkegiatan;
-      const filteredHonor = (honorRes.data || []).filter(h => h.id_subkegiatan == currentSubId);
+      // PERBAIKAN 2: Honorarium juga dibungkus dalam .data (biasanya)
+      // Pastikan mengakses array honorarium yang benar sebelum di-filter
+      const allHonor = honorRes.data.data || []; 
+      
+      // Gunakan detailPenugasan yang baru diambil untuk filter
+      const currentSubId = detailPenugasan.id_subkegiatan;
+      const filteredHonor = allHonor.filter(h => String(h.id_subkegiatan) === String(currentSubId));
+      
       setListHonorarium(filteredHonor);
 
     } catch (err) { 
-      console.error(err);
+      console.error("Detail Error:", err); // Debugging lebih jelas
       Swal.fire('Error', 'Gagal memuat data detail.', 'error');
     } finally {
       setIsLoading(false);

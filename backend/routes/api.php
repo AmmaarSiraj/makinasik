@@ -58,10 +58,11 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     // --- MANAJEMEN SUB KEGIATAN ---
     // Create (Butuh id_kegiatan di body)
+    Route::get('/subkegiatan', [SubkegiatanController::class, 'index']);
     Route::post('/subkegiatan', [SubkegiatanController::class, 'store']); 
-
     Route::put('/subkegiatan/{id}', [SubkegiatanController::class, 'update']);
     Route::delete('/subkegiatan/{id}', [SubkegiatanController::class, 'destroy']);
+    Route::get('/subkegiatan/kegiatan/{id}', [SubkegiatanController::class, 'getByKegiatan']);
     
     Route::get('/jabatan', [JabatanMitraController::class, 'index']);
     Route::post('/jabatan', [JabatanMitraController::class, 'store']);
@@ -92,6 +93,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     Route::post('/mitra/import', [MitraController::class, 'import']);
     Route::get('/mitra', [MitraController::class, 'index']);
+    Route::get('/mitra/aktif', [MitraController::class, 'mitraAktif']);
     Route::post('/mitra', [MitraController::class, 'store']);
     Route::get('/mitra/{id}', [MitraController::class, 'show']);
     Route::put('/mitra/{id}', [MitraController::class, 'update']);
@@ -101,6 +103,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/penugasan', [PenugasanController::class, 'store']);
     Route::get('/penugasan/{id}', [PenugasanController::class, 'show']);
     Route::delete('/penugasan/{id}', [PenugasanController::class, 'destroy']);
+    Route::get('/penugasan/{id}/anggota', [PenugasanController::class, 'getAnggota']);
 
     // --- KELOMPOK PENUGASAN (DETAIL ANGGOTA) ---
     Route::get('/kelompok-penugasan', [KelompokPenugasanController::class, 'index']);
