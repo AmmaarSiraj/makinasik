@@ -3,14 +3,18 @@
 namespace App\Http\Controllers;
 
 use App\Models\Penugasan;
-use App\Models\KelompokPenugasan; // Pastikan Model ini ada
+use App\Models\KelompokPenugasan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\DB; // Untuk perhitungan raw query honor
+use Illuminate\Support\Facades\DB;
+use Carbon\Carbon; // Penting: Import Carbon untuk format tanggal
 
 class PenugasanController extends Controller
 {
-    // 1. GET ALL PENUGASAN (Disesuaikan agar strukturnya datar/flat)
+    /**
+     * 1. GET ALL PENUGASAN
+     * Mengembalikan data dalam format flat (datar) dengan tanggal yang sudah diformat bersih.
+     */
     public function index()
     {
         // Load relasi nested: subkegiatan -> kegiatan, dan pengawas
@@ -18,41 +22,24 @@ class PenugasanController extends Controller
             ->latest()
             ->get();
 
-        // Transformasi data agar sesuai dengan frontend (seperti Node.js)
+        // Transformasi data
         $formattedData = $penugasan->map(function ($item) {
-            return [
-                'id_penugasan'         => $item->id,
-                'penugasan_created_at' => $item->created_at,
-
-                // Data Subkegiatan
-                'id_subkegiatan'       => $item->subkegiatan ? $item->subkegiatan->id : null,
-                'nama_sub_kegiatan'    => $item->subkegiatan ? $item->subkegiatan->nama_sub_kegiatan : '-',
-                'tanggal_mulai'        => $item->subkegiatan ? $item->subkegiatan->tanggal_mulai : null,
-                'tanggal_selesai'      => $item->subkegiatan ? $item->subkegiatan->tanggal_selesai : null,
-                
-                // Data Kegiatan (Nested di dalam subkegiatan)
-                'id_kegiatan'          => $item->subkegiatan && $item->subkegiatan->kegiatan ? $item->subkegiatan->kegiatan->id : null,
-                'nama_kegiatan'        => $item->subkegiatan && $item->subkegiatan->kegiatan ? $item->subkegiatan->kegiatan->nama_kegiatan : '-',
-
-                // Data Pengawas
-                'id_pengawas'          => $item->pengawas ? $item->pengawas->id : null,
-                'nama_pengawas'        => $item->pengawas ? $item->pengawas->username : '-', // Pastikan field username ada di tabel users
-                'email_pengawas'       => $item->pengawas ? $item->pengawas->email : null,
-                'role_pengawas'        => $item->pengawas ? $item->pengawas->role : null,
-            ];
+            return $this->formatItem($item);
         });
 
-        // Kembalikan dalam key 'data' (sesuai yang kita bahas sebelumnya)
         return response()->json(['status' => 'success', 'data' => $formattedData]);
     }
 
-    // 2. CREATE PENUGASAN
+    /**
+     * 2. CREATE PENUGASAN
+     * Membuat penugasan baru beserta anggota tim (jika ada).
+     */
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'id_subkegiatan' => 'required|exists:subkegiatan,id',
             'id_pengawas'    => 'required|exists:users,id',
-            'anggota'        => 'nullable|array' // Validasi input anggota
+            'anggota'        => 'nullable|array' 
         ]);
 
         if ($validator->fails()) {
@@ -83,40 +70,46 @@ class PenugasanController extends Controller
 
             DB::commit();
 
-            // Ambil data yang baru dibuat dengan format lengkap (untuk response)
-            // Kita panggil fungsi show() logic secara internal atau format manual
+            // Return data yang baru dibuat dengan format lengkap
             return response()->json([
                 'status' => 'success',
                 'message' => 'Penugasan berhasil dibuat beserta anggota tim.',
                 'data' => $this->formatSingle($penugasan->id)
             ], 201);
+
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['error' => 'Gagal membuat penugasan: ' . $e->getMessage()], 500);
         }
     }
 
-    // 3. GET SINGLE PENUGASAN (Detail)
+    /**
+     * 3. GET SINGLE PENUGASAN
+     * Detail satu penugasan.
+     */
     public function show($id)
     {
         $data = $this->formatSingle($id);
-        if (!$data) return response()->json(['message' => 'Data tidak ditemukan'], 404);
+        if (!$data) {
+            return response()->json(['message' => 'Data tidak ditemukan'], 404);
+        }
 
         return response()->json(['status' => 'success', 'data' => $data]);
     }
 
-    // 4. GET ANGGOTA BY PENUGASAN ID (PENTING UNTUK Frontend toggleRow)
-    // Route: GET /api/penugasan/{id}/anggota
+    /**
+     * 4. GET ANGGOTA BY PENUGASAN ID
+     * Mengambil daftar anggota tim + hitungan honor.
+     * Route: GET /api/penugasan/{id}/anggota
+     */
     public function getAnggota($id)
     {
         try {
-            // Menggunakan Raw Query atau Query Builder agar bisa join Honorarium & Hitung Total Honor
-            // Logic ini meniru: (tarif * volume) as total_honor
             $anggota = DB::table('kelompok_penugasan as kp')
                 ->join('mitra as m', 'kp.id_mitra', '=', 'm.id')
                 ->join('penugasan as p', 'kp.id_penugasan', '=', 'p.id')
                 ->leftJoin('jabatan_mitra as jm', 'kp.kode_jabatan', '=', 'jm.kode_jabatan')
-                // Join Honorarium berdasarkan subkegiatan dan jabatan
+                // Join ke tabel honorarium untuk ambil tarif
                 ->leftJoin('honorarium as h', function ($join) {
                     $join->on('h.id_subkegiatan', '=', 'p.id_subkegiatan')
                         ->on('h.kode_jabatan', '=', 'kp.kode_jabatan');
@@ -138,38 +131,68 @@ class PenugasanController extends Controller
                 ->orderBy('m.nama_lengkap', 'asc')
                 ->get();
 
-            return response()->json($anggota); // Frontend mengharapkan array langsung untuk endpoint ini
+            return response()->json($anggota); 
 
         } catch (\Exception $e) {
             return response()->json(['error' => 'Terjadi kesalahan: ' . $e->getMessage()], 500);
         }
     }
 
-    // 5. DELETE PENUGASAN
+    /**
+     * 5. DELETE PENUGASAN
+     */
     public function destroy($id)
     {
         $penugasan = Penugasan::find($id);
-        if (!$penugasan) return response()->json(['message' => 'Data tidak ditemukan'], 404);
+        if (!$penugasan) {
+            return response()->json(['message' => 'Data tidak ditemukan'], 404);
+        }
 
-        $penugasan->delete(); // Kelompok penugasan otomatis terhapus (jika ada cascade di db)
+        $penugasan->delete(); 
         return response()->json(['status' => 'success', 'message' => 'Penugasan berhasil dihapus.']);
     }
 
-    // --- HELPER FUNCTION ---
+    // =========================================================================
+    // HELPER FUNCTIONS
+    // =========================================================================
+
+    /**
+     * Helper untuk mengambil data single by ID dan memformatnya.
+     */
     private function formatSingle($id)
     {
         $item = Penugasan::with(['subkegiatan.kegiatan', 'pengawas'])->find($id);
         if (!$item) return null;
 
+        return $this->formatItem($item);
+    }
+
+    /**
+     * Helper utama untuk memformat output JSON agar tanggal bersih (Y-m-d).
+     */
+    private function formatItem($item)
+    {
         return [
             'id_penugasan'         => $item->id,
-            'penugasan_created_at' => $item->created_at,
+            'penugasan_created_at' => $item->created_at, // Timestamp default oke untuk created_at
+
+            // Data Subkegiatan
             'id_subkegiatan'       => $item->subkegiatan ? $item->subkegiatan->id : null,
             'nama_sub_kegiatan'    => $item->subkegiatan ? $item->subkegiatan->nama_sub_kegiatan : '-',
-            'tanggal_mulai'        => $item->subkegiatan ? $item->subkegiatan->tanggal_mulai : null,
-            'tanggal_selesai'      => $item->subkegiatan ? $item->subkegiatan->tanggal_selesai : null,
+            
+            // [FIX] Format Tanggal Bersih YYYY-MM-DD
+            'tanggal_mulai'        => $item->subkegiatan && $item->subkegiatan->tanggal_mulai 
+                                      ? Carbon::parse($item->subkegiatan->tanggal_mulai)->format('Y-m-d') 
+                                      : null,
+            'tanggal_selesai'      => $item->subkegiatan && $item->subkegiatan->tanggal_selesai 
+                                      ? Carbon::parse($item->subkegiatan->tanggal_selesai)->format('Y-m-d') 
+                                      : null,
+            
+            // Data Kegiatan (Induk)
             'id_kegiatan'          => $item->subkegiatan && $item->subkegiatan->kegiatan ? $item->subkegiatan->kegiatan->id : null,
             'nama_kegiatan'        => $item->subkegiatan && $item->subkegiatan->kegiatan ? $item->subkegiatan->kegiatan->nama_kegiatan : '-',
+
+            // Data Pengawas
             'id_pengawas'          => $item->pengawas ? $item->pengawas->id : null,
             'nama_pengawas'        => $item->pengawas ? $item->pengawas->username : '-',
             'email_pengawas'       => $item->pengawas ? $item->pengawas->email : null,

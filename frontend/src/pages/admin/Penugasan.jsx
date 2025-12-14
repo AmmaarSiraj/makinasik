@@ -13,8 +13,8 @@ import {
   FaClipboardList,
   FaEdit,   
   FaTrash,
-  FaSearch, 
-  FaFilter  
+  FaSearch, // Icon Search
+  FaFilter  // Icon Filter
 } from 'react-icons/fa';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
@@ -50,50 +50,50 @@ const Penugasan = () => {
     });
   };
 
-  // 1. Fetch Data Utama
+  // 1. Fetch Data
   const fetchPenugasan = async () => {
     setIsLoading(true);
     try {
-      const token = getToken();
-      const config = { headers: { Authorization: `Bearer ${token}` } };
-      
-      const [resPenugasan, resKelompok] = await Promise.all([
-        axios.get(`${API_URL}/api/penugasan`, config),
-        axios.get(`${API_URL}/api/kelompok-penugasan`, config)
-      ]);
-      
-      // [PERBAIKAN 1] Ambil array dari properti .data.data (Format Laravel)
-      const rawData = resPenugasan.data.data || [];
-      setAllPenugasan(rawData);
+        const token = getToken();
+        const config = { headers: { Authorization: `Bearer ${token}` } };
+        
+        const [resPenugasan, resKelompok] = await Promise.all([
+            axios.get(`${API_URL}/api/penugasan`, config),
+            axios.get(`${API_URL}/api/kelompok-penugasan`, config)
+        ]);
+        
+        // PERBAIKAN DI SINI:
+        // Gunakan resPenugasan.data.data karena backend membungkus array di dalam key 'data'
+        setAllPenugasan(resPenugasan.data.data); 
 
-      // Preload Anggota ke Cache
-      const membersMap = {};
-      // Cek apakah resKelompok.data.data ada, jika tidak fallback ke resKelompok.data
-      const rawKelompok = resKelompok.data.data || resKelompok.data || [];
+        // Preload Anggota ke Cache
+        const membersMap = {};
+        
+        // PERBAIKAN JUGA DI SINI (Asumsi controller kelompok-penugasan formatnya sama):
+        // Cek apakah resKelompok.data.data ada, jika tidak fallback ke resKelompok.data (untuk jaga-jaga)
+        const rawKelompok = resKelompok.data.data || resKelompok.data;
 
-      if (Array.isArray(rawKelompok)) {
-        rawKelompok.forEach(member => {
-          const cleanMember = {
-            ...member,
-            // Prioritaskan nama yang sudah diflatkan oleh controller backend
-            nama_lengkap: member.nama_lengkap || member.nama_mitra || 'Tanpa Nama', 
-          };
-          const pId = member.id_penugasan;
-          if (!membersMap[pId]) {
-            membersMap[pId] = [];
-          }
-          membersMap[pId].push(cleanMember);
-        });
-      }
-      setMembersCache(membersMap);
+        if (Array.isArray(rawKelompok)) {
+            rawKelompok.forEach(member => {
+                const cleanMember = {
+                    ...member,
+                    nama_lengkap: member.nama_lengkap || member.nama_mitra, 
+                };
+                const pId = member.id_penugasan;
+                if (!membersMap[pId]) {
+                    membersMap[pId] = [];
+                }
+                membersMap[pId].push(cleanMember);
+            });
+        }
+        setMembersCache(membersMap);
 
     } catch (err) {
-      console.error("Gagal load data:", err);
-      // Optional: Tampilkan notif error kecil jika perlu
+        console.error("Gagal load data:", err);
     } finally {
-      setIsLoading(false);
+        setIsLoading(false);
     }
-  };
+};
 
   useEffect(() => {
     fetchPenugasan();
@@ -101,18 +101,13 @@ const Penugasan = () => {
 
   // 2. LOGIKA FILTER & GROUPING (useMemo)
   
-  // A. Ambil Tahun yang tersedia (PERBAIKAN LOGIKA STRING)
+  // A. Ambil Tahun yang tersedia dari data
   const availableYears = useMemo(() => {
     const years = new Set();
     allPenugasan.forEach(item => {
-      // Pastikan tanggal_mulai ada dan bertipe string
-      if (item.tanggal_mulai && typeof item.tanggal_mulai === 'string') {
-        // Ambil 4 karakter pertama (YYYY)
-        const yearStr = item.tanggal_mulai.substring(0, 4);
-        const y = parseInt(yearStr);
-        if (!isNaN(y)) {
-          years.add(y);
-        }
+      if (item.tanggal_mulai) {
+        const y = new Date(item.tanggal_mulai).getFullYear();
+        if (!isNaN(y)) years.add(y);
       }
     });
     return [...years].sort((a, b) => b - a);
@@ -124,18 +119,18 @@ const Penugasan = () => {
     const filtered = allPenugasan.filter(item => {
       const term = searchTerm.toLowerCase();
       
-      // Pencarian
+      // Pencarian berdasarkan Nama Kegiatan (Survei/Sensus), Sub Kegiatan (Kegiatan), atau Pengawas
       const matchSearch = 
         (item.nama_kegiatan || '').toLowerCase().includes(term) ||
         (item.nama_sub_kegiatan || '').toLowerCase().includes(term) ||
         (item.nama_pengawas || '').toLowerCase().includes(term);
 
-      // Filter Tahun (PERBAIKAN LOGIKA STRING)
+      // Filter Tahun
       let matchYear = true;
       if (filterYear) {
-        if (item.tanggal_mulai && typeof item.tanggal_mulai === 'string') {
-          const itemYear = item.tanggal_mulai.substring(0, 4);
-          matchYear = itemYear === filterYear.toString();
+        if (item.tanggal_mulai) {
+          const y = new Date(item.tanggal_mulai).getFullYear();
+          matchYear = y.toString() === filterYear.toString();
         } else {
           matchYear = false;
         }
@@ -146,7 +141,7 @@ const Penugasan = () => {
 
     // 2. Grouping Data Hasil Filter
     return filtered.reduce((acc, item) => {
-      const key = item.nama_kegiatan || 'Kegiatan Tanpa Nama';
+      const key = item.nama_kegiatan;
       if (!acc[key]) acc[key] = [];
       acc[key].push(item);
       return acc;
@@ -168,17 +163,11 @@ const Penugasan = () => {
       setLoadingMembers(true);
       try {
         const token = getToken();
-        // Endpoint ini mengembalikan array langsung (berdasarkan controller PenugasanController::getAnggota)
         const res = await axios.get(`${API_URL}/api/penugasan/${id_penugasan}/anggota`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        
-        // Cek struktur response (array langsung atau wrapped)
-        const dataAnggota = Array.isArray(res.data) ? res.data : (res.data.data || []);
-        
-        setMembersCache(prev => ({ ...prev, [id_penugasan]: dataAnggota }));
+        setMembersCache(prev => ({ ...prev, [id_penugasan]: res.data }));
       } catch (err) {
-        console.error("Gagal load anggota:", err);
         setMembersCache(prev => ({ ...prev, [id_penugasan]: [] }));
       } finally {
         setLoadingMembers(false);
@@ -206,7 +195,7 @@ const Penugasan = () => {
           headers: { Authorization: `Bearer ${token}` }
         });
         Swal.fire('Terhapus!', 'Penugasan berhasil dihapus.', 'success');
-        fetchPenugasan(); // Refresh data
+        fetchPenugasan();
       } catch (err) {
         Swal.fire('Gagal!', 'Terjadi kesalahan saat menghapus.', 'error');
       }
@@ -255,7 +244,7 @@ const Penugasan = () => {
         icon: failCount > 0 ? 'warning' : 'success'
       });
       fetchPenugasan(); 
-      setMembersCache({}); // Clear cache agar data baru termuat
+      setMembersCache({}); 
     } catch (err) {
       Swal.fire('Error', 'Gagal mengimpor data.', 'error');
     } finally {
@@ -288,7 +277,7 @@ const Penugasan = () => {
         </div>
       </div>
 
-      {/* --- SEARCH & FILTER SECTION --- */}
+      {/* --- SEARCH & FILTER SECTION (BARU) --- */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
          <div className="relative w-full md:w-1/2">
             <FaSearch className="absolute left-3 top-3 text-gray-400" />
