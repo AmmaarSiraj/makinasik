@@ -205,6 +205,13 @@ const DetailPenugasan = () => {
   // Hitung Total Honor Seluruh Tim
   const totalHonorTim = anggota.reduce((acc, curr) => acc + (Number(curr.total_honor) || 0), 0);
 
+  const popupData = {
+    year: penugasan?.tanggal_mulai 
+      ? new Date(penugasan.tanggal_mulai).getFullYear().toString() 
+      : new Date().getFullYear().toString(),
+    idSubKegiatan: penugasan?.id_subkegiatan
+  };
+
   return (
     <>
       <div className="w-full space-y-8 pb-20">
@@ -512,7 +519,9 @@ const DetailPenugasan = () => {
         onClose={() => setIsPopupOpen(false)} 
         id_penugasan={id} 
         existingAnggotaIds={anggota.map(a => a.id_mitra)} 
-        onAnggotaAdded={fetchDetailData} 
+        onAnggotaAdded={fetchDetailData}
+        targetYear={popupData.year} 
+        idSubKegiatan={popupData.idSubKegiatan}
       />
     </>
   );

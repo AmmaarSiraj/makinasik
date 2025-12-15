@@ -28,8 +28,6 @@ const ManageKegiatan = () => {
   
   // State untuk Expand/Collapse
   const [expandedRow, setExpandedRow] = useState(null); 
-  const [subKegiatanMap, setSubKegiatanMap] = useState({}); 
-  const [loadingSub, setLoadingSub] = useState(false);
   
   // State untuk Filter & Search
   const [searchTerm, setSearchTerm] = useState('');
@@ -45,7 +43,7 @@ const ManageKegiatan = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [savingSub, setSavingSub] = useState(false);
 
-  // 1. FETCH DATA (Kegiatan)
+  // 1. FETCH DATA (Kegiatan + Subkegiatan sekaligus)
   const fetchKegiatan = async () => {
     setLoading(true);
     try {
@@ -53,28 +51,14 @@ const ManageKegiatan = () => {
       if (!token) throw new Error('No auth token found. Please login.');
       const config = { headers: { Authorization: `Bearer ${token}` } };
 
-      const [resKeg, resSub] = await Promise.all([
-        axios.get(`${API_URL}/api/kegiatan`, config),
-        axios.get(`${API_URL}/api/subkegiatan`, config)
-      ]);
+      const res = await axios.get(`${API_URL}/api/kegiatan`, config);
 
-      const allSubs = Array.isArray(resSub.data) ? resSub.data : [];
-      const allKegiatan = Array.isArray(resKeg.data) ? resKeg.data : [];
-      
-      const subsGroupedByName = {};
-      allSubs.forEach(sub => {
-        if (sub.nama_kegiatan) {
-           const key = sub.nama_kegiatan.trim().toLowerCase();
-           if (!subsGroupedByName[key]) {
-             subsGroupedByName[key] = [];
-           }
-           subsGroupedByName[key].push(sub);
-        }
-      });
+      // Ambil data dari wrapper resource Laravel
+      const allKegiatan = res.data.data || [];
 
       const mergedData = allKegiatan.map(k => {
-         const key = k.nama_kegiatan ? k.nama_kegiatan.trim().toLowerCase() : '';
-         const mySubs = subsGroupedByName[key] || [];
+         // Ambil subkegiatan langsung dari properti relasi yang dikirim backend
+         const mySubs = k.subkegiatan || [];
          
          const activeYears = new Set();
          mySubs.forEach(sub => {
@@ -115,11 +99,13 @@ const ManageKegiatan = () => {
     return kegiatan.filter(item => {
       const term = searchTerm.toLowerCase();
       const namaKegiatan = item.nama_kegiatan || '';
+      
       const matchParent = namaKegiatan.toLowerCase().includes(term);
       const matchChild = item.sub_list && item.sub_list.some(sub => 
         sub.nama_sub_kegiatan && sub.nama_sub_kegiatan.toLowerCase().includes(term)
       );
       const isMatchSearch = matchParent || matchChild;
+      
       const years = item.active_years || [];
       const matchYear = filterYear ? years.includes(filterYear) : true;
 
@@ -159,6 +145,7 @@ const ManageKegiatan = () => {
         await axios.delete(`${API_URL}/api/kegiatan/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        // Update state lokal atau refresh data
         setKegiatan(prev => prev.filter(item => item.id !== id));
         Swal.fire('Terhapus!', 'Data berhasil dihapus.', 'success');
       } catch (err) {
@@ -167,36 +154,18 @@ const ManageKegiatan = () => {
     }
   };
 
-  const handleRowClick = async (id) => {
+  const handleRowClick = (id) => {
     if (expandedRow === id) {
       setExpandedRow(null); 
-      return;
-    }
-    setExpandedRow(id); 
-
-    // Selalu fetch ulang agar data update terbaru masuk
-    fetchSubKegiatan(id);
-  };
-
-  const fetchSubKegiatan = async (parentId) => {
-    setLoadingSub(true);
-    try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get(`${API_URL}/api/subkegiatan/kegiatan/${parentId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setSubKegiatanMap(prev => ({ ...prev, [parentId]: res.data }));
-    } catch (err) {
-      console.error("Gagal load kegiatan:", err);
-    } finally {
-      setLoadingSub(false);
+    } else {
+      setExpandedRow(id);
     }
   };
 
   // --- HANDLERS SUB KEGIATAN (ANAK) ---
 
   // 1. DELETE SUB KEGIATAN
-  const handleDeleteSub = async (e, subId, parentId) => {
+  const handleDeleteSub = async (e, subId) => {
     e.stopPropagation();
     const result = await Swal.fire({
       title: 'Hapus Kegiatan?',
@@ -214,8 +183,8 @@ const ManageKegiatan = () => {
                 headers: { Authorization: `Bearer ${token}` }
             });
             Swal.fire('Terhapus', 'Kegiatan berhasil dihapus.', 'success');
-            // Refresh list sub kegiatan
-            fetchSubKegiatan(parentId);
+            // Refresh seluruh data untuk memperbarui tampilan
+            fetchKegiatan();
         } catch (err) {
             Swal.fire('Gagal', 'Terjadi kesalahan sistem.', 'error');
         }
@@ -257,8 +226,8 @@ const ManageKegiatan = () => {
 
         Swal.fire('Berhasil', 'Data Kegiatan diperbarui.', 'success');
         setIsModalOpen(false);
-        // Refresh data sub di tabel parent
-        fetchSubKegiatan(editingSub.id_kegiatan);
+        // Refresh seluruh data
+        fetchKegiatan();
 
     } catch (err) {
         console.error(err);
@@ -268,7 +237,7 @@ const ManageKegiatan = () => {
     }
   };
 
-  // --- HANDLERS IMPORT/EXPORT (SAMA SEPERTI SEBELUMNYA) ---
+  // --- HANDLERS IMPORT/EXPORT ---
   const handleDownloadTemplate = () => {
     const csvContent = "data:text/csv;charset=utf-8,nama_kegiatan,nama_sub_kegiatan,deskripsi,tanggal_mulai,tanggal_selesai\nSensus Penduduk 2030,Persiapan,Rapat,2030-01-01,2030-01-31";
     const encodedUri = encodeURI(csvContent);
@@ -295,7 +264,6 @@ const ManageKegiatan = () => {
       });
       const { successCount, failCount } = response.data;
       Swal.fire('Import Selesai', `Sukses: ${successCount}, Gagal: ${failCount}`, 'info');
-      setSubKegiatanMap({}); 
       setExpandedRow(null);
       fetchKegiatan(); 
     } catch (err) {
@@ -401,7 +369,7 @@ const ManageKegiatan = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 pl-12 md:pl-0">
-                    {/* Edit Kegiatan Induk: Redirect ke halaman EditKegiatan Full */}
+                    {/* Edit Kegiatan Induk */}
                     <Link to={`/admin/manage-kegiatan/edit/${item.id}`} onClick={(e) => e.stopPropagation()} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded transition" title="Edit Survei/Sensus & Atur Honor"><FaEdit /></Link>
                     <button onClick={(e) => handleDelete(e, item.id)} className="p-2 text-red-600 hover:bg-red-50 rounded transition" title="Hapus Survei/Sensus"><FaTrash /></button>
                   </div>
@@ -410,80 +378,73 @@ const ManageKegiatan = () => {
                 {/* Sub Kegiatan List (Accordion Content) */}
                 {isExpanded && (
                   <div className="bg-gray-50/50 border-t border-gray-100 animate-fade-in-down">
-                    {loadingSub && !subKegiatanMap[item.id] ? (
-                      <div className="p-6 text-center text-gray-500 text-sm italic">Memuat Kegiatan...</div>
-                    ) : (
-                      <>
-                        {subKegiatanMap[item.id] && subKegiatanMap[item.id].length > 0 ? (
-                          <div className="overflow-x-auto p-4">
-                            <table className="w-full text-left text-sm bg-white rounded-lg border border-gray-200 overflow-hidden">
-                              <thead className="bg-gray-50 text-gray-500 uppercase text-xs font-bold border-b border-gray-200">
-                                <tr>
-                                  <th className="px-4 py-3 w-1/3">Nama Kegiatan</th>
-                                  <th className="px-4 py-3">Jadwal Pelaksanaan</th>
-                                  <th className="px-4 py-3 text-center">Status</th>
-                                  <th className="px-4 py-3 text-right">Aksi</th>
+                    {item.sub_list && item.sub_list.length > 0 ? (
+                      <div className="overflow-x-auto p-4">
+                        <table className="w-full text-left text-sm bg-white rounded-lg border border-gray-200 overflow-hidden">
+                          <thead className="bg-gray-50 text-gray-500 uppercase text-xs font-bold border-b border-gray-200">
+                            <tr>
+                              <th className="px-4 py-3 w-1/3">Nama Kegiatan</th>
+                              <th className="px-4 py-3">Jadwal Pelaksanaan</th>
+                              <th className="px-4 py-3 text-center">Status</th>
+                              <th className="px-4 py-3 text-right">Aksi</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {item.sub_list.map((sub) => {
+                              const statusObj = getComputedStatus(sub.tanggal_mulai, sub.tanggal_selesai);
+                              return (
+                                <tr key={sub.id} className="hover:bg-blue-50 transition-colors group">
+                                  <td className="px-4 py-3 font-medium text-gray-800" onClick={() => navigate(`/admin/manage-kegiatan/detail/${sub.id}`)} style={{cursor: 'pointer'}}>
+                                    {sub.nama_sub_kegiatan}
+                                  </td>
+                                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap text-xs">
+                                    <div className="flex items-center gap-2">
+                                        <FaCalendarAlt className="text-gray-400"/> 
+                                        {formatDateRange(sub.tanggal_mulai, sub.tanggal_selesai)}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 text-center">
+                                    <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full uppercase tracking-wide shadow-sm ${statusObj.className}`}>{statusObj.label}</span>
+                                  </td>
+                                  <td className="px-4 py-3 text-right">
+                                    <div className="flex justify-end gap-2">
+                                        {/* Detail Button */}
+                                        <button 
+                                            onClick={() => navigate(`/admin/manage-kegiatan/detail/${sub.id}`)} 
+                                            className="text-gray-400 hover:text-[#1A2A80] p-1.5 rounded hover:bg-blue-50 transition"
+                                            title="Lihat Detail"
+                                        >
+                                            <FaInfoCircle />
+                                        </button>
+                                        {/* Edit Button - Membuka Modal */}
+                                        <button 
+                                            onClick={(e) => handleEditSubClick(e, sub)} 
+                                            className="text-gray-400 hover:text-green-600 p-1.5 rounded hover:bg-green-50 transition"
+                                            title="Edit Info Kegiatan"
+                                        >
+                                            <FaEdit />
+                                        </button>
+                                        {/* Delete Button - Hapus Langsung */}
+                                        <button 
+                                            onClick={(e) => handleDeleteSub(e, sub.id)} 
+                                            className="text-gray-400 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition"
+                                            title="Hapus Kegiatan"
+                                        >
+                                            <FaTrash />
+                                        </button>
+                                    </div>
+                                  </td>
                                 </tr>
-                              </thead>
-                              <tbody className="divide-y divide-gray-100">
-                                {subKegiatanMap[item.id].map((sub) => {
-                                  const statusObj = getComputedStatus(sub.tanggal_mulai, sub.tanggal_selesai);
-                                  return (
-                                    <tr key={sub.id} className="hover:bg-blue-50 transition-colors group">
-                                      <td className="px-4 py-3 font-medium text-gray-800" onClick={() => navigate(`/admin/manage-kegiatan/detail/${sub.id}`)} style={{cursor: 'pointer'}}>
-                                        {sub.nama_sub_kegiatan}
-                                      </td>
-                                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap text-xs">
-                                        <div className="flex items-center gap-2">
-                                            <FaCalendarAlt className="text-gray-400"/> 
-                                            {formatDateRange(sub.tanggal_mulai, sub.tanggal_selesai)}
-                                        </div>
-                                      </td>
-                                      <td className="px-4 py-3 text-center">
-                                        <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full uppercase tracking-wide shadow-sm ${statusObj.className}`}>{statusObj.label}</span>
-                                      </td>
-                                      <td className="px-4 py-3 text-right">
-                                        <div className="flex justify-end gap-2">
-                                            {/* Detail Button */}
-                                            <button 
-                                                onClick={() => navigate(`/admin/manage-kegiatan/detail/${sub.id}`)} 
-                                                className="text-gray-400 hover:text-[#1A2A80] p-1.5 rounded hover:bg-blue-50 transition"
-                                                title="Lihat Detail"
-                                            >
-                                                <FaInfoCircle />
-                                            </button>
-                                            {/* Edit Button - Membuka Modal */}
-                                            <button 
-                                                onClick={(e) => handleEditSubClick(e, sub)} 
-                                                className="text-gray-400 hover:text-green-600 p-1.5 rounded hover:bg-green-50 transition"
-                                                title="Edit Info Kegiatan"
-                                            >
-                                                <FaEdit />
-                                            </button>
-                                            {/* Delete Button - Hapus Langsung */}
-                                            <button 
-                                                onClick={(e) => handleDeleteSub(e, sub.id, item.id)} 
-                                                className="text-gray-400 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition"
-                                                title="Hapus Kegiatan"
-                                            >
-                                                <FaTrash />
-                                            </button>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        ) : (
-                          <div className="p-8 text-center">
-                            <p className="text-sm text-gray-500 italic mb-3">Tidak ada Kegiatan.</p>
-                            {/* Tombol ini akan mengarah ke AddKegiatan dengan mode existing, bisa disesuaikan jika ingin tambah via modal */}
-                            <Link to={`/admin/manage-kegiatan/edit/${item.id}`} className="inline-flex items-center gap-2 text-[#1A2A80] text-xs font-bold hover:underline bg-blue-50 px-3 py-2 rounded-lg border border-blue-100"><FaPlus size={10} /> Kelola Kegiatan</Link>
-                          </div>
-                        )}
-                      </>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="p-8 text-center">
+                        <p className="text-sm text-gray-500 italic mb-3">Tidak ada Kegiatan.</p>
+                        <Link to={`/admin/manage-kegiatan/edit/${item.id}`} className="inline-flex items-center gap-2 text-[#1A2A80] text-xs font-bold hover:underline bg-blue-50 px-3 py-2 rounded-lg border border-blue-100"><FaPlus size={10} /> Kelola Kegiatan</Link>
+                      </div>
                     )}
                   </div>
                 )}

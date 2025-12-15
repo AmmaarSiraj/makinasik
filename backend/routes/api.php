@@ -93,6 +93,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     Route::post('/mitra/import', [MitraController::class, 'import']);
     Route::get('/mitra', [MitraController::class, 'index']);
+    Route::get('/mitraop', [MitraController::class, 'optimize']);
     Route::get('/mitra/aktif', [MitraController::class, 'mitraAktif']);
     Route::post('/mitra', [MitraController::class, 'store']);
     Route::get('/mitra/{id}', [MitraController::class, 'show']);

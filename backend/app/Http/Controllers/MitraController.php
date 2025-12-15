@@ -19,34 +19,24 @@ class MitraController extends Controller
     {
         $query = Mitra::query();
 
-        // Fitur Pencarian
         if ($request->has('search') && $request->search != '') {
             $search = $request->search;
-            $query->where(function ($q) use ($search) {
+            $query->where(function($q) use ($search) {
                 $q->where('nama_lengkap', 'like', "%{$search}%")
-                    ->orWhere('nik', 'like', "%{$search}%")
-                    ->orWhere('sobat_id', 'like', "%{$search}%");
+                  ->orWhere('nik', 'like', "%{$search}%")
+                  ->orWhere('sobat_id', 'like', "%{$search}%");
             });
         }
 
-        // --- OPTIMASI QUERY ---
-        // 1. with('tahunAktif'): Mengambil data relasi dalam 1 query (Eager Loading)
-        // 2. paginate(20): Membatasi data per halaman agar server tidak berat
-        $mitra = $query->with(['tahunAktif' => function ($q) {
-            $q->orderBy('tahun', 'desc');
-        }])
-            ->orderBy('nama_lengkap', 'asc')
-            ->paginate(20);
+        $mitra = $query->orderBy('nama_lengkap', 'asc')->get();
 
-        // --- TRANSFORMASI DATA DI MEMORI ---
-        // Menggabungkan tahun aktif menjadi string tanpa query ulang ke DB
-        $mitra->getCollection()->transform(function ($item) {
-            // Ambil dari data yang sudah di-eager-load
-            $item->riwayat_tahun = $item->tahunAktif->pluck('tahun')->implode(', ');
-
-            // Hapus objek relasi untuk meringankan ukuran JSON
-            unset($item->tahunAktif);
-
+        $mitra->map(function ($item) {
+            $years = TahunAktif::where('user_id', $item->id)
+                        ->orderBy('tahun', 'desc')
+                        ->pluck('tahun')
+                        ->toArray();
+            
+            $item->riwayat_tahun = implode(', ', $years);
             return $item;
         });
 
@@ -54,6 +44,52 @@ class MitraController extends Controller
             'status' => 'success',
             'data' => $mitra
         ]);
+    }
+    
+    public function optimize(Request $request)
+    {
+        $selectedYear = $request->query('year', date('Y'));
+        $search = $request->search;
+
+        $query = Mitra::query();
+
+        $query->whereHas('tahunAktif', function($q) use ($selectedYear) {
+            $q->where('tahun', $selectedYear);
+        });
+
+        if ($request->has('search') && $request->search != '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('nama_lengkap', 'like', "%{$search}%")
+                    ->orWhere('nik', 'like', "%{$search}%")
+                    ->orWhere('sobat_id', 'like', "%{$search}%");
+            });
+        }
+
+        $totalActiveInYear = Mitra::whereHas('tahunAktif', function($q) use ($selectedYear) {
+            $q->where('tahun', $selectedYear);
+        })->count();
+
+        $mitra = $query->with(['tahunAktif' => function ($q) {
+            $q->orderBy('tahun', 'desc');
+        }])
+        ->orderBy('nama_lengkap', 'asc')
+        ->paginate(20);
+
+        $mitra->getCollection()->transform(function ($item) {
+            $item->riwayat_tahun = $item->tahunAktif->pluck('tahun')->implode(', ');
+            unset($item->tahunAktif);
+            return $item;
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Data mitra berhasil diambil',
+            'data' => $mitra,
+            'extra_meta' => [
+                'selected_year' => $selectedYear,
+                'total_active_count' => $totalActiveInYear
+            ]
+        ], 200);
     }
 
     /**

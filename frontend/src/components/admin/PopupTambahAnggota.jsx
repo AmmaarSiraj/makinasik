@@ -16,11 +16,21 @@ import {
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 const getToken = () => localStorage.getItem('token');
 
-const PopupTambahAnggota = ({ isOpen, onClose, id_penugasan, existingAnggotaIds, onAnggotaAdded }) => {
+// Tambahkan props targetYear dan idSubKegiatan
+const PopupTambahAnggota = ({ 
+  isOpen, 
+  onClose, 
+  id_penugasan, 
+  existingAnggotaIds, 
+  onAnggotaAdded,
+  targetYear,     // Props baru
+  idSubKegiatan   // Props baru
+}) => {
   const [allMitra, setAllMitra] = useState([]);
   const [availableJobs, setAvailableJobs] = useState([]); 
   const [currentTeamData, setCurrentTeamData] = useState([]); 
-  const [targetYear, setTargetYear] = useState(null); 
+  
+  // State targetYear lokal dihapus karena sudah dapat dari props
   
   const [selectedJob, setSelectedJob] = useState(''); 
   const [volume, setVolume] = useState(1); 
@@ -30,7 +40,8 @@ const PopupTambahAnggota = ({ isOpen, onClose, id_penugasan, existingAnggotaIds,
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (isOpen && id_penugasan) {
+    // Pastikan isOpen, id_penugasan, targetYear, dan idSubKegiatan tersedia
+    if (isOpen && id_penugasan && targetYear && idSubKegiatan) {
       const initData = async () => {
         setLoading(true);
         setError(null);
@@ -38,26 +49,19 @@ const PopupTambahAnggota = ({ isOpen, onClose, id_penugasan, existingAnggotaIds,
           const token = getToken();
           const headers = { Authorization: `Bearer ${token}` };
 
-          const [resPenugasan, resAnggotaTim] = await Promise.all([
-            axios.get(`${API_URL}/api/penugasan/${id_penugasan}`, { headers }),
-            axios.get(`${API_URL}/api/penugasan/${id_penugasan}/anggota`, { headers })
-          ]);
+          // KITA HAPUS request ke /api/penugasan/{id} karena data sudah dikirim via props
+          // Kita hanya perlu request anggota tim (untuk cek kuota) dan mitra & honor
 
-          const penugasanData = resPenugasan.data.data;
-          const { id_subkegiatan, tanggal_mulai } = penugasanData;
-
-          setCurrentTeamData(resAnggotaTim.data || []);
-
-          if (tanggal_mulai) {
-            const year = new Date(tanggal_mulai).getFullYear().toString();
-            setTargetYear(year);
-          }
-
-          const [resMitra, resHonor] = await Promise.all([
-             axios.get(`${API_URL}/api/mitra/aktif?tahun=${targetYear}`, { headers }),
+          const [resAnggotaTim, resMitra, resHonor] = await Promise.all([
+            axios.get(`${API_URL}/api/penugasan/${id_penugasan}/anggota`, { headers }),
+            axios.get(`${API_URL}/api/mitra/aktif?tahun=${targetYear}`, { headers }),
             axios.get(`${API_URL}/api/honorarium`, { headers })
           ]);
 
+          // Set Data Tim Saat Ini
+          setCurrentTeamData(resAnggotaTim.data || []);
+
+          // Set Data Mitra (langsung pakai targetYear dari props)
           let rawMitra = resMitra.data.data;
           if (rawMitra && !Array.isArray(rawMitra) && Array.isArray(rawMitra.data)) {
               rawMitra = rawMitra.data;
@@ -65,8 +69,9 @@ const PopupTambahAnggota = ({ isOpen, onClose, id_penugasan, existingAnggotaIds,
           const mitraArray = Array.isArray(rawMitra) ? rawMitra : [];
           setAllMitra(mitraArray);
 
+          // Set Data Pekerjaan (langsung filter pakai idSubKegiatan dari props)
           const honorList = resHonor.data.data || [];
-          const validHonors = honorList.filter(h => String(h.id_subkegiatan) === String(id_subkegiatan));
+          const validHonors = honorList.filter(h => String(h.id_subkegiatan) === String(idSubKegiatan));
           
           const jobs = validHonors.map(h => ({
             kode: h.kode_jabatan,
@@ -93,8 +98,11 @@ const PopupTambahAnggota = ({ isOpen, onClose, id_penugasan, existingAnggotaIds,
 
       initData();
     }
-  }, [isOpen, id_penugasan]);
+  }, [isOpen, id_penugasan, targetYear, idSubKegiatan]); // Dependency array diupdate
 
+  // ... (Sisa kode logic quotaInfo, availableMitra, handleAddAnggota, dan render return TETAP SAMA) ...
+  
+  // Pastikan logic quotaInfo dan return di bawah ini tidak berubah
   const quotaInfo = useMemo(() => {
     if (!selectedJob) return { sisa: 0, total: 0, terpakai: 0 };
 
@@ -115,85 +123,84 @@ const PopupTambahAnggota = ({ isOpen, onClose, id_penugasan, existingAnggotaIds,
   }, [selectedJob, availableJobs, currentTeamData]);
 
   const availableMitra = useMemo(() => {
-  if (!Array.isArray(allMitra)) return [];
+    if (!Array.isArray(allMitra)) return [];
 
-  const excludedIds = new Set(
-    (existingAnggotaIds || []).map(id => String(id))
-  );
+    const excludedIds = new Set(
+        (existingAnggotaIds || []).map(id => String(id))
+    );
 
-  const term = searchTerm.toLowerCase();
+    const term = searchTerm.toLowerCase();
 
-  return allMitra.filter(mitra => {
-    const notInTeam = !excludedIds.has(String(mitra.id));
+    return allMitra.filter(mitra => {
+        const notInTeam = !excludedIds.has(String(mitra.id));
+        const matchSearch =
+        mitra.nama_lengkap.toLowerCase().includes(term) ||
+        (mitra.nik && mitra.nik.includes(term));
 
-    const matchSearch =
-      mitra.nama_lengkap.toLowerCase().includes(term) ||
-      (mitra.nik && mitra.nik.includes(term));
-
-    return notInTeam && matchSearch;
-  });
-}, [allMitra, existingAnggotaIds, searchTerm]);
-
+        return notInTeam && matchSearch;
+    });
+  }, [allMitra, existingAnggotaIds, searchTerm]);
 
   const handleAddAnggota = async (id_mitra) => {
-    if (!selectedJob) {
-      Swal.fire('Peringatan', 'Harap pilih posisi/jabatan terlebih dahulu!', 'warning');
-      return;
-    }
-    
-    const finalVolume = (!volume || volume <= 0) ? 1 : volume;
-
-    if (quotaInfo.total > 0 && finalVolume > quotaInfo.sisa) {
-        Swal.fire({
-            title: 'Kuota Tidak Cukup',
-            text: `Sisa kuota: ${quotaInfo.sisa}. Anda input: ${finalVolume}.`,
-            icon: 'warning'
-        });
+      // ... (Kode handleAddAnggota tetap sama persis) ...
+      if (!selectedJob) {
+        Swal.fire('Peringatan', 'Harap pilih posisi/jabatan terlebih dahulu!', 'warning');
         return;
-    }
-
-    try {
-      const token = getToken();
+      }
       
-      const payload = { 
-          id_penugasan: id_penugasan, 
-          id_mitra: id_mitra,
-          kode_jabatan: selectedJob,
-          volume_tugas: finalVolume 
-      };
+      const finalVolume = (!volume || volume <= 0) ? 1 : volume;
 
-      await axios.post(`${API_URL}/api/kelompok-penugasan`, payload, { 
-        headers: { Authorization: `Bearer ${token}` } 
-      });
-      
-      const mitraBaru = allMitra.find(m => m.id === id_mitra);
-      setCurrentTeamData(prev => [
-          ...prev, 
-          { 
-              id_mitra, 
-              kode_jabatan: selectedJob, 
-              volume_tugas: finalVolume,
-              nama_lengkap: mitraBaru?.nama_lengkap 
-          }
-      ]);
+      if (quotaInfo.total > 0 && finalVolume > quotaInfo.sisa) {
+          Swal.fire({
+              title: 'Kuota Tidak Cukup',
+              text: `Sisa kuota: ${quotaInfo.sisa}. Anda input: ${finalVolume}.`,
+              icon: 'warning'
+          });
+          return;
+      }
 
-      Swal.fire({
-        title: 'Berhasil!',
-        text: `${mitraBaru?.nama_lengkap} ditambahkan.`,
-        icon: 'success',
-        timer: 1000,
-        showConfirmButton: false,
-        toast: true,
-        position: 'top-end'
-      });
+      try {
+        const token = getToken();
+        
+        const payload = { 
+            id_penugasan: id_penugasan, 
+            id_mitra: id_mitra,
+            kode_jabatan: selectedJob,
+            volume_tugas: finalVolume 
+        };
 
-      if (onAnggotaAdded) onAnggotaAdded();
-      
-    } catch (err) {
-      console.error(err);
-      const msg = err.response?.data?.message || err.response?.data?.error || 'Gagal menambahkan anggota.';
-      Swal.fire('Gagal', msg, 'error');
-    }
+        await axios.post(`${API_URL}/api/kelompok-penugasan`, payload, { 
+          headers: { Authorization: `Bearer ${token}` } 
+        });
+        
+        const mitraBaru = allMitra.find(m => m.id === id_mitra);
+        setCurrentTeamData(prev => [
+            ...prev, 
+            { 
+                id_mitra, 
+                kode_jabatan: selectedJob, 
+                volume_tugas: finalVolume,
+                nama_lengkap: mitraBaru?.nama_lengkap 
+            }
+        ]);
+
+        Swal.fire({
+          title: 'Berhasil!',
+          text: `${mitraBaru?.nama_lengkap} ditambahkan.`,
+          icon: 'success',
+          timer: 1000,
+          showConfirmButton: false,
+          toast: true,
+          position: 'top-end'
+        });
+
+        if (onAnggotaAdded) onAnggotaAdded();
+        
+      } catch (err) {
+        console.error(err);
+        const msg = err.response?.data?.message || err.response?.data?.error || 'Gagal menambahkan anggota.';
+        Swal.fire('Gagal', msg, 'error');
+      }
   };
 
   if (!isOpen) return null;
@@ -202,6 +209,7 @@ const PopupTambahAnggota = ({ isOpen, onClose, id_penugasan, existingAnggotaIds,
     <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm transition-opacity">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden border border-gray-200 animate-fade-in-up">
         
+        {/* Header Component */}
         <div className="flex justify-between items-center p-5 bg-[#1A2A80] text-white">
           <h2 className="text-lg font-bold flex items-center gap-2">
             <FaUserPlus className="text-blue-200" /> Tambah Anggota Tim
@@ -215,7 +223,7 @@ const PopupTambahAnggota = ({ isOpen, onClose, id_penugasan, existingAnggotaIds,
         </div>
 
         <div className="px-5 pt-5 pb-3 bg-white space-y-4">
-            
+            {/* Bagian Pilih Jabatan */}
             <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-2">
                     <FaBriefcase className="text-[#1A2A80]" /> Pilih Posisi Penugasan
@@ -243,6 +251,7 @@ const PopupTambahAnggota = ({ isOpen, onClose, id_penugasan, existingAnggotaIds,
                 )}
             </div>
 
+            {/* Bagian Volume Tugas */}
             <div>
                 <div className="flex justify-between items-center mb-2">
                     <label className="block text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
@@ -289,6 +298,7 @@ const PopupTambahAnggota = ({ isOpen, onClose, id_penugasan, existingAnggotaIds,
 
         </div>
 
+        {/* Bagian Search & List Mitra */}
         <div className="px-5 py-3 border-b border-t border-gray-100 bg-gray-50/50">
           
           {targetYear && (
@@ -325,7 +335,7 @@ const PopupTambahAnggota = ({ isOpen, onClose, id_penugasan, existingAnggotaIds,
                         <p className="text-sm">
                            {searchTerm 
                              ? "Tidak ada mitra yang cocok." 
-                             : `Tidak ada mitra tersedia.`}
+                             : `Tidak ada mitra tersedia untuk tahun ${targetYear}.`}
                         </p>
                     </div>
                 ) : (

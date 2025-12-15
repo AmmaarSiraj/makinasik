@@ -45,11 +45,11 @@ const EditKegiatan = () => {
 
         // Set Data Induk
         setIndukData({
-          nama_kegiatan: resInduk.data.nama_kegiatan,
-          deskripsi: resInduk.data.deskripsi || ''
+          nama_kegiatan: resInduk.data.data.nama_kegiatan,
+          deskripsi: resInduk.data.data.deskripsi || ''
         });
 
-        const allHonors = resHonor.data;
+        const allHonors = resHonor.data.data;
 
         // Mapping Sub Kegiatan & Honorarium
         const mappedSubs = resSub.data.map(sub => {
