@@ -40,7 +40,7 @@ const AddKegiatan = () => {
       try {
         const token = localStorage.getItem('token');
         const res = await axios.get(`${API_URL}/api/kegiatan`, { headers: { Authorization: `Bearer ${token}` } });
-        setExistingKegiatanList(res.data);
+        setExistingKegiatanList(res.data.data);
       } catch (err) {
         console.error(err);
       }
@@ -103,7 +103,7 @@ const AddKegiatan = () => {
           nama_kegiatan: indukData.nama_kegiatan,
           deskripsi: indukData.deskripsi
         }, config);
-        idKegiatan = resKeg.data.data.kegiatan.id;
+        idKegiatan = resKeg.data.data.data.kegiatan.id;
       }
 
       // 2. Simpan Sub Kegiatan & Honorarium

@@ -10,8 +10,23 @@ class HonorariumController extends Controller
 {
     public function index()
     {
-        // Mengambil honor lengkap dengan nama jabatan dan nama subkegiatan
-        $honor = Honorarium::with(['jabatan', 'subkegiatan'])->latest()->get();
+        $honor = Honorarium::with(['jabatan', 'subkegiatan', 'satuan'])
+                            ->latest()
+                            ->get()
+                            ->map(function($item) {
+                                // Meratakan data untuk konsumsi frontend
+                                $item->nama_jabatan = $item->jabatan->nama_jabatan ?? 'Jabatan Tidak Dikenal';
+                                $item->nama_satuan = $item->satuan->nama_satuan ?? 'Satuan Tidak Dikenal';
+                                $item->satuan_alias = $item->satuan->alias; 
+
+                                // Hapus objek relasi bersarang untuk menghemat payload
+                                unset($item->jabatan);
+                                unset($item->subkegiatan); 
+                                unset($item->satuan);
+                                
+                                return $item;
+                            });
+
         return response()->json(['status' => 'success', 'data' => $honor]);
     }
 
@@ -102,9 +117,26 @@ class HonorariumController extends Controller
      */
     public function getBySubkegiatan($idSubkegiatan)
     {
+        // 1. Eager load relasi 'jabatan' dan 'satuan'
         $honor = Honorarium::where('id_subkegiatan', $idSubkegiatan)
-                           ->with('jabatan') // Sertakan info jabatan
-                           ->get();
+            ->with(['jabatan', 'satuan']) // Tambahkan relasi 'satuan'
+            ->get()
+            // 2. Transformasi koleksi untuk meratakan (flatten) data
+            ->map(function ($item) {
+                // Menambahkan properti yang diperlukan dari relasi ke tingkat atas objek
+                $item->nama_jabatan = $item->jabatan->nama_jabatan ?? 'Jabatan Tidak Dikenal';
+                $item->nama_satuan = $item->satuan->nama_satuan ?? 'Satuan Tidak Dikenal';
+
+                // *** PERBAIKAN DI SINI ***
+                // Jika satuan_alias kosong, gunakan nama_satuan, jika nama_satuan juga kosong, baru gunakan 'N/A'
+                $item->satuan_alias = $item->satuan->alias;
+
+                // Hapus properti relasi objek penuh untuk menghemat payload dan mencocokkan format frontend
+                unset($item->jabatan);
+                unset($item->satuan);
+
+                return $item;
+            });
 
         return response()->json([
             'status' => 'success',

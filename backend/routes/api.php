@@ -60,7 +60,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Create (Butuh id_kegiatan di body)
     Route::get('/subkegiatan', [SubkegiatanController::class, 'index']);
     Route::post('/subkegiatan', [SubkegiatanController::class, 'store']); 
-    Route::put('/subkegiatan/{id}', [SubkegiatanController::class, 'update']);
+    Route::put('/subkegiatan/{id}/info', [SubkegiatanController::class, 'update']);
+    Route::get('/subkegiatan/{id}', [SubkegiatanController::class, 'show']);
     Route::delete('/subkegiatan/{id}', [SubkegiatanController::class, 'destroy']);
     Route::get('/subkegiatan/kegiatan/{id}', [SubkegiatanController::class, 'getByKegiatan']);
     

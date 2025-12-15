@@ -28,30 +28,27 @@ const DetailKegiatan = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
+    setLoading(true);
+    setError(null);
+    try {
         const token = localStorage.getItem('token');
         const headers = { Authorization: `Bearer ${token}` };
 
-        // 1. Ambil Detail Kegiatan (Sub)
-        const resSub = await axios.get(`${API_URL}/api/subkegiatan/${id}`, { headers });
-        setSubData(resSub.data);
+        const [resSub, resHon] = await Promise.all([
+            axios.get(`${API_URL}/api/subkegiatan/${id}`, { headers }),
+            axios.get(`${API_URL}/api/subkegiatan/${id}/honorarium`, { headers }),
+        ]);
 
-        // 2. Ambil Data Honorarium
-        const resHon = await axios.get(`${API_URL}/api/honorarium`, { headers });
-        if (resHon.data && Array.isArray(resHon.data)) {
-          const relevantHonors = resHon.data.filter(h => h.id_subkegiatan === id);
-          setHonorList(relevantHonors);
-        }
+        setSubData(resSub.data.data);
+        setHonorList(resHon.data.data); 
 
-      } catch (err) {
-        console.error(err);
+    } catch (err) {
+        console.error("Error fetching data:", err);
         setError(err.response?.data?.message || err.message || "Gagal memuat data.");
-      } finally {
+    } finally {
         setLoading(false);
-      }
-    };
+    }
+};
 
     if (id) fetchData();
   }, [id]);

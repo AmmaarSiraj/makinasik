@@ -11,6 +11,30 @@ import {
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
+// Fungsi pembantu untuk secara aman mengekstrak data list dari respons Axios
+const safeExtractData = (res, endpointName) => {
+    // Jika data ada di res.data.data (struktur umum Laravel/Lumen untuk single atau list)
+    if (res.data && res.data.data) {
+        if (Array.isArray(res.data.data)) {
+            return res.data.data;
+        }
+    }
+    
+    // Jika data adalah array langsung di res.data (struktur yang Anda berikan untuk /anggota)
+    if (res.data && Array.isArray(res.data)) {
+        return res.data;
+    }
+    
+    // Log pesan peringatan jika data tidak terdeteksi
+    if (res.data && typeof res.data === 'object' && res.data.status !== 'success') {
+        console.warn(`[DEBUG] API ${endpointName} mengembalikan status non-success/error.`, res.data);
+    } else {
+        console.warn(`[DEBUG] API ${endpointName} mengembalikan data yang tidak berbentuk array (res.data atau res.data.data).`, res);
+    }
+
+    return []; // Pastikan selalu mengembalikan array kosong
+};
+
 const EditPenugasan = () => {
   const { id } = useParams(); // ID Penugasan
   const navigate = useNavigate();
@@ -45,31 +69,43 @@ const EditPenugasan = () => {
         const token = localStorage.getItem('token');
         const headers = { Authorization: `Bearer ${token}` };
 
-        // Ambil Detail Penugasan
+        // Ambil Detail Penugasan (Single Object - Assume data.data)
         const resPenugasan = await axios.get(`${API_URL}/api/penugasan/${id}`, { headers });
-        setPenugasanInfo(resPenugasan.data);
+        const penugasanData = resPenugasan.data.data;
         
-        const idSub = resPenugasan.data.id_subkegiatan;
+        setPenugasanInfo(penugasanData);
+        
+        const idSub = penugasanData.id_subkegiatan;
 
         // Ambil Data Lainnya secara paralel
         const [resSub, resMitra, resHonor, resAturan, resAnggota, resAllKelompok, resAllPenugasan] = await Promise.all([
           axios.get(`${API_URL}/api/subkegiatan/${idSub}`, { headers }),
           axios.get(`${API_URL}/api/mitra`, { headers }),
-          axios.get(`${API_URL}/api/honorarium`, { headers }), // Nanti difilter manual
+          axios.get(`${API_URL}/api/honorarium`, { headers }), 
           axios.get(`${API_URL}/api/aturan-periode`, { headers }),
-          axios.get(`${API_URL}/api/penugasan/${id}/anggota`, { headers }), // Anggota spesifik penugasan ini
-          axios.get(`${API_URL}/api/kelompok-penugasan`, { headers }), // Semua kelompok (untuk hitung income)
-          axios.get(`${API_URL}/api/penugasan`, { headers }) // Semua penugasan (untuk map id_subkegiatan)
+          axios.get(`${API_URL}/api/penugasan/${id}/anggota`, { headers }),
+          axios.get(`${API_URL}/api/kelompok-penugasan`, { headers }),
+          axios.get(`${API_URL}/api/penugasan`, { headers })
         ]);
+        
+        // --- Ekstraksi Data List dengan Safety Check ---
+        const subKegiatanData = resSub.data.data;
+        const listMitraData = safeExtractData(resMitra, 'Mitra');
+        const honorList = safeExtractData(resHonor, 'Honorarium'); 
+        const aturanList = safeExtractData(resAturan, 'Aturan Periode');
+        const anggotaList = safeExtractData(resAnggota, 'Penugasan Anggota'); 
+        const allKelompokList = safeExtractData(resAllKelompok, 'Semua Kelompok');
+        const allPenugasanList = safeExtractData(resAllPenugasan, 'Semua Penugasan');
 
-        setSubKegiatanInfo(resSub.data);
-        setListMitra(resMitra.data);
+        setSubKegiatanInfo(subKegiatanData);
+        setListMitra(listMitraData);
+        
         // Filter honorarium hanya untuk sub kegiatan ini
-        setListHonorarium(resHonor.data.filter(h => String(h.id_subkegiatan) === String(idSub)));
-        setListAturan(resAturan.data);
+        setListHonorarium(honorList.filter(h => String(h.id_subkegiatan) === String(idSub)));
+        setListAturan(aturanList);
 
-        // Format Anggota Existing ke State selectedMitras
-        const formattedMembers = resAnggota.data.map(m => ({
+        // Format Anggota Existing ke State selectedMitras (Menggunakan anggotaList yang sudah aman)
+        const formattedMembers = anggotaList.map(m => ({
             id: m.id_mitra,
             nama_lengkap: m.nama_lengkap,
             nik: m.nik,
@@ -82,55 +118,42 @@ const EditPenugasan = () => {
         setSelectedMitras(formattedMembers);
 
         // --- HITUNG INCOME & LIMIT ---
-        if (resSub.data.tanggal_mulai) {
-            const tahunKegiatan = new Date(resSub.data.tanggal_mulai).getFullYear().toString();
-            
-            // Set Limit
-            const aturan = resAturan.data.find(r => String(r.tahun || r.periode) === tahunKegiatan);
-            setBatasHonorPeriode(aturan ? Number(aturan.batas_honor) : 0);
-
-            // Hitung Income Existing (Global)
-            const incomeMap = {};
-            
-            // Map Penugasan ID -> Sub ID
-            const mapPenugasanSub = {};
-            resAllPenugasan.data.forEach(p => mapPenugasanSub[p.id_penugasan] = p.id_subkegiatan);
-
-            // Filter Kelompok yang relevan (Tahun sama, KECUALI penugasan ini - karena ini yang mau diedit)
-            // Kita akan tambahkan nilai honor dari form edit secara realtime, jadi incomeMap hanya berisi "honor dari kegiatan LAIN"
-            resAllKelompok.data.forEach(k => {
-                // Skip data dari penugasan yang sedang diedit (agar tidak double count dengan state form)
-                if (String(k.id_penugasan) === String(id)) return;
-
-                const subId = mapPenugasanSub[k.id_penugasan];
-                // Cari info sub (sayangnya kita butuh tanggal mulai semua sub, 
-                // asumsi resAllPenugasan/resAllSub sudah ada, tapi disini kita pakai logic sederhana dulu
-                // atau fetch semua sub kegiatan jika perlu akurasi tinggi.
-                // Disini kita skip validasi tanggal sub lain demi performa, atau anggap user hanya edit current context
-            });
-            
-            // NOTE: Untuk Edit, perhitungan "Realtime Cross-Activity" agak kompleks. 
-            // Disini kita gunakan pendekatan: 
-            // 1. Ambil total pendapatan SAAT INI dari database (termasuk kegiatan ini).
-            // 2. Kurangi pendapatan LAMA dari kegiatan ini.
-            // 3. Tambahkan pendapatan BARU dari form.
+        if (subKegiatanData.tanggal_mulai) {
+            const tahunKegiatan = new Date(subKegiatanData.tanggal_mulai).getFullYear().toString();
             
             // Fetch Transaksi Mitra Spesifik untuk Tahun Ini
             const resTrans = await axios.get(`${API_URL}/api/transaksi`, { 
                 headers, params: { tahun: tahunKegiatan } 
             });
+            const transList = safeExtractData(resTrans, 'Transaksi');
             
+            // Set Limit
+            const aturan = aturanList.find(r => String(r.tahun || r.periode) === tahunKegiatan);
+            setBatasHonorPeriode(aturan ? Number(aturan.batas_honor) : 0);
+
             const transMap = {};
-            resTrans.data.forEach(t => {
-                transMap[String(t.id)] = Number(t.total_pendapatan);
+            transList.forEach(t => {
+                // Asumsi t.id_mitra adalah kunci yang benar untuk transaksi
+                transMap[String(t.id_mitra)] = Number(t.total_pendapatan);
             });
 
+            // Map Penugasan ID -> Sub ID
+            const mapPenugasanSub = {};
+            allPenugasanList.forEach(p => mapPenugasanSub[p.id_penugasan] = p.id_subkegiatan);
+
+            // Perhitungan income lain (tetap disederhanakan)
+            allKelompokList.forEach(k => {
+                if (String(k.id_penugasan) === String(id)) return;
+                // Logic perhitungan income lain dilewatkan/diabaikan
+            });
+            
             // Kurangi honor dari kegiatan INI (karena mau diganti dengan nilai form)
             formattedMembers.forEach(m => {
-                const hItem = resHonor.data.find(h => String(h.id_subkegiatan) === String(idSub) && h.kode_jabatan === m.assignedJabatan);
+                const hItem = honorList.find(h => String(h.id_subkegiatan) === String(idSub) && h.kode_jabatan === m.assignedJabatan);
                 const tarifLama = hItem ? Number(hItem.tarif) : 0;
                 const honorLama = tarifLama * Number(m.assignedVolume);
                 
+                // Menggunakan id mitra untuk mengakses transMap
                 if (transMap[String(m.id)]) {
                     transMap[String(m.id)] -= honorLama;
                 }
@@ -140,8 +163,8 @@ const EditPenugasan = () => {
         }
 
       } catch (err) {
-        console.error(err);
-        Swal.fire('Error', 'Gagal memuat data penugasan.', 'error');
+        console.error("Error saat memuat data:", err.response?.data || err.message, err);
+        Swal.fire('Error', 'Gagal memuat data penugasan. Cek konsol browser untuk detail.', 'error');
         navigate('/admin/penugasan');
       } finally {
         setLoading(false);

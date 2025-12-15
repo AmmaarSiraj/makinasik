@@ -31,4 +31,10 @@ class Honorarium extends Model
     {
         return $this->belongsTo(JabatanMitra::class, 'kode_jabatan', 'kode_jabatan');
     }
+
+    public function satuan()
+    {
+        // Honorarium.id_satuan terhubung ke SatuanKegiatan.id
+        return $this->belongsTo(SatuanKegiatan::class, 'id_satuan', 'id');
+    }
 }

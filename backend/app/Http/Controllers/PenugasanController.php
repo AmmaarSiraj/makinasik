@@ -38,8 +38,11 @@ class PenugasanController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'id_subkegiatan' => 'required|exists:subkegiatan,id',
-            'id_pengawas'    => 'required|exists:users,id',
-            'anggota'        => 'nullable|array' 
+            'id_pengawas'    => 'required|exists:user,id', // <--- PERBAIKAN: Mengubah 'users' menjadi 'user'
+            'anggota'        => 'nullable|array',
+            'anggota.*.id_mitra'     => 'required|exists:mitra,id',
+            'anggota.*.kode_jabatan' => 'required|exists:jabatan_mitra,kode_jabatan',
+            'anggota.*.volume_tugas' => 'required|integer|min:1',
         ]);
 
         if ($validator->fails()) {
@@ -114,7 +117,7 @@ class PenugasanController extends Controller
                     $join->on('h.id_subkegiatan', '=', 'p.id_subkegiatan')
                         ->on('h.kode_jabatan', '=', 'kp.kode_jabatan');
                 })
-                ->where('kp.id_penugasan', $id)
+                ->where('kp.id_penugasan', $id) // Filter utama berdasarkan ID Penugasan
                 ->select([
                     'm.id as id_mitra',
                     'm.nama_lengkap',
@@ -180,7 +183,7 @@ class PenugasanController extends Controller
             'id_subkegiatan'       => $item->subkegiatan ? $item->subkegiatan->id : null,
             'nama_sub_kegiatan'    => $item->subkegiatan ? $item->subkegiatan->nama_sub_kegiatan : '-',
             
-            // [FIX] Format Tanggal Bersih YYYY-MM-DD
+            // Format Tanggal Bersih YYYY-MM-DD
             'tanggal_mulai'        => $item->subkegiatan && $item->subkegiatan->tanggal_mulai 
                                       ? Carbon::parse($item->subkegiatan->tanggal_mulai)->format('Y-m-d') 
                                       : null,

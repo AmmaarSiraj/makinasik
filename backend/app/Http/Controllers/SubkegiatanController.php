@@ -69,6 +69,23 @@ class SubkegiatanController extends Controller
         ], 201);
     }
 
+    public function show($id)
+    {
+        $sub = Subkegiatan::where('id', $id)->first();
+
+        if (!$sub) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Sub Kegiatan dengan ID ' . $id . ' tidak ditemukan'
+            ], 404);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $sub
+        ]);
+    }
+
     /**
      * Update Sub Kegiatan (Berdasarkan ID String, misal: sub12)
      */

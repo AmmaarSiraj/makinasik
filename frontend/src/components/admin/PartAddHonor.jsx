@@ -17,12 +17,12 @@ const PartAddHonor = ({ honorList, onChange }) => {
         const config = { headers: { Authorization: `Bearer ${token}` } };
         
         const [resJab, resSat] = await Promise.all([
-          axios.get(`${API_URL}/api/jabatan-mitra`, config),
-          axios.get(`${API_URL}/api/satuan`, config)
+          axios.get(`${API_URL}/api/jabatan`, config),
+          axios.get(`${API_URL}/api/satuan-kegiatan`, config)
         ]);
         
-        setJabatanOptions(resJab.data);
-        setSatuanOptions(resSat.data);
+        setJabatanOptions(resJab.data.data);
+        setSatuanOptions(resSat.data.data);
       } catch (err) {
         console.error("Gagal load master data honor", err);
       }
