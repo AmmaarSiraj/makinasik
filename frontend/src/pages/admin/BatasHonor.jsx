@@ -1,186 +1,334 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import Swal from 'sweetalert2';
-import { FaSave, FaTrash, FaCog, FaCalendarAlt, FaMoneyBillWave } from 'react-icons/fa';
+import { FaCalendarAlt, FaDollarSign, FaTrash, FaEdit, FaPlus, FaTable, FaInfoCircle } from 'react-icons/fa';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 const BatasHonor = () => {
-  const [rules, setRules] = useState([]);
-  const [newRule, setNewRule] = useState({ tahun: new Date().getFullYear(), batas_honor: '' });
-  const [loading, setLoading] = useState(false);
+  const [aturanList, setAturanList] = useState([]);
+  const [formData, setFormData] = useState({
+    periode: '',
+    batas_honor: ''
+  });
+  // editingId sekarang menyimpan ID unik database (e.g., 12), bukan periode (e.g., "2029")
+  const [editingId, setEditingId] = useState(null); 
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  // Fetch Data
-  const fetchRules = async () => {
-    setLoading(true);
-    try {
-      const res = await axios.get(`${API_URL}/api/aturan-periode`);
-      setRules(res.data);
-    } catch (err) {
-      console.error(err);
-      Swal.fire("Gagal", "Gagal memuat data aturan.", "error");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('token');
+    return { Authorization: `Bearer ${token}` };
+  };
 
-  useEffect(() => {
-    fetchRules();
-  }, []);
+  const cleanNumber = (formattedValue) => {
+    return String(formattedValue).replace(/[Rp.\s,]/g, '');
+  };
+  
+  const formatInputRupiah = (num) => {
+    const number = Number(num);
+    
+    if (String(num) === '' || number === 0) {
+        return '';
+    }
+    if (isNaN(number) || number < 0) return '';
+    
+    return new Intl.NumberFormat('id-ID', { 
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    }).format(number);
+  };
 
-  // Simpan Aturan Baru
-  const handleSaveRule = async (e) => {
-    e.preventDefault();
-    if (!newRule.tahun || !newRule.batas_honor) {
-      return Swal.fire("Validasi Gagal", "Lengkapi data tahun dan nominal batas honor.", "warning");
-    }
-    if (!/^\d{4}$/.test(newRule.tahun)) {
-      return Swal.fire("Validasi Gagal", "Format tahun harus 4 digit angka.", "warning");
-    }
+  const formatTableRupiah = (num) => {
+    const number = Number(num);
+    if (isNaN(number) || number === 0) return 'Rp 0';
+    
+    const formattedNumber = new Intl.NumberFormat('id-ID', { 
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0 
+    }).format(number);
 
-    try {
-      await axios.post(`${API_URL}/api/aturan-periode`, newRule);
-      setNewRule({ tahun: new Date().getFullYear(), batas_honor: '' });
-      fetchRules();
-      Swal.fire("Sukses", "Aturan batas honor tahunan berhasil disimpan.", "success");
-    } catch (err) {
-      Swal.fire("Gagal", err.response?.data?.error || "Gagal menyimpan.", "error");
-    }
-  };
+    return `Rp ${formattedNumber}`;
+  };
+  
+  const fetchAturan = async () => {
+    try {
+      setLoading(true);
+      
+      const response = await axios.get(`${API_URL}/api/aturan-periode`, {
+          headers: getAuthHeaders()
+      }); 
+      
+      if (response.data && Array.isArray(response.data.data)) {
+        const processedList = response.data.data.map(item => {
+            const cleanedApiValue = String(item.batas_honor).replace(/\.00$/, '');
+            return {
+                ...item,
+                batas_honor: cleanedApiValue
+            }
+        }).sort((a, b) => b.periode - a.periode); 
 
-  // Hapus Aturan
-  const handleDeleteRule = async (id) => {
-    const result = await Swal.fire({
-      title: 'Hapus Aturan?',
-      text: "Data ini akan dihapus permanen.",
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#d33',
-      confirmButtonText: 'Ya, Hapus'
-    });
+        setAturanList(processedList);
+      } else {
+        setAturanList([]);
+      }
+      setLoading(false);
+    } catch (err) {
+      console.error("Gagal mengambil data aturan honor:", err);
+      setLoading(false);
+      if (err.response?.status === 401) {
+          Swal.fire('Sesi Habis', 'Sesi Anda telah berakhir atau tidak valid.', 'error');
+      } else {
+          Swal.fire('Error', 'Gagal memuat daftar Batas Honor.', 'error');
+      }
+    }
+  };
+  
+  useEffect(() => {
+    fetchAturan();
+  }, []);
 
-    if (result.isConfirmed) {
-      try {
-        await axios.delete(`${API_URL}/api/aturan-periode/${id}`);
-        fetchRules();
-        Swal.fire("Terhapus", "Data aturan berhasil dihapus.", "success");
-      } catch (err) {
-        Swal.fire("Gagal", "Tidak bisa menghapus aturan.", "error");
-      }
-    }
-  };
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    
+    if (name === 'batas_honor') {
+        const cleaned = cleanNumber(value);
+        setFormData({ ...formData, [name]: cleaned });
+    } else {
+        setFormData({ ...formData, [name]: value });
+    }
+  };
 
-  return (
-    <div className="w-full pb-20">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-          <FaCog className="text-[#1A2A80]" /> Pengaturan Batas Honor
-        </h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Tentukan batas maksimal pendapatan honorarium mitra per tahun anggaran.
-        </p>
-      </div>
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    
+    const payload = {
+        periode: formData.periode,
+        batas_honor: parseFloat(formData.batas_honor)
+    };
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* KOLOM KIRI: FORM INPUT */}
-        <div className="lg:col-span-1">
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <h3 className="text-lg font-bold text-gray-700 mb-4 border-b pb-2">Tambah Aturan Baru</h3>
-            <form onSubmit={handleSaveRule} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Tahun Anggaran</label>
-                <div className="relative">
-                  <FaCalendarAlt className="absolute left-3 top-3 text-gray-400" />
-                  <input 
-                    type="number" 
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1A2A80] outline-none font-bold text-gray-700"
-                    placeholder="2025"
-                    value={newRule.tahun}
-                    onChange={e => setNewRule({...newRule, tahun: e.target.value})}
-                  />
-                </div>
-              </div>
+    if (!payload.periode || isNaN(payload.batas_honor) || payload.batas_honor <= 0) {
+      setError("Periode (Tahun) dan Batas Honor wajib diisi dengan nilai positif!");
+      return;
+    }
 
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Batas Maksimal (Rp)</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-3 text-gray-400 font-bold text-xs">Rp</span>
-                  <input 
-                    type="number" 
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1A2A80] outline-none font-bold text-gray-700"
-                    placeholder="0"
-                    value={newRule.batas_honor}
-                    onChange={e => setNewRule({...newRule, batas_honor: e.target.value})}
-                  />
-                </div>
-                <p className="text-[10px] text-gray-400 mt-1">*Nominal ini akan menjadi limit akumulasi honor mitra.</p>
-              </div>
+    try {
+      if (editingId) {
+        // Menggunakan editingId (yang sekarang adalah database ID) untuk UPDATE
+        await axios.put(`${API_URL}/api/aturan-periode/${editingId}`, payload, {
+            headers: getAuthHeaders()
+        });
+        Swal.fire('Berhasil', 'Aturan Honor berhasil diperbarui.', 'success');
+      } else {
+        await axios.post(`${API_URL}/api/aturan-periode`, payload, {
+            headers: getAuthHeaders()
+        });
+        Swal.fire('Berhasil', 'Aturan Honor berhasil ditambahkan.', 'success');
+      }
+      
+      setFormData({ periode: '', batas_honor: '' });
+      setEditingId(null);
+      fetchAturan();
 
-              <button 
-                type="submit" 
-                className="w-full bg-[#1A2A80] text-white py-2.5 rounded-lg font-bold hover:bg-blue-900 transition shadow-md flex justify-center items-center gap-2"
-              >
-                <FaSave /> Simpan Aturan
-              </button>
-            </form>
-          </div>
-        </div>
+    } catch (err) {
+      const msg = err.response?.data?.errors?.periode?.[0] || 
+                  err.response?.data?.errors?.batas_honor?.[0] ||
+                  err.response?.data?.message || 
+                  "Terjadi kesalahan saat menyimpan.";
+      Swal.fire('Gagal', msg, 'error');
+      setError(msg);
+    }
+  };
+  
+  const handleEdit = (item) => {
+      // Menyimpan ID unik database (item.id) ke editingId
+      setEditingId(item.id); 
+      setFormData({
+          periode: String(item.periode),
+          batas_honor: item.batas_honor 
+      });
+  };
 
-        {/* KOLOM KANAN: TABEL DATA */}
-        <div className="lg:col-span-2">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-6 py-4 bg-gray-50 border-b border-gray-100">
-              <h3 className="font-bold text-gray-700">Daftar Aturan Periode</h3>
-            </div>
-            
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-white text-gray-500 border-b border-gray-100">
-                  <tr>
-                    <th className="px-6 py-3 font-bold uppercase text-xs">Tahun</th>
-                    <th className="px-6 py-3 font-bold uppercase text-xs">Nominal Batas</th>
-                    <th className="px-6 py-3 text-right font-bold uppercase text-xs">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {loading ? (
-                    <tr><td colSpan="3" className="text-center py-8 text-gray-400">Memuat data...</td></tr>
-                  ) : rules.length === 0 ? (
-                    <tr><td colSpan="3" className="text-center py-8 text-gray-400 italic">Belum ada aturan yang dibuat.</td></tr>
-                  ) : (
-                    rules.map((r) => (
-                      <tr key={r.id} className="hover:bg-blue-50/30 transition">
-                        <td className="px-6 py-4 font-bold text-gray-800">
-                          <span className="bg-blue-100 text-[#1A2A80] px-2 py-1 rounded text-xs">
-                            {r.tahun || r.periode}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 font-bold text-green-600 flex items-center gap-2">
-                          <FaMoneyBillWave className="text-gray-300" />
-                          Rp {Number(r.batas_honor).toLocaleString('id-ID')}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <button 
-                            onClick={() => handleDeleteRule(r.id)} 
-                            className="text-red-400 hover:text-red-600 p-2 rounded hover:bg-red-50 transition"
-                            title="Hapus Aturan"
-                          >
-                            <FaTrash />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+  const handleCancelEdit = () => {
+      setEditingId(null);
+      setFormData({ periode: '', batas_honor: '' });
+  };
 
-      </div>
-    </div>
-  );
+
+  const handleDelete = async (idToDelete, periodeText) => {
+    const result = await Swal.fire({
+        title: 'Konfirmasi Hapus',
+        text: `Apakah Anda yakin ingin menghapus Batas Honor tahun ${periodeText}? (ID: ${idToDelete})`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Ya, Hapus!'
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      // Menggunakan idToDelete (yang merupakan database ID) untuk DELETE
+      await axios.delete(`${API_URL}/api/aturan-periode/${idToDelete}`, {
+          headers: getAuthHeaders()
+      });
+      
+      Swal.fire('Terhapus!', 'Batas Honor berhasil dihapus.', 'success');
+      fetchAturan();
+    } catch (err) {
+      const msg = err.response?.data?.message || "Gagal menghapus aturan. Mungkin sedang digunakan di sistem lain.";
+      Swal.fire('Gagal', msg, 'error');
+    }
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto py-8">
+      <h1 className="text-3xl font-extrabold mb-8 text-gray-900 border-b pb-2">
+        <FaDollarSign className='inline mr-3 text-green-600' /> Manajemen Batas Honor Mitra
+      </h1>
+      
+      <div className="bg-white p-6 rounded-xl shadow-lg mb-8 border border-gray-100">
+        <h2 className="text-xl font-bold mb-5 text-gray-800 flex items-center gap-2">
+            {editingId ? 
+              // Menampilkan periode untuk informasi yang lebih mudah dibaca
+              <><FaEdit className='text-yellow-600' size={18}/> Edit Batas Honor Tahun {formData.periode}</> 
+              : 
+              <><FaPlus className='text-blue-600' size={18}/> Tambah Batas Honor Baru</>
+            }
+        </h2>
+        
+        {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm border border-red-200 font-medium flex items-center gap-2"><FaInfoCircle/> {error}</div>}
+
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+          <div className="w-full">
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Periode (Tahun)</label>
+            <div className="relative">
+                <input
+                    type="number"
+                    name="periode"
+                    value={formData.periode}
+                    onChange={handleChange}
+                    placeholder="Contoh: 2025"
+                    min="2000"
+                    max="2100"
+                    disabled={!!editingId}
+                    className={`w-full border border-gray-300 px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition text-sm ${editingId ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                />
+                <FaCalendarAlt className="absolute right-3 top-3 text-gray-400" size={16}/>
+            </div>
+            </div>
+
+          <div className="w-full md:col-span-2">
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Batas Honor Maksimum (Setahun)</label>
+            <div className="relative">
+                <input
+                    type="text"
+                    name="batas_honor"
+                    value={formatInputRupiah(formData.batas_honor)}
+                    onChange={handleChange}
+                    placeholder="Contoh: 50.000.000"
+                    className="w-full border border-gray-300 px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition text-sm font-semibold text-right"
+                />
+                <span className="absolute left-3 top-3 text-gray-600 text-sm font-semibold">Rp</span>
+            </div>
+          </div>
+
+          <div className="w-full md:w-auto">
+            <button
+              type="submit"
+              className={`w-full font-semibold py-2.5 px-6 rounded-lg transition duration-200 shadow-md flex items-center justify-center gap-2 ${
+                  editingId ? 'bg-yellow-600 hover:bg-yellow-700 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'
+              }`}
+            >
+                {editingId ? <><FaEdit size={14}/> Perbarui</> : <><FaPlus size={14}/> Simpan Baru</>}
+            </button>
+            {editingId && (
+                <button
+                    type="button"
+                    onClick={handleCancelEdit}
+                    className="w-full mt-2 bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2.5 px-6 rounded-lg transition duration-200 text-sm"
+                >
+                    Batal Edit
+                </button>
+            )}
+          </div>
+        </form>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
+        <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+            <FaTable className='inline text-gray-500' size={18}/> Daftar Batas Honor
+          </h2>
+          <span className="text-sm font-bold text-gray-600 px-3 py-1 rounded-full bg-gray-200">Total: {aturanList.length}</span>
+        </div>
+        
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left">
+            <thead className="bg-gray-100 border-b border-gray-200">
+              <tr>
+                <th className="px-6 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider" style={{ width: '5%' }}>No</th>
+                <th className="px-6 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider" style={{ width: '20%' }}>Periode (Tahun)</th>
+                <th className="px-6 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider" style={{ width: '45%' }}>Batas Honor (Maksimum)</th>
+                <th className="px-6 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider text-center" style={{ width: '20%' }}>Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {loading ? (
+                <tr>
+                  <td colSpan="4" className="text-center py-10 text-gray-500">Memuat data...</td>
+                </tr>
+              ) : aturanList.length === 0 ? (
+                <tr>
+                  <td colSpan="4" className="text-center py-10 text-gray-500 italic">Belum ada aturan Batas Honor yang terdaftar.</td>
+                </tr>
+              ) : (
+                aturanList.map((item, index) => (
+                  // Menggunakan item.id untuk memeriksa apakah baris ini sedang di-edit
+                  <tr key={item.id} className={`hover:bg-blue-50/50 transition ${editingId === item.id ? 'bg-yellow-50' : ''}`}>
+                    
+                    <td className="px-6 py-4 text-sm text-gray-600 align-top">{index + 1}</td>
+                    
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-blue-700 font-mono align-top">
+                        {item.periode}
+                    </td>
+                    
+                    <td className="px-6 py-4 text-sm text-gray-800 align-top font-bold">
+                        {formatTableRupiah(item.batas_honor)}
+                    </td>
+
+                    <td className="px-6 py-4 text-center align-top space-x-2">
+                      <button
+                        onClick={() => handleEdit(item)}
+                        // Menggunakan item.id untuk memeriksa status disabled
+                        disabled={editingId === item.id} 
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition duration-200 shadow-sm inline-flex items-center gap-1 ${
+                            editingId === item.id 
+                            ? 'bg-gray-300 text-gray-600 cursor-not-allowed' 
+                            : 'bg-yellow-100 text-yellow-600 hover:bg-yellow-600 hover:text-white'
+                        }`}
+                      >
+                        <FaEdit size={10} /> Edit
+                      </button>
+                      <button
+                        // Mengirim item.id untuk DELETE
+                        onClick={() => handleDelete(item.id, item.periode)} 
+                        className="bg-red-50 text-red-600 hover:bg-red-600 hover:text-white px-3 py-1.5 rounded-lg text-xs font-medium transition duration-200 shadow-sm inline-flex items-center gap-1"
+                      >
+                        <FaTrash size={10} /> Hapus
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default BatasHonor;
