@@ -141,6 +141,64 @@ class PenugasanController extends Controller
         }
     }
 
+    public function getByMitraAndPeriode($id_mitra, $periode)
+    {
+        try {
+            // Periode format: "2025-12"
+            $parts = explode('-', $periode);
+            if (count($parts) !== 2) {
+                return response()->json(['message' => 'Format periode salah'], 400);
+            }
+            $year = $parts[0];
+            $month = $parts[1];
+
+            // Query Kompleks
+            $tasks = DB::table('kelompok_penugasan as kp')
+                ->join('penugasan as p', 'kp.id_penugasan', '=', 'p.id')
+                ->join('subkegiatan as s', 'p.id_subkegiatan', '=', 's.id')
+                ->join('kegiatan as k', 's.id_kegiatan', '=', 'k.id')
+                ->leftJoin('jabatan_mitra as jm', 'kp.kode_jabatan', '=', 'jm.kode_jabatan')
+                
+                // 1. Join ke Honorarium dulu (karena id_satuan ada di sini)
+                ->leftJoin('honorarium as h', function ($join) {
+                    $join->on('h.id_subkegiatan', '=', 's.id')
+                         ->on('h.kode_jabatan', '=', 'kp.kode_jabatan');
+                })
+
+                // 2. Join Satuan Kegiatan lewat Honorarium (BUKAN lewat subkegiatan)
+                ->leftJoin('satuan_kegiatan as sat', 'h.id_satuan', '=', 'sat.id')
+
+                ->where('kp.id_mitra', $id_mitra)
+                ->whereYear('s.tanggal_mulai', $year)
+                ->whereMonth('s.tanggal_mulai', $month)
+                ->select([
+                    's.nama_sub_kegiatan',
+                    's.tanggal_mulai',
+                    's.tanggal_selesai',
+                    'kp.volume_tugas as target_volume',
+                    'sat.nama_satuan', // Ambil dari tabel satuan yang di-join lewat honorarium
+                    'jm.nama_jabatan',
+                    // Ambil tarif, jika null anggap 0
+                    DB::raw("IFNULL(h.tarif, 0) as harga_satuan"),
+                    // Hitung total: volume * tarif
+                    DB::raw("(kp.volume_tugas * IFNULL(h.tarif, 0)) as total_honor"),
+                    // Beban anggaran: Prioritaskan dari honorarium, jika kosong ambil nama kegiatan
+                    DB::raw("COALESCE(h.beban_anggaran) as beban_anggaran") 
+                ])
+                ->orderBy('s.tanggal_mulai', 'asc')
+                ->get();
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $tasks
+            ]);
+
+        } catch (\Exception $e) {
+            // Tampilkan pesan error detail untuk debugging
+            return response()->json(['message' => 'Terjadi kesalahan: ' . $e->getMessage()], 500);
+        }
+    }
+
     /**
      * 5. DELETE PENUGASAN
      */

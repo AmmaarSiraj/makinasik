@@ -7,30 +7,40 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 const ModalSPKSetting = ({ isOpen, onClose, periode, onSuccess }) => {
   const [formData, setFormData] = useState({
+    id: null, // Tambahkan ID untuk tracking update
     nama_ppk: '',
     nip_ppk: '',
     jabatan_ppk: 'Pejabat Pembuat Komitmen',
     tanggal_surat: '',
     nomor_surat_format: '000/33730/SPK.MITRA/MM/YYYY',
     komponen_honor: 'biaya pajak, bea materai, dan jasa pelayanan keuangan',
+    template_id: null // Penting: simpan state template_id agar tidak hilang saat save
   });
   
   const [loading, setLoading] = useState(false);
+
+  const getAuthHeader = () => {
+    const token = localStorage.getItem('token');
+    return { Authorization: `Bearer ${token}` };
+  };
 
   useEffect(() => {
     if (isOpen) {
       const initData = async () => {
         try {
-          const resSetting = await axios.get(`${API_URL}/api/spk/setting/${periode}`);
-          if (resSetting.data) {
-            const formattedDate = resSetting.data.tanggal_surat ? resSetting.data.tanggal_surat.split('T')[0] : '';
-            setFormData({ 
-                ...resSetting.data, 
-                tanggal_surat: formattedDate
+          // Fetch data existing
+          const res = await axios.get(`${API_URL}/api/spk-setting/periode/${periode}`, { headers: getAuthHeader() });
+          const data = res.data.data || res.data;
+          
+          if (data) {
+            setFormData({
+                ...data, // Spread data DB ke state (termasuk id dan template_id)
+                tanggal_surat: data.tanggal_surat ? data.tanggal_surat.split('T')[0] : ''
             });
           }
         } catch (err) {
-          console.error(err);
+            // Jika 404 (belum ada), biarkan default values
+            if (err.response && err.response.status !== 404) console.error(err);
         }
       };
       initData();
@@ -44,16 +54,26 @@ const ModalSPKSetting = ({ isOpen, onClose, periode, onSuccess }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+
+    // Payload wajib menyertakan template_id yang ada di state formData
+    // agar backend tidak meresetnya jadi null.
+    const payload = { ...formData, periode };
+
     try {
-      // Kirim data tanpa template_id (hanya update detail administrasi)
-      await axios.post(`${API_URL}/api/spk/setting`, {
-        ...formData,
-        periode
-      });
+      // LOGIKA PUT vs POST
+      if (formData.id) {
+          // UPDATE
+          await axios.put(`${API_URL}/api/spk-setting/${formData.id}`, payload, { headers: getAuthHeader() });
+      } else {
+          // CREATE
+          await axios.post(`${API_URL}/api/spk-setting`, payload, { headers: getAuthHeader() });
+      }
+
       Swal.fire('Tersimpan', 'Detail administratif surat berhasil disimpan.', 'success');
       onSuccess();
       onClose();
     } catch (err) {
+      console.error(err);
       Swal.fire('Gagal', 'Terjadi kesalahan saat menyimpan.', 'error');
     } finally {
       setLoading(false);

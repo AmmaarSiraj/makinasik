@@ -41,6 +41,8 @@ class SpkSettingController extends Controller
             'nip_ppk'            => 'nullable|string|max:50',
             'jabatan_ppk'        => 'nullable|string|max:100',
             'komponen_honor'     => 'nullable|string',
+            // Pastikan template_id divalidasi dan diizinkan masuk
+            'template_id'        => 'nullable|exists:master_template_spk,id', 
         ]);
 
         if ($validator->fails()) {
@@ -97,6 +99,8 @@ class SpkSettingController extends Controller
             'nip_ppk'            => 'nullable|string|max:50',
             'jabatan_ppk'        => 'nullable|string|max:100',
             'komponen_honor'     => 'nullable|string',
+            // Validasi template_id juga saat update
+            'template_id'        => 'nullable|exists:master_template_spk,id',
         ]);
 
         if ($validator->fails()) {

@@ -19,6 +19,7 @@ class SpkSetting extends Model
         'nip_ppk',
         'jabatan_ppk',
         'komponen_honor',
+        'template_id',
     ];
 
     protected $casts = [

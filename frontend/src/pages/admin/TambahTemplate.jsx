@@ -91,7 +91,7 @@ const TambahTemplate = () => {
       const fetchData = async () => {
         setLoading(true);
         try {
-          const res = await axios.get(`${API_URL}/api/spk-templates/${id}`);
+          const res = await axios.get(`${API_URL}/api/template-spk/${id}`);
           const { nama_template, parts, articles } = res.data;
           setHeader({ nama_template });
           setParts(parts || {});
@@ -157,11 +157,11 @@ const TambahTemplate = () => {
       };
 
       if (id) {
-        await axios.put(`${API_URL}/api/spk-templates/${id}`, payload);
+        await axios.put(`${API_URL}/api/template-spk/${id}`, payload);
       } else {
-        const resCreate = await axios.post(`${API_URL}/api/spk-templates`, { nama_template: header.nama_template });
+        const resCreate = await axios.post(`${API_URL}/api/template-spk`, { nama_template: header.nama_template });
         const newId = resCreate.data.id;
-        await axios.put(`${API_URL}/api/spk-templates/${newId}`, payload);
+        await axios.put(`${API_URL}/api/template-spk/${newId}`, payload);
       }
 
       Swal.fire('Berhasil', 'Template berhasil disimpan', 'success').then(() => {

@@ -92,6 +92,38 @@ class MitraController extends Controller
         ], 200);
     }
 
+    public function getByPeriode($periode)
+    {
+        try {
+            // Periode format: "2025-12"
+            $parts = explode('-', $periode);
+            if (count($parts) !== 2) {
+                return response()->json(['message' => 'Format periode salah'], 400);
+            }
+            $year = $parts[0];
+            $month = $parts[1];
+
+            // Query menggunakan JOIN agar lebih performa dan akurat
+            $mitra = Mitra::select('mitra.*')
+                ->join('kelompok_penugasan', 'mitra.id', '=', 'kelompok_penugasan.id_mitra')
+                ->join('penugasan', 'kelompok_penugasan.id_penugasan', '=', 'penugasan.id')
+                ->join('subkegiatan', 'penugasan.id_subkegiatan', '=', 'subkegiatan.id')
+                // Filter berdasarkan tanggal mulai kegiatan
+                ->whereYear('subkegiatan.tanggal_mulai', $year)
+                ->whereMonth('subkegiatan.tanggal_mulai', $month)
+                ->distinct() // Mencegah duplikasi jika mitra punya banyak tugas di bulan itu
+                ->orderBy('mitra.nama_lengkap', 'asc')
+                ->get();
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $mitra
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+    
     /**
      * 2. TAMBAH MITRA MANUAL
      */

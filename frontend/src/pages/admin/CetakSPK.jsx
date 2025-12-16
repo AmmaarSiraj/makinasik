@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { FaPrint, FaArrowLeft, FaSpinner } from 'react-icons/fa';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
@@ -12,25 +13,68 @@ const CetakSPK = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Helper untuk Header Auth
+  const getAuthHeader = () => {
+    const token = localStorage.getItem('token');
+    return { Authorization: `Bearer ${token}` };
+  };
+
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
       try {
-        const res = await axios.get(`${API_URL}/api/spk/print/${periode}/${id_mitra}`);
-        setData(res.data);
+        const headers = getAuthHeader();
+
+        // 1. Ambil Data Mitra, Setting SPK, dan Penugasan secara Paralel
+        const [resMitra, resSetting, resTasks] = await Promise.all([
+          axios.get(`${API_URL}/api/mitra/${id_mitra}`, { headers }),
+          axios.get(`${API_URL}/api/spk-setting/periode/${periode}`, { headers }),
+          axios.get(`${API_URL}/api/penugasan/mitra/${id_mitra}/periode/${periode}`, { headers })
+        ]);
+
+        // 2. Handle Wrapper data.data (Laravel Resource)
+        const mitraData = resMitra.data.data || resMitra.data;
+        const settingData = resSetting.data.data || resSetting.data;
+        const tasksResult = resTasks.data.data || resTasks.data;
+        const tasksData = Array.isArray(tasksResult) ? tasksResult : [];
+
+        // 3. Ambil Template (Jika ada template_id di setting)
+        let templateData = null;
+        if (settingData && settingData.template_id) {
+            try {
+                const resTemplate = await axios.get(`${API_URL}/api/template-spk/${settingData.template_id}`, { headers });
+                templateData = resTemplate.data.data || resTemplate.data;
+            } catch (err) {
+                console.warn("Template tidak ditemukan, menggunakan default.");
+            }
+        }
+
+        // 4. Set State Data Gabungan
+        setData({
+            mitra: mitraData,
+            setting: settingData,
+            template: templateData,
+            tasks: tasksData
+        });
+
       } catch (err) {
-        console.error(err);
-        setError("Gagal memuat data surat.");
+        console.error("Gagal memuat data:", err);
+        setError("Gagal memuat data surat. Pastikan koneksi aman dan data tersedia.");
       } finally {
         setLoading(false);
       }
     };
-    fetchData();
+
+    if (id_mitra && periode) {
+        fetchData();
+    }
   }, [periode, id_mitra]);
 
   const handlePrint = () => {
     window.print();
   };
 
+  // --- HELPER FORMATTING ---
   const formatRupiah = (num) => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(num || 0);
   };
@@ -147,25 +191,25 @@ const CetakSPK = () => {
     const { mitra, setting, tasks } = data;
     const totalHonor = tasks.reduce((acc, curr) => acc + Number(curr.total_honor || 0), 0);
     const tahunAnggaran = setting.tanggal_surat ? new Date(setting.tanggal_surat).getFullYear() : new Date().getFullYear();
-
     const today = new Date();
 
     let result = text;
 
-    result = result.replace(/{{NAMA_PPK}}/g, `<b>${setting.nama_ppk || '...'}</b>`);
-    result = result.replace(/{{NIP_PPK}}/g, setting.nip_ppk || '...');
-    result = result.replace(/{{JABATAN_PPK}}/g, setting.jabatan_ppk || '...');
-    result = result.replace(/{{NAMA_MITRA}}/g, `<b>${mitra.nama_lengkap}</b>`);
-    result = result.replace(/{{NIK}}/g, mitra.nik || '-');
-    result = result.replace(/{{ALAMAT_MITRA}}/g, mitra.alamat || '-');
-    result = result.replace(/{{TOTAL_HONOR}}/g, `<b>${formatRupiah(totalHonor)}</b>`);
-    result = result.replace(/{{TERBILANG}}/g, `<i>${formatTerbilang(totalHonor)}</i>`);
+    result = result.replace(/\[NAMA_PPK\]/g, `<b>${setting.nama_ppk || '...'}</b>`);
+    result = result.replace(/\[NIP_PPK\]/g, setting.nip_ppk || '...');
+    result = result.replace(/\[JABATAN_PPK\]/g, setting.jabatan_ppk || '...');
+    result = result.replace(/\[NAMA_MITRA\]/g, `<b>${mitra.nama_lengkap}</b>`);
+    result = result.replace(/\[NIK\]/g, mitra.nik || '-');
+    result = result.replace(/\[ALAMAT\]/g, mitra.alamat || '-');
+    result = result.replace(/\[TOTAL_HONOR\]/g, `<b>${formatRupiah(totalHonor)}</b>`);
+    result = result.replace(/\[TERBILANG\]/g, `<i>${formatTerbilang(totalHonor)}</i>`);
     
-    result = result.replace(/{{TANGGAL_SURAT}}/g, formatDateIndo(setting.tanggal_surat));
-    result = result.replace(/{{TANGGAL_TERBILANG}}/g, getTanggalTerbilang(today));
+    result = result.replace(/\[TANGGAL_SURAT\]/g, formatDateIndo(setting.tanggal_surat));
+    result = result.replace(/\[TANGGAL_TERBILANG\]/g, getTanggalTerbilang(today));
     
-    result = result.replace(/{{TAHUN}}/g, tahunAnggaran);
-    result = result.replace(/{{NOMOR_SURAT}}/g, setting.nomor_surat_format || '...');
+    result = result.replace(/\[TAHUN\]/g, tahunAnggaran);
+    result = result.replace(/\[NOMOR_SURAT\]/g, setting.nomor_surat_format || '...');
+    result = result.replace(/\[KOMPONEN_HONOR\]/g, setting.komponen_honor || '...');
     
     if (result.includes('{{Lampiran}}')) {
         const lampiranHTML = generateLampiranHTML(tasks, totalHonor, tahunAnggaran, setting.nomor_surat_format);
@@ -180,8 +224,23 @@ const CetakSPK = () => {
     return result;
   };
 
-  if (loading) return <div className="p-10 text-center">Memuat dokumen...</div>;
-  if (error || !data) return <div className="p-10 text-center text-red-500">{error || "Data tidak ditemukan"}</div>;
+  if (loading) {
+    return (
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
+            <FaSpinner className="animate-spin text-4xl text-blue-600 mb-4" />
+            <p className="text-gray-600 font-medium">Menyiapkan Dokumen SPK...</p>
+        </div>
+    );
+  }
+
+  if (error || !data) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-screen">
+            <div className="text-red-500 font-bold mb-4">{error || "Data tidak ditemukan"}</div>
+            <button onClick={() => navigate(-1)} className="text-blue-600 underline">Kembali</button>
+        </div>
+      );
+  }
 
   const { mitra, setting, tasks, template } = data;
   const totalHonor = tasks.reduce((acc, curr) => acc + Number(curr.total_honor || 0), 0);
@@ -197,87 +256,98 @@ const CetakSPK = () => {
     <div className="min-h-screen bg-gray-100 flex flex-col items-center p-8 print:p-0 print:bg-white">
       
       <style>{`
+        /* SETTING MARGIN HALAMAN FISIK (PENTING UNTUK HALAMAN 2 DST) */
         @page { 
-          margin: 5mm; 
+          margin: 0; /* Margin 0 agar header/footer browser hilang */
           size: A4 portrait;
         }
+
         @media print {
-          body { -webkit-print-color-adjust: exact; margin: 0; }
-          @page { margin: 0; }
+          body { 
+            -webkit-print-color-adjust: exact; 
+            margin: 0; 
+            background: white; 
+          }
+
           .print-content { 
-            padding: 15mm 10mm !important; 
-            width: 100% !important; 
+            /* PADDING SEBAGAI GANTI MARGIN */
+            padding: 15mm 15mm !important; 
+            width: 100% !important;
             margin: 0 !important; 
             box-shadow: none !important; 
+            min-height: 100vh !important;
+            box-sizing: border-box !important;
           }
+
           .no-print { display: none !important; }
+          
+          /* Spacer halaman baru */
           .page-break-spacer {
             page-break-before: always !important; 
             display: block !important;
-            height: 20mm !important; 
-            width: 100%;
+            height: 0 !important; 
             visibility: hidden; 
+          }
+
+          /* Reset margin top untuk elemen yang dipaksa pindah halaman */
+          .print\:break-before-page {
+            page-break-before: always !important;
+            margin-top: 0 !important;
+            padding-top: 0 !important;
+          }
+          
+          .print\:break-after-page {
+            page-break-after: always !important;
           }
         }
       `}</style>
 
-      <div className="w-full max-w-[210mm] flex justify-between mb-6 print:hidden">
-        <button onClick={() => navigate(-1)} className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded shadow font-bold">
-          &larr; Kembali
+      {/* Toolbar Atas (Hidden saat print) */}
+      <div className="w-full max-w-[210mm] flex justify-between mb-6 print:hidden no-print">
+        <button 
+            onClick={() => navigate(-1)} 
+            className="flex items-center gap-2 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded shadow font-bold transition"
+        >
+          <FaArrowLeft /> Kembali
         </button>
-        <button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded shadow font-bold flex items-center gap-2">
-          Cetak PDF
+        <button 
+            onClick={handlePrint} 
+            className="flex items-center gap-2 bg-[#1A2A80] hover:bg-blue-900 text-white px-6 py-2 rounded shadow font-bold transition"
+        >
+          <FaPrint /> Cetak PDF
         </button>
       </div>
 
-      <div className="print-content bg-white w-[210mm] min-h-[297mm] p-[10mm] shadow-2xl text-black font-serif text-[11pt] leading-relaxed relative mx-auto">
+      {/* Konten Kertas A4 */}
+      <div className="print-content bg-white w-[210mm] min-h-[297mm] p-[15mm] shadow-2xl text-black font-serif text-[11pt] leading-relaxed relative mx-auto">
         
         {template ? (
+            // ================= RENDER TEMPLATE DINAMIS =================
             <>
                 <div className="text-center font-bold mb-6 pt-0 mt-0"> 
-                    <h3 className="uppercase text-lg m-0 leading-tight">PERJANJIAN KERJA</h3>
-                    <h3 className="uppercase text-lg m-0 leading-tight">PETUGAS PENDATAAN LAPANGAN</h3>
-                    <h3 className="uppercase text-lg m-0 leading-tight">KEGIATAN SURVEI/SENSUS TAHUN {tahunAnggaran}</h3>
-                    <h3 className="uppercase m-0 leading-tight">PADA BADAN PUSAT STATISTIK KOTA SALATIGA</h3>
-                    <p className="font-normal mt-2">NOMOR: {setting.nomor_surat_format}</p>
+                    <div className="uppercase text-lg border-b-2 border-black pb-2 inline-block w-full">{template.nama_template}</div>
                 </div>
 
-                <div className="text-justify mb-4" dangerouslySetInnerHTML={{ __html: replaceVariables(template.parts.pembuka) }}></div>
+                {/* Bagian Pembuka */}
+                <div className="text-justify mb-4 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: replaceVariables(template.bagian_teks?.pembuka) }}></div>
 
-                <table className="w-full mb-6 align-top">
-                    <tbody>
-                        <tr>
-                            <td className="w-6 text-center align-top font-bold">1.</td>
-                            <td className="w-40 align-top font-bold">{setting.nama_ppk}</td>
-                            <td className="w-4 align-top">:</td>
-                            <td className="align-top text-justify" dangerouslySetInnerHTML={{ __html: replaceVariables(template.parts.pihak_pertama) }}></td>
-                        </tr>
-                        <tr><td colSpan="4" className="h-4"></td></tr>
-                        <tr>
-                            <td className="w-6 text-center align-top font-bold">2.</td>
-                            <td className="w-40 align-top font-bold">{mitra.nama_lengkap}</td>
-                            <td className="w-4 align-top">:</td>
-                            <td className="align-top text-justify" dangerouslySetInnerHTML={{ __html: replaceVariables(template.parts.pihak_kedua) }}></td>
-                        </tr>
-                    </tbody>
-                </table>
-
-                <div className="text-justify mb-4" dangerouslySetInnerHTML={{ __html: replaceVariables(template.parts.kesepakatan) }}></div>
-
-                <div className="space-y-4">
-                    {template.articles.map((article, idx) => (
+                {/* Pasal-Pasal */}
+                <div className="space-y-4 mb-6">
+                    {template.pasal && template.pasal.map((p, idx) => (
                         <div key={idx}>
                             <div className="text-center font-bold">
-                                Pasal {article.nomor_pasal}
-                                {article.judul_pasal && <span className="block uppercase">{article.judul_pasal}</span>}
+                                Pasal {p.nomor_pasal}
+                                {p.judul_pasal && <span className="block uppercase">{p.judul_pasal}</span>}
                             </div>
-                            <div className="text-justify mt-1 whitespace-pre-line" dangerouslySetInnerHTML={{ __html: replaceVariables(article.isi_pasal) }}></div>
+                            <div className="text-justify mt-1 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: replaceVariables(p.isi_pasal) }}></div>
                         </div>
                     ))}
                 </div>
 
-                <div className="text-justify mt-6" dangerouslySetInnerHTML={{ __html: replaceVariables(template.parts.penutup) }}></div>
+                {/* Bagian Penutup */}
+                <div className="text-justify mt-6 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: replaceVariables(template.bagian_teks?.penutup) }}></div>
 
+                {/* Tanda Tangan */}
                 <div className="mt-12 flex justify-between px-4 break-inside-avoid">
                     <div className="text-center w-64">
                         <p className="font-bold mb-20">PIHAK KEDUA,</p>
@@ -291,7 +361,9 @@ const CetakSPK = () => {
                 </div>
             </>
         ) : (
+            // ================= RENDER TEMPLATE DEFAULT (HARDCODED) =================
             <>
+                {/* HALAMAN 1 */}
                 <div className="print:break-after-page relative pb-10">
                     <div className="text-center font-bold mb-6">
                         <h3 className="uppercase text-lg">PERJANJIAN KERJA</h3>
@@ -326,7 +398,7 @@ const CetakSPK = () => {
                                 <td className="w-40 align-top font-bold pt-4">{mitra.nama_lengkap}</td>
                                 <td className="w-4 align-top pt-4">:</td>
                                 <td className="align-top pt-4 text-justify">
-                                    Mitra Statistik, berkedudukan di {mitra.alamat}, bertindak untuk dan atas nama diri sendiri, 
+                                    Mitra Statistik, berkedudukan di {mitra.alamat || '-'}, bertindak untuk dan atas nama diri sendiri, 
                                     selanjutnya disebut <strong> PIHAK KEDUA</strong>.
                                 </td>
                             </tr>
@@ -336,8 +408,8 @@ const CetakSPK = () => {
                     <div className="text-justify mb-4">
                         <p>
                             Bahwa PIHAK PERTAMA dan PIHAK KEDUA yang secara bersama-sama disebut PARA PIHAK, sepakat untuk mengikatkan diri 
-                            dalam Perjanjian Kerja Petugas Pendataan Lapangan Kegiatan Survei/Sensus Tahun {tahunAnggaran} pada Badan Pusat Statistik Kota Salatiga, 
-                            yang selanjutnya disebut Perjanjian, dengan ketentuan-ketentuan sebagai berikut:
+                            dalam Perjanjian Kerja Petugas Pendataan Lapangan Kegiatan Survei/Sensus Tahun {tahunAnggaran}, 
+                            dengan ketentuan-ketentuan sebagai berikut:
                         </p>
                     </div>
 
@@ -345,25 +417,38 @@ const CetakSPK = () => {
                         <div className="text-center"><h4 className="font-bold">Pasal 1</h4></div>
                         <p className="text-justify">
                             PIHAK PERTAMA memberikan pekerjaan kepada PIHAK KEDUA dan PIHAK KEDUA menerima pekerjaan dari PIHAK PERTAMA 
-                            sebagai Petugas Pendataan Lapangan Kegiatan Survei/Sensus Tahun {tahunAnggaran} pada Badan Pusat Statistik Kota Salatiga, 
-                            dengan lingkup pekerjaan yang ditetapkan oleh PIHAK PERTAMA.
+                            sebagai Petugas Pendataan Lapangan, dengan lingkup pekerjaan yang ditetapkan oleh PIHAK PERTAMA.
                         </p>
 
                         <div className="text-center"><h4 className="font-bold">Pasal 2</h4></div>
                         <p className="text-justify">
-                            Ruang lingkup pekerjaan dalam Perjanjian ini mengacu pada wilayah kerja dan beban kerja sebagaimana tertuang dalam lampiran Perjanjian, 
-                            Pedoman Petugas Pendataan Lapangan Wilayah Kegiatan Survei/Sensus Tahun {tahunAnggaran} pada Badan Pusat Statistik Kota Salatiga, 
-                            dan ketentuan-ketentuan yang ditetapkan oleh PIHAK PERTAMA.
+                            (1) PIHAK KEDUA berhak untuk mendapatkan honorarium petugas dari PIHAK PERTAMA sebesar 
+                            <strong> {formatRupiah(totalHonor)} </strong> 
+                            (<i>{formatTerbilang(totalHonor)}</i>).
+                        </p>
+                        <p className="text-justify mt-1">
+                            (2) Honorarium sudah termasuk {setting.komponen_honor || 'biaya pajak, bea materai, dan jasa pelayanan keuangan'}.
                         </p>
 
                         <div className="text-center"><h4 className="font-bold">Pasal 3</h4></div>
                         <p className="text-justify">
                             Jangka Waktu Perjanjian terhitung sejak tanggal {formatDateIndo(setting.tanggal_surat)} sampai dengan selesainya periode kegiatan bulan ini.
                         </p>
+                        
+                        <div className="text-center"><h4 className="font-bold">Pasal 4</h4></div>
+                        <p className="text-justify">
+                            Demikian Perjanjian ini dibuat dan ditandatangani oleh PARA PIHAK dalam 2 (dua) rangkap asli bermeterai cukup, 
+                            tanpa paksaan dari PIHAK manapun dan untuk dilaksanakan oleh PARA PIHAK.
+                        </p>
                     </div>
                 </div>
 
-                <div className="print:break-before-page relative pt-8 print:break-after-page"> 
+                {/* HALAMAN 2: Pasal 4 (Lanjutan) - 9 */}
+                <div className="print:break-before-page relative pt-0 print:break-after-page"> 
+                    
+                    {/* INI DIV SPACER YANG ANDA MINTA UNTUK JARAK ATAS HALAMAN 2 */}
+                    <div className="h-16 w-full hidden print:block"></div> 
+
                     <div className="space-y-4">
                         <div className="text-center"><h4 className="font-bold">Pasal 4</h4></div>
                         <p className="text-justify">
@@ -412,7 +497,12 @@ const CetakSPK = () => {
                     </div>
                 </div>
 
-                <div className="print:break-before-page relative pt-8">
+                {/* HALAMAN 3: Pasal 10 - 12 */}
+                <div className="print:break-before-page relative pt-0">
+                    
+                    {/* INI DIV SPACER UNTUK JARAK ATAS HALAMAN 3 */}
+                    <div className="h-16 w-full hidden print:block"></div> 
+
                     <div className="space-y-4">
                         <div className="text-center"><h4 className="font-bold">Pasal 10</h4></div>
                         <p className="text-justify">
@@ -453,7 +543,9 @@ const CetakSPK = () => {
                     </div>
                 </div>
 
+                {/* HALAMAN 4: Lampiran */}
                 <div className="print:break-before-page min-h-[297mm] pt-10">
+                    <div className="h-10 w-full hidden print:block"></div>
                     <div className="text-center font-bold mb-8">
                         <h3 className="uppercase">LAMPIRAN</h3>
                         <h3 className="uppercase">PERJANJIAN KERJA PETUGAS PENCACAHAN/PENDATAAN LAPANGAN</h3>

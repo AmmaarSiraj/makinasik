@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { 
-  FaUserClock, 
   FaChartLine, 
   FaUsers, 
   FaPlus,
@@ -41,15 +40,22 @@ const AdminDashboard = () => {
         const token = localStorage.getItem('token');
         const headers = { Authorization: `Bearer ${token}` };
 
-        // 1. Fetch semua data yang dibutuhkan termasuk Honorarium (untuk Target Volume)
-        const [resPengajuan, resKegiatan, resMitra, resPenugasan, resKelompok, resHonor] = await Promise.all([
-          axios.get(`${API_URL}/api/manajemen-mitra`, { headers }),
+        // 1. Fetch data (Hapus manajemen-mitra)
+        const [resKegiatan, resMitra, resPenugasan, resKelompok, resHonor] = await Promise.all([
           axios.get(`${API_URL}/api/kegiatan`, { headers }),
           axios.get(`${API_URL}/api/mitra`, { headers }),
           axios.get(`${API_URL}/api/penugasan`, { headers }),
           axios.get(`${API_URL}/api/kelompok-penugasan`, { headers }),
-          axios.get(`${API_URL}/api/honorarium`, { headers }) // Fetch Honorarium
+          axios.get(`${API_URL}/api/honorarium`, { headers })
         ]);
+
+        // --- HANDLING DATA STRUCTURE (data.data) ---
+        // Menggunakan fallback (|| []) agar tidak error jika data kosong/null
+        const kegiatanData = resKegiatan.data.data || [];
+        const mitraData = resMitra.data.data || [];
+        const penugasanData = resPenugasan.data.data || [];
+        const kelompokData = resKelompok.data.data || [];
+        const honorData = resHonor.data.data || [];
 
         const today = new Date();
         const currentYear = today.getFullYear();
@@ -60,23 +66,21 @@ const AdminDashboard = () => {
         // --- A. PERSIAPAN DATA VOLUME ---
         
         // 1. Hitung Target Volume per Sub Kegiatan (Dari Honorarium)
-        // Key: id_subkegiatan, Value: Sum of basis_volume
         const targetVolumeMap = {};
-        resHonor.data.forEach(h => {
+        honorData.forEach(h => {
             if (!targetVolumeMap[h.id_subkegiatan]) targetVolumeMap[h.id_subkegiatan] = 0;
             targetVolumeMap[h.id_subkegiatan] += Number(h.basis_volume || 0);
         });
 
         // 2. Hitung Volume Terisi/Assigned (Dari Kelompok Penugasan)
-        // Key: id_penugasan, Value: Sum of volume_tugas
         const assignedVolumeMap = {};
-        resKelompok.data.forEach(kp => {
+        kelompokData.forEach(kp => {
             if (!assignedVolumeMap[kp.id_penugasan]) assignedVolumeMap[kp.id_penugasan] = 0;
             assignedVolumeMap[kp.id_penugasan] += Number(kp.volume_tugas || 0);
         });
 
         // --- B. PROSES DATA PROGRESS SUB KEGIATAN ---
-        const processedProgress = resPenugasan.data.map(task => {
+        const processedProgress = penugasanData.map(task => {
             if (!task.tanggal_mulai) return null;
             
             const start = new Date(task.tanggal_mulai);
@@ -111,7 +115,7 @@ const AdminDashboard = () => {
             };
         })
         .filter(item => item !== null)
-        .sort((a, b) => b.percent - a.percent); // Urutkan progress tertinggi
+        .sort((a, b) => b.percent - a.percent);
 
         setSubKegiatanProgress(processedProgress);
 
@@ -119,7 +123,7 @@ const AdminDashboard = () => {
         
         // Mitra Aktif Bulan Ini
         const activeTaskIdsMonth = new Set();
-        resPenugasan.data.forEach(task => {
+        penugasanData.forEach(task => {
             const start = new Date(task.tanggal_mulai);
             const end = new Date(task.tanggal_selesai);
             if (start <= endOfMonth && end >= startOfMonth) {
@@ -128,27 +132,24 @@ const AdminDashboard = () => {
         });
 
         const activeMitraMonthSet = new Set();
-        resKelompok.data.forEach(k => {
+        kelompokData.forEach(k => {
             if (activeTaskIdsMonth.has(k.id_penugasan)) {
                 activeMitraMonthSet.add(k.id_mitra);
             }
         });
 
-        // Hitung tugas yang sedang berjalan
-        const activeSubKegiatanCount = processedProgress.length;
-
         setStats({
           activeMitraMonth: activeMitraMonthSet.size,
-          activeKegiatan: activeSubKegiatanCount,
-          totalMitra: resMitra.data.length,
-          totalKegiatan: resKegiatan.data.length
+          activeKegiatan: processedProgress.length,
+          totalMitra: mitraData.length,
+          totalKegiatan: kegiatanData.length
         });
 
         // --- D. DATA TABEL MITRA AKTIF (TAHUNAN) ---
         const activePenugasanIdsYear = new Set();
         const penugasanMap = {}; 
 
-        resPenugasan.data.forEach(task => {
+        penugasanData.forEach(task => {
             const start = new Date(task.tanggal_mulai);
             const end = new Date(task.tanggal_selesai);
             if (start.getFullYear() === currentYear || end.getFullYear() === currentYear) {
@@ -162,7 +163,7 @@ const AdminDashboard = () => {
         });
 
         const mitraActivityMap = {};
-        resKelompok.data.forEach(kelompok => {
+        kelompokData.forEach(kelompok => {
             if (activePenugasanIdsYear.has(kelompok.id_penugasan)) {
                 const mitraId = kelompok.id_mitra;
                 if (!mitraActivityMap[mitraId]) {
@@ -181,24 +182,18 @@ const AdminDashboard = () => {
         const mitraList = Object.values(mitraActivityMap);
         if (mitraList.length > 0 && !mitraList[0].nama_mitra) {
              const mitraDbMap = {};
-             resMitra.data.forEach(m => mitraDbMap[m.id] = m.nama_lengkap);
+             mitraData.forEach(m => mitraDbMap[m.id] = m.nama_lengkap);
              mitraList.forEach(m => m.nama_mitra = mitraDbMap[m.id] || 'Unknown Mitra');
         }
         
         mitraList.sort((a, b) => b.kegiatan.length - a.kegiatan.length);
         setActiveMitraList(mitraList);
 
-        // --- E. DATA TIMELINE ---
+        // --- E. DATA TIMELINE (Hanya Penugasan) ---
         const activities = [];
-        resPengajuan.data.slice(0, 5).forEach(p => {
-            activities.push({
-                id: `p-${p.id}`,
-                type: 'registrasi',
-                text: `${p.nama_lengkap} mendaftar sebagai mitra.`,
-                time: new Date(p.created_at),
-            });
-        });
-        resPenugasan.data.slice(0, 5).forEach(t => {
+        // Removed: Logika pengajuan mitra baru
+        
+        penugasanData.slice(0, 10).forEach(t => {
             activities.push({
                 id: `t-${t.id_penugasan}`,
                 type: 'tugas',
@@ -206,8 +201,9 @@ const AdminDashboard = () => {
                 time: new Date(t.penugasan_created_at || t.created_at || new Date()),
             });
         });
+        
         activities.sort((a, b) => b.time - a.time);
-        setRecentActivities(activities.slice(0, 5));
+        setRecentActivities(activities.slice(0, 6));
 
       } catch (err) {
         console.error("Gagal memuat dashboard:", err);
@@ -494,7 +490,7 @@ const AdminDashboard = () => {
                     ) : (
                         recentActivities.map((act) => (
                             <div key={act.id} className="relative pl-6 group">
-                                <span className={`absolute -left-[9px] top-1 h-4 w-4 rounded-full border-4 border-white ${act.type === 'registrasi' ? 'bg-yellow-400' : 'bg-blue-500'} shadow-sm`}></span>
+                                <span className="absolute -left-[9px] top-1 h-4 w-4 rounded-full border-4 border-white bg-blue-500 shadow-sm"></span>
                                 <div className="flex flex-col">
                                     <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">
                                         {act.time.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} • {act.time.toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})}
@@ -509,8 +505,8 @@ const AdminDashboard = () => {
                 </div>
                 
                 <div className="mt-6 pt-4 border-t border-gray-100 text-center">
-                    <Link to="/admin/manajemen-mitra" className="text-xs font-bold text-gray-500 hover:text-[#1A2A80] transition">
-                        Lihat Log Lengkap
+                    <Link to="/admin/penugasan" className="text-xs font-bold text-gray-500 hover:text-[#1A2A80] transition">
+                        Lihat Selengkapnya
                     </Link>
                 </div>
             </div>

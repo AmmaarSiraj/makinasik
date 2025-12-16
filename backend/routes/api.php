@@ -93,6 +93,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::delete('/aturan-periode/{id}', [AturanPeriodeController::class, 'destroy']);
 
     Route::post('/mitra/import', [MitraController::class, 'import']);
+    Route::get('/mitra/periode/{periode}', [MitraController::class, 'getByPeriode']);
     Route::get('/mitra', [MitraController::class, 'index']);
     Route::get('/mitraop', [MitraController::class, 'optimize']);
     Route::get('/mitra/aktif', [MitraController::class, 'mitraAktif']);
@@ -104,6 +105,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/penugasan', [PenugasanController::class, 'index']);
     Route::post('/penugasan', [PenugasanController::class, 'store']);
     Route::get('/penugasan/{id}', [PenugasanController::class, 'show']);
+    Route::get('/penugasan/mitra/{id}/periode/{periode}', [PenugasanController::class, 'getByMitraAndPeriode']);
     Route::delete('/penugasan/{id}', [PenugasanController::class, 'destroy']);
     Route::get('/penugasan/{id}/anggota', [PenugasanController::class, 'getAnggota']);
 
