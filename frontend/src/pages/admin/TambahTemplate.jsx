@@ -15,28 +15,90 @@ const VARIABLES = [
   { code: '{{NIP_PPK}}', desc: 'NIP PPK' },
   { code: '{{TOTAL_HONOR}}', desc: 'Total Honor (Rp)' },
   { code: '{{TERBILANG}}', desc: 'Terbilang Honor' },
-  { code: '{{TANGGAL_SURAT}}', desc: 'Tanggal Surat' },
-  { code: '{{TANGGAL_TERBILANG}}', desc: 'Tanggal (Teks)' },
+  { code: '{{TANGGAL_SURAT}}', desc: 'Tanggal Surat (ex: 01 Januari 2025)' },
+  { code: '{{HARI_INI}}', desc: 'Hari saat ini (Senin, dst)' },
+  { code: '{{TANGGAL_TERBILANG}}', desc: 'Tanggal saat ini (Satu, dst)' },
+  { code: '{{BULAN_INI}}', desc: 'Bulan saat ini (Januari, dst)' },
+  { code: '{{TAHUN_TERBILANG}}', desc: 'Tahun saat ini (Dua Ribu...)' },
+  { code: '{{TAHUN}}', desc: 'Tahun Anggaran (Angka)' },
   { code: '{{NOMOR_SURAT}}', desc: 'Nomor Surat SPK' },
-  { code: '{{TAHUN}}', desc: 'Tahun Anggaran' },
   { code: '{{Break_Space}}', desc: 'Paksa Pindah Halaman' },
   { code: '{{Lampiran}}', desc: 'Tabel Rincian Tugas (Otomatis)' },
 ];
 
 const DEFAULT_CONTENT = {
   parts: {
-    pembuka: "Pada hari ini {{TANGGAL_TERBILANG}}, bertempat di BPS Kota Salatiga, yang bertandatangan di bawah ini:",
-    pihak_pertama: "{{NAMA_PPK}}, {{JABATAN_PPK}} Badan Pusat Statistik Kota Salatiga, berkedudukan di BPS Kota Salatiga, bertindak untuk dan atas nama Badan Pusat Statistik Kota Salatiga, selanjutnya disebut sebagai PIHAK PERTAMA.",
-    pihak_kedua: "{{NAMA_MITRA}}, Mitra Statistik, berkedudukan di {{ALAMAT_MITRA}}, bertindak untuk dan atas nama diri sendiri, selanjutnya disebut PIHAK KEDUA.",
-    kesepakatan: "Bahwa PIHAK PERTAMA dan PIHAK KEDUA yang secara bersama-sama disebut PARA PIHAK, sepakat untuk mengikatkan diri dalam Perjanjian Kerja Petugas Pendataan Lapangan Kegiatan Statistik pada Badan Pusat Statistik Kota Salatiga, yang selanjutnya disebut Perjanjian, dengan ketentuan-ketentuan sebagai berikut:",
+    pembuka: "Pada hari ini {{HARI_INI}}, tanggal {{TANGGAL_TERBILANG}}, bulan {{BULAN_INI}} tahun {{TAHUN_TERBILANG}}, bertempat di BPS Kota Salatiga, yang bertandatangan di bawah ini:",
+    
+    pihak_pertama: "{{JABATAN_PPK}} Badan Pusat Statistik Kota Salatiga, berkedudukan di BPS Kota Salatiga, bertindak untuk dan atas nama Badan Pusat Statistik Kota Salatiga berkedudukan di Jl. Hasanudin KM 01, Dukuh, Sidomukti, Salatiga, selanjutnya disebut sebagai PIHAK PERTAMA.",
+    
+    pihak_kedua: "Mitra Statistik, berkedudukan di {{ALAMAT_MITRA}}, bertindak untuk dan atas nama diri sendiri, selanjutnya disebut PIHAK KEDUA.",
+    
+    kesepakatan: "Bahwa PIHAK PERTAMA dan PIHAK KEDUA yang secara bersama-sama disebut PARA PIHAK, sepakat untuk mengikatkan diri dalam Perjanjian Kerja Petugas Pendataan Lapangan Kegiatan Survei/Sensus Tahun {{TAHUN}}, dengan ketentuan-ketentuan sebagai berikut:",
+    
     penutup: "Demikian Perjanjian ini dibuat dan ditandatangani oleh PARA PIHAK dalam 2 (dua) rangkap asli bermeterai cukup, tanpa paksaan dari PIHAK manapun dan untuk dilaksanakan oleh PARA PIHAK."
   },
   articles: [
-    { nomor_pasal: 1, judul_pasal: 'RUANG LINGKUP PEKERJAAN', isi_pasal: "PIHAK PERTAMA memberikan pekerjaan kepada PIHAK KEDUA dan PIHAK KEDUA menerima pekerjaan dari PIHAK PERTAMA sebagai Petugas Pendataan Lapangan Kegiatan Statistik pada Badan Pusat Statistik Kota Salatiga, dengan lingkup pekerjaan yang ditetapkan oleh PIHAK PERTAMA." },
-    { nomor_pasal: 2, judul_pasal: '', isi_pasal: "Ruang lingkup pekerjaan dalam Perjanjian ini mengacu pada wilayah kerja dan beban kerja sebagaimana tertuang dalam lampiran Perjanjian." },
-    { nomor_pasal: 3, judul_pasal: '', isi_pasal: "Jangka Waktu Perjanjian terhitung sejak tanggal {{TANGGAL_SURAT}} sampai dengan selesainya periode kegiatan bulan ini." },
-    { nomor_pasal: 4, judul_pasal: 'HAK DAN KEWAJIBAN', isi_pasal: "PIHAK KEDUA berkewajiban melaksanakan seluruh pekerjaan yang diberikan oleh PIHAK PERTAMA sampai selesai." },
-    { nomor_pasal: 5, judul_pasal: '', isi_pasal: "(1) PIHAK KEDUA berhak untuk mendapatkan honorarium petugas dari PIHAK PERTAMA sebesar {{TOTAL_HONOR}} ({{TERBILANG}}).\n(2) PIHAK KEDUA tidak diberikan honorarium tambahan apabila melakukan kunjungan di luar jadwal." }
+    { 
+        nomor_pasal: 1, 
+        judul_pasal: '', 
+        isi_pasal: "PIHAK PERTAMA memberikan pekerjaan kepada PIHAK KEDUA dan PIHAK KEDUA menerima pekerjaan dari PIHAK PERTAMA sebagai Petugas Pendataan Lapangan, dengan lingkup pekerjaan yang ditetapkan oleh PIHAK PERTAMA." 
+    },
+    { 
+        nomor_pasal: 2, 
+        judul_pasal: '', 
+        isi_pasal: "Ruang lingkup pekerjaan sebagaimana dimaksud dalam Pasal 1 meliputi kegiatan pendataan lapangan sesuai dengan tugas dan target yang ditetapkan." 
+    },
+    { 
+        nomor_pasal: 3, 
+        judul_pasal: '', 
+        isi_pasal: "Jangka Waktu Perjanjian terhitung sejak tanggal {{TANGGAL_SURAT}} sampai dengan selesainya periode kegiatan bulan ini. {{Break_Space}}" 
+    },
+    { 
+        nomor_pasal: 4, 
+        judul_pasal: '', 
+        isi_pasal: "PIHAK KEDUA berkewajiban melaksanakan seluruh pekerjaan yang diberikan oleh PIHAK PERTAMA sampai selesai, sesuai ruang lingkup pekerjaan sebagaimana dimaksud dalam Pasal 2 di wilayah kerja masing-masing." 
+    },
+    { 
+        nomor_pasal: 5, 
+        judul_pasal: '', 
+        isi_pasal: "(1) PIHAK KEDUA berhak untuk mendapatkan honorarium petugas dari PIHAK PERTAMA sebesar {{TOTAL_HONOR}} ({{TERBILANG}}) untuk pekerjaan sebagaimana dimaksud dalam Pasal 2, termasuk biaya pulsa dan transport.\n(2) PIHAK KEDUA tidak diberikan honorarium tambahan apabila melakukan kunjungan di luar jadwal atau terdapat tambahan waktu pelaksanaan pekerjaan lapangan." 
+    },
+    { 
+        nomor_pasal: 6, 
+        judul_pasal: '', 
+        isi_pasal: "(1) Pembayaran honorarium sebagaimana dimaksud dalam Pasal 5 dilakukan setelah PIHAK KEDUA menyelesaikan dan menyerahkan seluruh hasil pekerjaan sebagaimana dimaksud dalam Pasal 2 kepada PIHAK PERTAMA.\n(2) Pembayaran sebagaimana dimaksud pada ayat (1) dilakukan oleh PIHAK PERTAMA kepada PIHAK KEDUA sesuai dengan ketentuan peraturan perundang-undangan." 
+    },
+    { 
+        nomor_pasal: 7, 
+        judul_pasal: '', 
+        isi_pasal: "Penyerahan hasil pekerjaan lapangan sebagaimana dimaksud dalam Pasal 2 dilakukan secara bertahap dan selambat-lambatnya seluruh hasil pekerjaan lapangan diserahkan sesuai jadwal yang tercantum dalam Lampiran, yang dinyatakan dalam Berita Acara Serah Terima Hasil Pekerjaan yang ditandatangani oleh PARA PIHAK." 
+    },
+    { 
+        nomor_pasal: 8, 
+        judul_pasal: '', 
+        isi_pasal: "PIHAK PERTAMA dapat memutuskan Perjanjian ini secara sepihak sewaktu-waktu dalam hal PIHAK KEDUA tidak dapat melaksanakan kewajibannya sebagaimana dimaksud dalam Pasal 4, dengan menerbitkan Surat Pemutusan Perjanjian Kerja." 
+    },
+    { 
+        nomor_pasal: 9, 
+        judul_pasal: '', 
+        isi_pasal: "(1) Apabila PIHAK KEDUA mengundurkan diri pada saat/setelah pelaksanaan pekerjaan lapangan dengan tidak menyelesaikan pekerjaan yang menjadi tanggungjawabnya, maka PIHAK PERTAMA akan memberikan Surat Pemutusan Perjanjian Kerja kepada PIHAK KEDUA.\n(2) Dalam hal terjadi peristiwa sebagaimana dimaksud pada ayat (1), PIHAK PERTAMA membayarkan honorarium kepada PIHAK KEDUA secara proporsional sesuai pekerjaan yang telah dilaksanakan. {{Break_Space}}" 
+    },
+    { 
+        nomor_pasal: 10, 
+        judul_pasal: '', 
+        isi_pasal: "(1) Apabila terjadi Keadaan Kahar, yang meliputi bencana alam dan bencana sosial, PIHAK KEDUA memberitahukan kepada PIHAK PERTAMA dalam waktu paling lambat 7 (tujuh) hari sejak mengetahui atas kejadian Keadaan Kahar dengan menyertakan bukti.\n(2) Pada saat terjadi Keadaan Kahar, pelaksanaan pekerjaan oleh PIHAK KEDUA dihentikan sementara dan dilanjutkan kembali setelah Keadaan Kahar berakhir, namun apabila akibat Keadaan Kahar tidak memungkinkan dilanjutkan/diselesaikannya pelaksanaan pekerjaan, PIHAK KEDUA berhak menerima honorarium secara proporsional sesuai pekerjaan yang telah dilaksanakan." 
+    },
+    { 
+        nomor_pasal: 11, 
+        judul_pasal: '', 
+        isi_pasal: "Segala sesuatu yang belum atau tidak cukup diatur dalam Perjanjian ini, dituangkan dalam perjanjian tambahan/addendum dan merupakan bagian tidak terpisahkan dari perjanjian ini." 
+    },
+    { 
+        nomor_pasal: 12, 
+        judul_pasal: '', 
+        isi_pasal: "(1) Segala perselisihan atau perbedaan pendapat yang timbul sebagai akibat adanya Perjanjian ini akan diselesaikan secara musyawarah untuk mufakat.\n(2) Apabila perselisihan tidak dapat diselesaikan sebagaimana dimaksud pada ayat (1), PARA PIHAK sepakat menyelesaikan perselisihan dengan memilih kedudukan/domisili hukum di Panitera Pengadilan Negeri Kota Salatiga." 
+    }
   ]
 };
 
@@ -86,25 +148,63 @@ const TambahTemplate = () => {
     draft?.articles || (id ? [] : DEFAULT_CONTENT.articles)
   );
 
+  // --- HELPER UNTUK HEADER AUTH ---
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+        Swal.fire('Sesi Habis', 'Silakan login kembali', 'warning').then(() => navigate('/'));
+        return null;
+    }
+    return { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+    };
+  };
+
   useEffect(() => {
     if (id && !draft?.fromPreview) {
       const fetchData = async () => {
         setLoading(true);
+        const headers = getAuthHeaders();
+        if (!headers) return; // Stop jika tidak ada token
+
         try {
-          const res = await axios.get(`${API_URL}/api/template-spk/${id}`);
-          const { nama_template, parts, articles } = res.data;
-          setHeader({ nama_template });
-          setParts(parts || {});
-          setArticles(articles || []);
+          const res = await axios.get(`${API_URL}/api/template-spk/${id}`, { headers });
+          
+          // Struktur data: { status: "success", data: { ... } }
+          const data = res.data.data; 
+
+          // 1. Set Header
+          setHeader({ nama_template: data.nama_template });
+
+          // 2. Mapping Bagian Teks (Array dari DB) ke Parts (Object di State)
+          const backendParts = data.bagian_teks || [];
+          const mappedParts = { ...DEFAULT_CONTENT.parts }; 
+          
+          backendParts.forEach(item => {
+            if (mappedParts.hasOwnProperty(item.jenis_bagian)) {
+              mappedParts[item.jenis_bagian] = item.isi_teks;
+            }
+          });
+          setParts(mappedParts);
+
+          // 3. Set Pasal
+          setArticles(data.pasal || []);
+
         } catch (err) {
-          Swal.fire('Error', 'Gagal memuat template', 'error');
+          console.error(err);
+          if (err.response?.status === 401) {
+             Swal.fire('Unauthorized', 'Sesi anda telah berakhir', 'error').then(() => navigate('/'));
+          } else {
+             Swal.fire('Error', 'Gagal memuat template', 'error');
+          }
         } finally {
           setLoading(false);
         }
       };
       fetchData();
     }
-  }, [id, draft]);
+  }, [id, draft, navigate]);
 
   const handlePartChange = (key, value) => setParts(prev => ({ ...prev, [key]: value }));
   
@@ -139,7 +239,7 @@ const TambahTemplate = () => {
         const newPenutup = parts.penutup.replace(/(\n\n{{Break_Space}}\n{{Lampiran}}|{{Lampiran}})/g, '');
         setParts(prev => ({ ...prev, penutup: newPenutup }));
     } else {
-        // Tambah Lampiran (Append ke penutup dengan page break)
+        // Tambah Lampiran
         const suffix = "\n\n{{Lampiran}}";
         setParts(prev => ({ ...prev, penutup: prev.penutup + suffix }));
     }
@@ -148,6 +248,9 @@ const TambahTemplate = () => {
   const handleSave = async () => {
     if (!header.nama_template) return Swal.fire('Gagal', 'Nama Template (Metadata) wajib diisi', 'warning');
     
+    const headers = getAuthHeaders();
+    if (!headers) return;
+
     setLoading(true);
     try {
       const payload = {
@@ -157,11 +260,15 @@ const TambahTemplate = () => {
       };
 
       if (id) {
-        await axios.put(`${API_URL}/api/template-spk/${id}`, payload);
+        // UPDATE
+        await axios.put(`${API_URL}/api/template-spk/${id}`, payload, { headers });
       } else {
-        const resCreate = await axios.post(`${API_URL}/api/template-spk`, { nama_template: header.nama_template });
-        const newId = resCreate.data.id;
-        await axios.put(`${API_URL}/api/template-spk/${newId}`, payload);
+        // CREATE HEADER
+        const resCreate = await axios.post(`${API_URL}/api/template-spk`, { nama_template: header.nama_template }, { headers });
+        const newId = resCreate.data.data.id; 
+        
+        // UPDATE DETAIL
+        await axios.put(`${API_URL}/api/template-spk/${newId}`, payload, { headers });
       }
 
       Swal.fire('Berhasil', 'Template berhasil disimpan', 'success').then(() => {
@@ -169,7 +276,12 @@ const TambahTemplate = () => {
       });
     } catch (err) {
       console.error(err);
-      Swal.fire('Gagal', 'Terjadi kesalahan saat menyimpan', 'error');
+      if (err.response?.status === 401) {
+         Swal.fire('Gagal', 'Sesi login berakhir.', 'error');
+         navigate('/');
+      } else {
+         Swal.fire('Gagal', 'Terjadi kesalahan saat menyimpan', 'error');
+      }
     } finally {
       setLoading(false);
     }
@@ -205,7 +317,6 @@ const TambahTemplate = () => {
                 </div>
             ))}
 
-            {/* INFO LAMPIRAN */}
             <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                 <p className="text-xs font-bold text-yellow-800 mb-1 flex items-center gap-1">
                   <FaInfoCircle /> Info Lampiran:
@@ -250,17 +361,14 @@ const TambahTemplate = () => {
         {/* Scrollable Content Container */}
         <div className="flex-1 overflow-y-auto bg-gray-100 p-8 flex justify-center scrollbar-thin scrollbar-thumb-gray-300">
             
-            {/* KONTEN EDITOR (LEBAR FLUID, TINGGI MENGIKUTI ISI) */}
             <div className="w-full max-w-4xl bg-white shadow-xl p-10 md:p-14 relative animate-fade-in-up rounded-sm h-fit">
                 
-                {/* Judul Surat (Visual Saja) */}
                 <div className="text-center font-bold mb-8 border-b-2 border-double border-gray-800 pb-4 select-none opacity-60">
                     <h3 className="uppercase text-lg">PERJANJIAN KERJA</h3>
                     <h3 className="uppercase text-lg">PETUGAS PENDATAAN LAPANGAN</h3>
                     <p className="text-sm font-normal mt-2 italic">[Header Surat Otomatis Sesuai Periode]</p>
                 </div>
 
-                {/* AREA EDIT */}
                 <div className="space-y-6 text-justify leading-relaxed font-serif text-[11pt]">
                     
                     {/* Pembuka */}
@@ -276,7 +384,6 @@ const TambahTemplate = () => {
                     {/* Tabel Pihak */}
                     <table className="w-full align-top mt-4">
                         <tbody>
-                            {/* Pihak 1 */}
                             <tr className="group">
                                 <td className="w-6 font-bold pt-2 align-top">1.</td>
                                 <td className="w-full pt-2">
@@ -288,11 +395,9 @@ const TambahTemplate = () => {
                                             placeholder="Deskripsi jabatan Pihak Pertama..."
                                             className="text-justify"
                                         />
-                                        <p className="text-[9px] text-blue-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity absolute right-0 top-0 bg-white px-1">Deskripsi Pihak 1</p>
                                     </div>
                                 </td>
                             </tr>
-                            {/* Pihak 2 */}
                             <tr className="group">
                                 <td className="w-6 font-bold pt-6 align-top">2.</td>
                                 <td className="w-full pt-6">
@@ -304,7 +409,6 @@ const TambahTemplate = () => {
                                             placeholder="Deskripsi kedudukan Pihak Kedua..."
                                             className="text-justify"
                                         />
-                                        <p className="text-[9px] text-green-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity absolute right-0 top-0 bg-white px-1">Deskripsi Pihak 2</p>
                                     </div>
                                 </td>
                             </tr>
@@ -377,7 +481,7 @@ const TambahTemplate = () => {
                         />
                     </div>
 
-                    {/* Tanda Tangan (Visual Dummy) */}
+                    {/* Tanda Tangan */}
                     <div className="flex justify-between mt-16 px-4 select-none opacity-50">
                         <div className="text-center w-64">
                             <p className="font-bold mb-20">PIHAK KEDUA,</p>
@@ -389,7 +493,7 @@ const TambahTemplate = () => {
                         </div>
                     </div>
 
-                    {/* --- TOMBOL TAMBAH LAMPIRAN DI BAWAH TANDA TANGAN --- */}
+                    {/* Tombol Lampiran */}
                     <div className="mt-12 border-t border-dashed border-gray-300 pt-6">
                         {hasLampiran ? (
                             <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex justify-between items-center animate-fade-in-up">
@@ -399,7 +503,7 @@ const TambahTemplate = () => {
                                     </div>
                                     <div>
                                         <h4 className="font-bold text-green-800 text-sm">Lampiran Aktif</h4>
-                                        <p className="text-xs text-green-600">Tabel Rincian Tugas akan dicetak di halaman terpisah (setelah tanda tangan).</p>
+                                        <p className="text-xs text-green-600">Tabel Rincian Tugas akan dicetak di halaman terpisah.</p>
                                     </div>
                                 </div>
                                 <button 

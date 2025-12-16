@@ -108,6 +108,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/penugasan/mitra/{id}/periode/{periode}', [PenugasanController::class, 'getByMitraAndPeriode']);
     Route::delete('/penugasan/{id}', [PenugasanController::class, 'destroy']);
     Route::get('/penugasan/{id}/anggota', [PenugasanController::class, 'getAnggota']);
+    
 
     // --- KELOMPOK PENUGASAN (DETAIL ANGGOTA) ---
     Route::get('/kelompok-penugasan', [KelompokPenugasanController::class, 'index']);
@@ -143,6 +144,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     Route::get('/template-spk', [MasterTemplateSPKController::class, 'index']);
     Route::post('/template-spk', [MasterTemplateSPKController::class, 'store']);
+    Route::put('/template-spk/{id}', [MasterTemplateSPKController::class, 'update']);
     Route::get('/template-spk/{id}', [MasterTemplateSPKController::class, 'show']); // Dapet full teks + pasal
     Route::delete('/template-spk/{id}', [MasterTemplateSPKController::class, 'destroy']);
     Route::put('/template-spk/{id}/set-active', [MasterTemplateSPKController::class, 'setActive']); // Set Default

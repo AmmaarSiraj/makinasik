@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\MasterTemplateSPK;
+use App\Models\TemplateBagianTeks;
+use App\Models\TemplatePasal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
@@ -67,6 +69,68 @@ class MasterTemplateSPKController extends Controller
         });
 
         return response()->json(['status' => 'success', 'message' => 'Template berhasil diaktifkan']);
+    }
+
+    public function update(Request $request, $id)
+    {
+        $template = MasterTemplateSPK::find($id);
+
+        if (!$template) {
+            return response()->json(['message' => 'Template tidak ditemukan'], 404);
+        }
+
+        // Gunakan Transaction untuk memastikan semua data tersimpan atau tidak sama sekali
+        DB::transaction(function () use ($template, $request) {
+            
+            // 1. Update Nama Template (Header)
+            if ($request->has('nama_template')) {
+                $template->update([
+                    'nama_template' => $request->nama_template
+                ]);
+            }
+
+            // 2. Update Bagian Teks (Parts)
+            // Frontend mengirim object: { "pembuka": "...", "penutup": "..." }
+            if ($request->has('parts') && is_array($request->parts)) {
+                foreach ($request->parts as $jenis => $isi) {
+                    // Update jika ada, Create jika belum ada
+                    TemplateBagianTeks::updateOrCreate(
+                        [
+                            'template_id' => $template->id,
+                            'jenis_bagian' => $jenis
+                        ],
+                        [
+                            'isi_teks' => $isi
+                        ]
+                    );
+                }
+            }
+
+            // 3. Update Pasal-Pasal (Articles)
+            // Frontend mengirim array: [ {nomor_pasal: 1, ...}, ... ]
+            if ($request->has('articles') && is_array($request->articles)) {
+                
+                // Strategi: Hapus semua pasal lama, lalu insert ulang yang baru.
+                // Ini menangani kasus pasal dihapus, diedit, atau diurutkan ulang dengan mudah.
+                $template->pasal()->delete();
+
+                foreach ($request->articles as $index => $art) {
+                    TemplatePasal::create([
+                        'template_id' => $template->id,
+                        'nomor_pasal' => $art['nomor_pasal'],
+                        'judul_pasal' => $art['judul_pasal'] ?? '',
+                        'isi_pasal'   => $art['isi_pasal'] ?? '',
+                        'urutan'      => $index + 1 // Urutan otomatis berdasarkan array
+                    ]);
+                }
+            }
+        });
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Template berhasil diperbarui',
+            'data' => $template->load(['bagianTeks', 'pasal']) // Return data terbaru
+        ]);
     }
 
     // Hapus Template (Cascade delete anak-anaknya)

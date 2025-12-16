@@ -53,25 +53,22 @@ const ManajemenSPK = () => {
   const fetchData = async () => {
     setLoading(true);
     const periode = getPeriodeString();
-    const headers = getAuthHeader(); // Pastikan helper ini ada (lihat kode sebelumnya)
+    const headers = getAuthHeader(); 
     
     try {
       const [resMitra, resSetting, resTemplates] = await Promise.allSettled([
-        // PERUBAHAN DISINI: Menggunakan endpoint by periode, bukan /mitra/aktif
         axios.get(`${API_URL}/api/mitra/periode/${periode}`, { headers }),
         axios.get(`${API_URL}/api/spk-setting/periode/${periode}`, { headers }),
         axios.get(`${API_URL}/api/template-spk`, { headers })
       ]);
 
-      // 1. Mitra (Handle Mitra yang bertugas saja)
+      // 1. Mitra 
       if (resMitra.status === 'fulfilled') {
         const raw = resMitra.value.data;
         const data = raw.data ? raw.data : raw;
         setMitraList(Array.isArray(data) ? data : []);
       } else {
-        // Jika 401 Unauthorized -> redirect login
         if (resMitra.reason.response?.status === 401) navigate('/');
-        console.warn("Gagal memuat mitra:", resMitra.reason);
         setMitraList([]);
       }
 
@@ -80,6 +77,7 @@ const ManajemenSPK = () => {
         const raw = resSetting.value.data;
         const data = raw.data ? raw.data : raw;
         setSpkSetting(data || null);
+        // Set dropdown sesuai setting yg tersimpan, atau DEFAULT jika null
         setSelectedTemplateId(data?.template_id || 'DEFAULT');
       } else {
         setSpkSetting(null);
@@ -106,20 +104,13 @@ const ManajemenSPK = () => {
     fetchData();
   }, [selectedYear, selectedMonth]);
 
-  // --- HANDLER TERAPKAN TEMPLATE (DIPERBAIKI) ---
+  // --- HANDLER TERAPKAN TEMPLATE ---
   const handleApplyTemplate = async () => {
-    // Validasi sederhana
     if (!selectedTemplateId) return Swal.fire('Pilih Template', 'Silakan pilih template terlebih dahulu.', 'warning');
 
     const periode = getPeriodeString();
-    
-    // 1. Tentukan template_id yang akan dikirim (Null jika Default/Kosong)
-    // Ini memastikan ID dari master_template_spk terkirim dengan benar
-    const templateIdToSend = (selectedTemplateId === 'DEFAULT' || selectedTemplateId === '') 
-        ? null 
-        : selectedTemplateId;
+    const templateIdToSend = (selectedTemplateId === 'DEFAULT' || selectedTemplateId === '') ? null : selectedTemplateId;
 
-    // 2. Siapkan data default jika belum ada setting sebelumnya
     const defaultData = {
         nama_ppk: '', 
         nip_ppk: '', 
@@ -129,25 +120,18 @@ const ManajemenSPK = () => {
         komponen_honor: 'biaya pajak, bea materai, dan jasa pelayanan keuangan'
     };
 
-    // 3. Merge data: 
-    // Jika spkSetting (dari DB) sudah ada, kita copy isinya agar field lain (nama_ppk, dll) tidak hilang.
-    // LALU, kita timpa 'template_id' dengan pilihan baru dari dropdown.
     const payload = spkSetting 
         ? { ...spkSetting, template_id: templateIdToSend, periode }
         : { ...defaultData, template_id: templateIdToSend, periode };
 
     try {
-        // 4. LOGIKA PUT vs POST (Mencegah Error 409 Conflict)
         if (spkSetting && spkSetting.id) {
-            // Jika sudah ada ID, berarti Update (PUT)
             await axios.put(`${API_URL}/api/spk-setting/${spkSetting.id}`, payload, { headers: getAuthHeader() });
             Swal.fire('Berhasil', 'Template berhasil diperbarui untuk periode ini.', 'success');
         } else {
-            // Jika belum ada, berarti Baru (POST)
             await axios.post(`${API_URL}/api/spk-setting`, payload, { headers: getAuthHeader() });
             Swal.fire('Berhasil', 'Template berhasil diterapkan.', 'success');
         }
-        
         fetchData(); 
     } catch (err) {
         console.error(err);
@@ -155,7 +139,7 @@ const ManajemenSPK = () => {
     }
   };
 
-  // ... (Sisa handler preview, edit, delete, print sama seperti sebelumnya) ...
+  // --- [FIX] HANDLER PREVIEW TEMPLATE ---
   const handlePreviewTemplate = async () => {
     if (!selectedTemplateId || selectedTemplateId === 'DEFAULT') return;
     try {
@@ -163,10 +147,36 @@ const ManajemenSPK = () => {
         const data = res.data.data || res.data;
         const { nama_template, bagian_teks, pasal } = data;
         
+        // --- LOGIKA MAPPING ARRAY KE OBJECT ---
+        // Kita harus mengubah array [{jenis_bagian: 'pembuka', isi_teks: '...'}]
+        // menjadi object { pembuka: '...', ... } agar bisa dibaca di PreviewTemplate.jsx
+        
+        const mappedParts = {};
+        if (Array.isArray(bagian_teks)) {
+            bagian_teks.forEach(part => {
+                mappedParts[part.jenis_bagian] = part.isi_teks;
+            });
+        }
+
+        // Pastikan field standar ada (fallback string kosong)
+        const finalParts = {
+            pembuka: mappedParts.pembuka || '',
+            pihak_pertama: mappedParts.pihak_pertama || '',
+            pihak_kedua: mappedParts.pihak_kedua || '',
+            kesepakatan: mappedParts.kesepakatan || '',
+            penutup: mappedParts.penutup || ''
+        };
+        
         navigate('/admin/spk/templates/preview', {
-            state: { header: { nama_template }, parts: bagian_teks, articles: pasal, id: selectedTemplateId }
+            state: { 
+                header: { nama_template }, 
+                parts: finalParts, // Gunakan hasil mapping
+                articles: pasal, 
+                id: selectedTemplateId 
+            }
         });
     } catch (error) {
+        console.error(error);
         Swal.fire('Error', 'Gagal memuat template.', 'error');
     }
   };
@@ -207,7 +217,10 @@ const ManajemenSPK = () => {
   const getCurrentTemplateName = () => {
       if (!spkSetting) return null;
       if (!spkSetting.template_id) return 'Default (Sistem)';
-      return spkSetting.nama_template || 'Terpilih';
+      
+      // Cari nama template dari list templates berdasarkan ID yang disimpan di setting
+      const found = templates.find(t => t.id == spkSetting.template_id);
+      return found ? found.nama_template : 'Template Terhapus/Tidak Dikenal';
   };
 
   return (
