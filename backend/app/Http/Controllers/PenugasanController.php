@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Penugasan;
+use App\Models\Perencanaan;
 use App\Models\KelompokPenugasan;
+use App\Models\KelompokPerencanaan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon; // Penting: Import Carbon untuk format tanggal
+use Carbon\Carbon;
 
 class PenugasanController extends Controller
 {
@@ -38,7 +40,7 @@ class PenugasanController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'id_subkegiatan' => 'required|exists:subkegiatan,id',
-            'id_pengawas'    => 'required|exists:user,id', // <--- PERBAIKAN: Mengubah 'users' menjadi 'user'
+            'id_pengawas'    => 'required|exists:user,id',
             'anggota'        => 'nullable|array',
             'anggota.*.id_mitra'     => 'required|exists:mitra,id',
             'anggota.*.kode_jabatan' => 'required|exists:jabatan_mitra,kode_jabatan',
@@ -87,8 +89,80 @@ class PenugasanController extends Controller
     }
 
     /**
-     * 3. GET SINGLE PENUGASAN
-     * Detail satu penugasan.
+     * 3. IMPORT DARI PERENCANAAN
+     * Menyalin data dari Perencanaan ke Penugasan.
+     */
+    public function importFromPerencanaan(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'ids_perencanaan' => 'required|array', // Array ID Perencanaan yang mau diteruskan
+            'ids_perencanaan.*' => 'exists:perencanaan,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            $countHeader = 0;
+            $countMembers = 0;
+
+            // 1. Loop setiap ID Perencanaan yang dikirim
+            foreach ($request->ids_perencanaan as $idPerencanaan) {
+                
+                // Ambil Data Perencanaan & Anggotanya (Gunakan 'kelompok' sesuai Model)
+                $perencanaan = Perencanaan::with('kelompok')->find($idPerencanaan);
+                
+                if (!$perencanaan) continue;
+
+                // 2. LOGIKA HEADER PENUGASAN (Upsert berdasarkan id_subkegiatan)
+                $penugasan = Penugasan::updateOrCreate(
+                    [
+                        'id_subkegiatan' => $perencanaan->id_subkegiatan
+                    ],
+                    [
+                        'id_pengawas' => $perencanaan->id_pengawas, 
+                        'updated_at'  => now() 
+                    ]
+                );
+                $countHeader++;
+
+                // 3. LOGIKA ANGGOTA (KELOMPOK PENUGASAN)
+                // Loop menggunakan properti 'kelompok' dari relasi di Model Perencanaan
+                foreach ($perencanaan->kelompok as $anggotaPlan) {
+                    
+                    // Upsert berdasarkan id_penugasan DAN id_mitra
+                    KelompokPenugasan::updateOrCreate(
+                        [
+                            'id_penugasan' => $penugasan->id,
+                            'id_mitra'     => $anggotaPlan->id_mitra,
+                        ],
+                        [
+                            'kode_jabatan' => $anggotaPlan->kode_jabatan,
+                            'volume_tugas' => $anggotaPlan->volume_tugas,
+                            'created_at'   => now()
+                        ]
+                    );
+                    $countMembers++;
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => "Berhasil meneruskan data.\n{$countHeader} Kegiatan diproses.\n{$countMembers} Anggota berhasil disinkronisasi."
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Gagal meneruskan data: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 4. GET SINGLE PENUGASAN
      */
     public function show($id)
     {
@@ -101,9 +175,7 @@ class PenugasanController extends Controller
     }
 
     /**
-     * 4. GET ANGGOTA BY PENUGASAN ID
-     * Mengambil daftar anggota tim + hitungan honor.
-     * Route: GET /api/penugasan/{id}/anggota
+     * 5. GET ANGGOTA BY PENUGASAN ID
      */
     public function getAnggota($id)
     {
@@ -117,7 +189,7 @@ class PenugasanController extends Controller
                     $join->on('h.id_subkegiatan', '=', 'p.id_subkegiatan')
                         ->on('h.kode_jabatan', '=', 'kp.kode_jabatan');
                 })
-                ->where('kp.id_penugasan', $id) // Filter utama berdasarkan ID Penugasan
+                ->where('kp.id_penugasan', $id)
                 ->select([
                     'm.id as id_mitra',
                     'm.nama_lengkap',
@@ -141,6 +213,9 @@ class PenugasanController extends Controller
         }
     }
 
+    /**
+     * 6. GET BY MITRA AND PERIODE
+     */
     public function getByMitraAndPeriode($id_mitra, $periode)
     {
         try {
@@ -159,13 +234,13 @@ class PenugasanController extends Controller
                 ->join('kegiatan as k', 's.id_kegiatan', '=', 'k.id')
                 ->leftJoin('jabatan_mitra as jm', 'kp.kode_jabatan', '=', 'jm.kode_jabatan')
                 
-                // 1. Join ke Honorarium dulu (karena id_satuan ada di sini)
+                // Join ke Honorarium
                 ->leftJoin('honorarium as h', function ($join) {
                     $join->on('h.id_subkegiatan', '=', 's.id')
                          ->on('h.kode_jabatan', '=', 'kp.kode_jabatan');
                 })
 
-                // 2. Join Satuan Kegiatan lewat Honorarium (BUKAN lewat subkegiatan)
+                // Join Satuan Kegiatan lewat Honorarium
                 ->leftJoin('satuan_kegiatan as sat', 'h.id_satuan', '=', 'sat.id')
 
                 ->where('kp.id_mitra', $id_mitra)
@@ -176,13 +251,10 @@ class PenugasanController extends Controller
                     's.tanggal_mulai',
                     's.tanggal_selesai',
                     'kp.volume_tugas as target_volume',
-                    'sat.nama_satuan', // Ambil dari tabel satuan yang di-join lewat honorarium
+                    'sat.nama_satuan', 
                     'jm.nama_jabatan',
-                    // Ambil tarif, jika null anggap 0
                     DB::raw("IFNULL(h.tarif, 0) as harga_satuan"),
-                    // Hitung total: volume * tarif
                     DB::raw("(kp.volume_tugas * IFNULL(h.tarif, 0)) as total_honor"),
-                    // Beban anggaran: Prioritaskan dari honorarium, jika kosong ambil nama kegiatan
                     DB::raw("COALESCE(h.beban_anggaran) as beban_anggaran") 
                 ])
                 ->orderBy('s.tanggal_mulai', 'asc')
@@ -194,13 +266,12 @@ class PenugasanController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            // Tampilkan pesan error detail untuk debugging
             return response()->json(['message' => 'Terjadi kesalahan: ' . $e->getMessage()], 500);
         }
     }
 
     /**
-     * 5. DELETE PENUGASAN
+     * 7. DELETE PENUGASAN
      */
     public function destroy($id)
     {
@@ -217,9 +288,6 @@ class PenugasanController extends Controller
     // HELPER FUNCTIONS
     // =========================================================================
 
-    /**
-     * Helper untuk mengambil data single by ID dan memformatnya.
-     */
     private function formatSingle($id)
     {
         $item = Penugasan::with(['subkegiatan.kegiatan', 'pengawas'])->find($id);
@@ -228,14 +296,11 @@ class PenugasanController extends Controller
         return $this->formatItem($item);
     }
 
-    /**
-     * Helper utama untuk memformat output JSON agar tanggal bersih (Y-m-d).
-     */
     private function formatItem($item)
     {
         return [
             'id_penugasan'         => $item->id,
-            'penugasan_created_at' => $item->created_at, // Timestamp default oke untuk created_at
+            'penugasan_created_at' => $item->created_at,
 
             // Data Subkegiatan
             'id_subkegiatan'       => $item->subkegiatan ? $item->subkegiatan->id : null,

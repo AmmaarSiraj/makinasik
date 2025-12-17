@@ -35,7 +35,7 @@ Route::post('/users/login', [AuthController::class, 'login']);
 
 // --- PROTECTED ROUTES (Harus login / punya Token) ---
 Route::middleware(['auth:sanctum'])->group(function () {
-    
+
     // Auth
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [UserController::class, 'me']); // Cek profile sendiri
@@ -48,7 +48,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/users/{id}', [UserController::class, 'show']);  // Detail 1 User
     Route::put('/users/{id}', [UserController::class, 'update']); // Edit User
     Route::delete('/users/{id}', [UserController::class, 'destroy']);
-    
+
 
     Route::get('/kegiatan', [KegiatanController::class, 'index']);      // List semua
     Route::post('/kegiatan', [KegiatanController::class, 'store']);     // Buat baru
@@ -59,12 +59,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // --- MANAJEMEN SUB KEGIATAN ---
     // Create (Butuh id_kegiatan di body)
     Route::get('/subkegiatan', [SubkegiatanController::class, 'index']);
-    Route::post('/subkegiatan', [SubkegiatanController::class, 'store']); 
+    Route::post('/subkegiatan', [SubkegiatanController::class, 'store']);
     Route::put('/subkegiatan/{id}/info', [SubkegiatanController::class, 'update']);
     Route::get('/subkegiatan/{id}', [SubkegiatanController::class, 'show']);
     Route::delete('/subkegiatan/{id}', [SubkegiatanController::class, 'destroy']);
     Route::get('/subkegiatan/kegiatan/{id}', [SubkegiatanController::class, 'getByKegiatan']);
-    
+
     Route::get('/jabatan', [JabatanMitraController::class, 'index']);
     Route::post('/jabatan', [JabatanMitraController::class, 'store']);
     Route::get('/jabatan/{id}', [JabatanMitraController::class, 'show']);
@@ -77,7 +77,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/honorarium/{id}', [HonorariumController::class, 'show']);
     Route::put('/honorarium/{id}', [HonorariumController::class, 'update']);
     Route::delete('/honorarium/{id}', [HonorariumController::class, 'destroy']);
-    
+
     // Opsional: Ambil honor berdasarkan subkegiatan tertentu
     Route::get('/subkegiatan/{id}/honorarium', [HonorariumController::class, 'getBySubkegiatan']);
     Route::get('/tahun-aktif', [TahunAktifController::class, 'index']);
@@ -108,7 +108,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/penugasan/mitra/{id}/periode/{periode}', [PenugasanController::class, 'getByMitraAndPeriode']);
     Route::delete('/penugasan/{id}', [PenugasanController::class, 'destroy']);
     Route::get('/penugasan/{id}/anggota', [PenugasanController::class, 'getAnggota']);
-    
+    Route::post('/penugasan/import-perencanaan', [App\Http\Controllers\PenugasanController::class, 'importFromPerencanaan']);
+
 
     // --- KELOMPOK PENUGASAN (DETAIL ANGGOTA) ---
     Route::get('/kelompok-penugasan', [KelompokPenugasanController::class, 'index']);
@@ -123,10 +124,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::delete('/perencanaan/{id}', [PerencanaanController::class, 'destroy']);
     Route::get('/perencanaan/{id}/anggota', [PerencanaanController::class, 'getAnggota']);
 
+    Route::get('/rekap/bulanan', [PerencanaanController::class, 'getRekapBulanan']);
+    Route::get('/rekap/mitra', [PerencanaanController::class, 'getRekapMitra']);
+    Route::get('/rekap/detail', [PerencanaanController::class, 'getRekapDetail']);
+
     // --- KELOMPOK PERENCANAAN (DETAIL ANGGOTA) ---
     Route::get('/kelompok-perencanaan', [KelompokPerencanaanController::class, 'index']);
-    Route::post('/kelompok-perencanaan', [KelompokPerencanaanController::class, 'store']); 
-    Route::put('/kelompok-perencanaan/{id}', [KelompokPerencanaanController::class, 'update']); 
+    Route::post('/kelompok-perencanaan', [KelompokPerencanaanController::class, 'store']);
+    Route::put('/kelompok-perencanaan/{id}', [KelompokPerencanaanController::class, 'update']);
     Route::delete('/kelompok-perencanaan/{id}', [KelompokPerencanaanController::class, 'destroy']);
 
     Route::get('/satuan-kegiatan', [SatuanKegiatanController::class, 'index']);
@@ -140,7 +145,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/spk-setting/{id}', [SpkSettingController::class, 'show']);
     Route::put('/spk-setting/{id}', [SpkSettingController::class, 'update']);
     Route::delete('/spk-setting/{id}', [SpkSettingController::class, 'destroy']);
-    
+
     // Route khusus cari by periode (berguna saat cetak PDF)
     Route::get('/spk-setting/periode/{periode}', [SpkSettingController::class, 'getByPeriode']);
 

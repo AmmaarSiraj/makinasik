@@ -104,31 +104,35 @@ const EditPerencanaan = () => {
           id: m.id_mitra,
           nama_lengkap: m.nama_lengkap,
           nik: m.nik,
-          // Pastikan normalize kode jabatan jika perlu, 
-          // tapi yang terpenting adalah assignedVolume
           assignedJabatan: m.kode_jabatan ? normalizeKodeJabatan(m.kode_jabatan) : '',
-
-          // PERBAIKAN: Pastikan nama properti sesuai dengan response API (volume_tugas)
           assignedVolume: Number(m.volume_tugas) || 0,
-
           isExisting: true,
-          id_kelompok: m.id_kelompok || m.id // Sesuaikan dengan key ID di tabel kelompok_perencanaan
+          id_kelompok: m.id_kelompok || m.id 
         }));
         setCurrentMembers(formattedMembers);
         setSelectedMitras(formattedMembers);
 
+        // --- HITUNG PENDAPATAN & LIMIT (BULANAN) ---
         if (subKegiatanData && subKegiatanData.tanggal_mulai) {
-          const tahunKegiatan = new Date(subKegiatanData.tanggal_mulai).getFullYear().toString();
+          const targetDate = new Date(subKegiatanData.tanggal_mulai);
+          const targetYear = targetDate.getFullYear().toString();
+          const targetMonth = targetDate.getMonth();
 
+          // Ambil batas honor dari tabel aturan_periode (berdasarkan tahun)
           const aturan = resAturan.data.data.find(r =>
-            String(r.tahun) === tahunKegiatan || String(r.periode) === tahunKegiatan
+            String(r.tahun) === targetYear || String(r.periode) === targetYear
           );
           setBatasHonorPeriode(aturan ? Number(aturan.batas_honor) : 0);
 
+          // Hitung akumulasi pendapatan di BULAN yang sama
           const incomeMap = {};
           const allKelompok = resKelompok.data.data;
 
           allKelompok.forEach(k => {
+            // Skip data yang sedang diedit ini agar tidak double count (jika belum disimpan)
+            // Namun karena kita ambil data eksisting dari DB, data ini sebenarnya sudah masuk di allKelompok.
+            // Untuk Edit, idealnya kita hitung 'base' income DILUAR perencanaan ini, 
+            // lalu UI akan menambahkan value inputan user.
             if (String(k.id_perencanaan) === String(id)) return;
 
             const Perencanaan = resAllPerencanaan.data.data.find(p => p.id_perencanaan === k.id_perencanaan);
@@ -137,8 +141,12 @@ const EditPerencanaan = () => {
             const sub = subKegiatanList.find(s => s.id === Perencanaan.id_subkegiatan);
             if (!sub || !sub.tanggal_mulai) return;
 
-            const subYear = new Date(sub.tanggal_mulai).getFullYear().toString();
-            if (subYear !== tahunKegiatan) return;
+            // [MODIFIKASI] Filter berdasarkan Tahun & Bulan
+            const itemDate = new Date(sub.tanggal_mulai);
+            const itemYear = itemDate.getFullYear().toString();
+            const itemMonth = itemDate.getMonth();
+
+            if (itemYear !== targetYear || itemMonth !== targetMonth) return;
 
             const honor = honorList.find(h => h.id_subkegiatan === sub.id && normalizeKodeJabatan(h.kode_jabatan) === normalizeKodeJabatan(k.kode_jabatan));
             const tarif = honor ? Number(honor.tarif) : 0;
@@ -230,26 +238,8 @@ const EditPerencanaan = () => {
       return Swal.fire('Data Belum Lengkap', `Harap pilih jabatan dan isi volume tugas (> 0) untuk mitra: ${incompleteMitra.nama_lengkap}`, 'warning');
     }
 
-    if (batasHonorPeriode > 0) {
-      const overLimitUser = selectedMitras.find(m => {
-        const normalizedAssignedJabatan = normalizeKodeJabatan(m.assignedJabatan);
-        const hInfo = availableJabatan.find(h => normalizeKodeJabatan(h.kode_jabatan) === normalizedAssignedJabatan);
-
-        const tarif = hInfo ? Number(hInfo.tarif) : 0;
-        const totalHonorBaru = tarif * Number(m.assignedVolume);
-
-        const current = mitraIncomeMap[String(m.id)] || 0;
-        return (current + totalHonorBaru) > batasHonorPeriode;
-      });
-
-      if (overLimitUser) {
-        return Swal.fire(
-          'Gagal Menyimpan',
-          `Mitra <b>${overLimitUser.nama_lengkap}</b> melebihi batas honor tahunan ini. Silakan kurangi volume/honor atau hapus dari daftar.`,
-          'error'
-        );
-      }
-    }
+    // [MODIFIKASI] Hapus validasi blokir batas honor.
+    // Kode pengecekan batas honor dihapus agar tetap bisa disimpan.
 
     setSubmitting(true);
     const token = localStorage.getItem('token');
@@ -419,28 +409,29 @@ const EditPerencanaan = () => {
                     filteredMitra.map(m => {
                       const currentIncome = mitraIncomeMap[String(m.id)] || 0;
                       const limit = batasHonorPeriode;
+                      // isFull hanya visual, tidak disable klik
                       const isFull = limit > 0 && currentIncome >= limit;
                       const percent = limit > 0 ? (currentIncome / limit) * 100 : 0;
 
                       return (
                         <div
                           key={m.id}
-                          onClick={() => !isFull && handleAddMitra(m)}
-                          className={`px-4 py-3 border-b last:border-none transition cursor-pointer ${isFull ? 'bg-gray-100 opacity-60 cursor-not-allowed' : 'hover:bg-blue-50'}`}
+                          onClick={() => handleAddMitra(m)}
+                          className={`px-4 py-3 border-b last:border-none transition cursor-pointer hover:bg-blue-50`}
                         >
                           <div className="flex justify-between items-start">
                             <div>
                               <p className="text-sm font-bold text-gray-800">{m.nama_lengkap}</p>
                               <p className="text-xs text-gray-500">{m.nik}</p>
                             </div>
-                            {isFull && <span className="text-[10px] font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded">PENUH</span>}
+                            {isFull && <span className="text-[10px] font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded">LIMIT</span>}
                           </div>
 
                           {limit > 0 && (
                             <div className="mt-2">
                               <div className="flex justify-between text-[10px] mb-1 text-gray-500">
                                 <span>Rp {currentIncome.toLocaleString('id-ID')}</span>
-                                <span>Limit Thn: Rp {limit.toLocaleString('id-ID')}</span>
+                                <span>Limit Bln: Rp {limit.toLocaleString('id-ID')}</span>
                               </div>
                               <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
                                 <div className={`h-1.5 rounded-full ${percent > 90 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${Math.min(percent, 100)}%` }}></div>
@@ -555,7 +546,7 @@ const EditPerencanaan = () => {
                         <div className="mt-3 border-t border-gray-100 pt-2">
                           <div className="flex justify-between text-[10px] text-gray-500 mb-1">
                             <span>Total Proyeksi: {formatRupiah(totalProjected)}</span>
-                            <span>Batas Thn: {formatRupiah(limit)}</span>
+                            <span>Batas Bln: {formatRupiah(limit)}</span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden flex">
                             <div
@@ -574,7 +565,7 @@ const EditPerencanaan = () => {
 
                       {isOverLimit && (
                         <div className="mt-2 text-[10px] text-red-600 font-bold flex items-center gap-1 animate-pulse justify-end">
-                          <FaExclamationCircle /> Akumulasi pendapatan melebihi batas tahunan!
+                          <FaExclamationCircle /> Melebihi batas bulanan!
                         </div>
                       )}
 

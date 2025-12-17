@@ -5,39 +5,40 @@ import {
   FaHome, 
   FaUsers, 
   FaClipboardList, 
-  FaHandshake, 
-  FaFileAlt, 
+  FaCalendarAlt, // Ganti Icon Perencanaan
+  FaChartLine,   // Icon Baru untuk Rekap
+  FaTasks,       // Ganti Icon Penugasan
+  FaBriefcase,   // Ganti Icon Jabatan
+  FaSlidersH,    // Ganti Icon Atur Batas
   FaSignOutAlt, 
   FaUserCircle, 
   FaUserCheck,
   FaBars,
   FaFileContract,
   FaMoneyBillWave,
-  FaCog
 } from 'react-icons/fa';
 
 import logoSikinerja from '../assets/logo.png'; 
 import PartDetailProfileAdmin from '../components/admin/PartDetailProfileAdmin';
 
 const menuItems = [
- // 1. UTAMA
+  // 1. UTAMA
   { path: "/admin/dashboard", label: "Dashboard", icon: <FaHome /> },
   
-  // 2. OPERASIONAL (Kegiatan & Plotting)
+  // 2. OPERASIONAL (Alur Kerja)
   { path: "/admin/manage-kegiatan", label: "Survei/Sensus", icon: <FaClipboardList /> },
-  { path: "/admin/penugasan", label: "Penugasan", icon: <FaHandshake /> },
-  { path: "/admin/perencanaan", label: "Perencanaan", icon: <FaHandshake /> },
+  { path: "/admin/perencanaan", label: "Perencanaan", icon: <FaCalendarAlt /> },
+  { path: "/admin/rekap", label: "Rekap Perencanaan", icon: <FaChartLine /> }, // MENU BARU
+  { path: "/admin/penugasan", label: "Penugasan", icon: <FaTasks /> },
   
-  // 3. SDM (Mitra)
+  // 3. SDM & KEUANGAN
   { path: "/admin/manajemen-mitra", label: "Manajemen Mitra", icon: <FaUserCheck /> },
-  
-  // 4. KEUANGAN & DOKUMEN
   { path: "/admin/transaksi-mitra", label: "Transaksi Mitra", icon: <FaMoneyBillWave /> },
   { path: "/admin/manajemen-spk", label: "Manajemen SPK", icon: <FaFileContract /> },
   
-  // 5. MASTER DATA & PENGATURAN
-  { path: "/admin/manajemen-jabatan", label: "Master Jabatan", icon: <FaFileAlt /> },
-  { path: "/admin/batas-honor", label: "Atur Batas Honor", icon: <FaCog /> },
+  // 4. MASTER DATA & PENGATURAN
+  { path: "/admin/manajemen-jabatan", label: "Master Jabatan", icon: <FaBriefcase /> },
+  { path: "/admin/batas-honor", label: "Atur Batas Honor", icon: <FaSlidersH /> },
   { path: "/admin/manage-users", label: "Manajemen User", icon: <FaUsers /> },
 ];
 
@@ -50,7 +51,7 @@ const AdminHeader = ({ title, toggleSidebar, isProfileExpanded, setIsProfileExpa
   
   // State Ukuran Widget
   const [widgetWidth, setWidgetWidth] = useState(300); // Lebar saat tertutup
-  const [expandedWidth, setExpandedWidth] = useState(window.innerWidth); // Lebar saat terbuka (BARU)
+  const [expandedWidth, setExpandedWidth] = useState(window.innerWidth); // Lebar saat terbuka
   const [headerHeight, setHeaderHeight] = useState(80);
   const widgetContentRef = useRef(null);
 
@@ -81,9 +82,7 @@ const AdminHeader = ({ title, toggleSidebar, isProfileExpanded, setIsProfileExpa
       setWidgetWidth(contentWidth + buffer);
     }
 
-    // 3. Hitung Lebar Widget saat TERBUKA (Expanded) - LOGIKA BARU
-    // Di Desktop, kurangi lebar sidebar (288px / w-72). 
-    // Di Mobile, ambil full width.
+    // 3. Hitung Lebar Widget saat TERBUKA (Expanded)
     const sidebarWidth = 288;
     setExpandedWidth(isMobile ? width : width - sidebarWidth);
   };
@@ -127,7 +126,6 @@ const AdminHeader = ({ title, toggleSidebar, isProfileExpanded, setIsProfileExpa
       <div 
         onClick={handleProfileClick}
         style={{
-            // LOGIKA BARU: Gunakan expandedWidth saat terbuka agar pas di sebelah sidebar
             width: isProfileExpanded ? `${expandedWidth}px` : `${widgetWidth}px`,
             height: isProfileExpanded ? '100vh' : `${headerHeight}px`,
             borderRadius: isProfileExpanded ? '0px' : '0px 0px 0px 40px'
@@ -148,7 +146,7 @@ const AdminHeader = ({ title, toggleSidebar, isProfileExpanded, setIsProfileExpa
               <div className="absolute top-0 right-0 w-full h-full flex items-center justify-end pr-4 md:pr-8 pt-1 md:pt-2">
                   
                   <div ref={widgetContentRef} className="flex items-center gap-3 md:gap-4">
-                      {/* Teks Nama & Role (Hidden di Mobile agar rapi) */}
+                      {/* Teks Nama & Role */}
                       <div className="text-right whitespace-nowrap hidden md:block">
                           <p className="text-sm font-bold text-gray-800 leading-tight block select-none">
                               {userData.username}

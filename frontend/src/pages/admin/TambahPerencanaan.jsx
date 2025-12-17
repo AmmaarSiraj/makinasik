@@ -5,7 +5,7 @@ import Swal from 'sweetalert2';
 import {
   FaArrowRight, FaArrowLeft, FaCheck, FaClipboardList,
   FaIdCard, FaSearch, FaTimes, FaUsers, FaMoneyBillWave,
-  FaExclamationCircle, FaChartBar, FaBoxOpen, FaFilter
+  FaExclamationCircle, FaChartBar, FaBoxOpen, FaFilter, FaCalendarDay
 } from 'react-icons/fa';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
@@ -29,7 +29,6 @@ const TambahPerencanaan = () => {
   // Form State
   const [selectedKegiatanId, setSelectedKegiatanId] = useState('');
   const [selectedSubId, setSelectedSubId] = useState('');
-
   const [selectedMitras, setSelectedMitras] = useState([]);
 
   const [mitraSearch, setMitraSearch] = useState('');
@@ -95,7 +94,8 @@ const TambahPerencanaan = () => {
     fetchSubDropdown();
   }, [selectedKegiatanId]);
 
-  // 3. HITUNG PENDAPATAN & LIMIT (HISTORIS - TAHUNAN)
+  // 3. HITUNG PENDAPATAN & LIMIT (BULANAN)
+  // [MODIFIKASI: Filter berdasarkan Tahun DAN Bulan yang sama]
   useEffect(() => {
     if (!selectedSubId) {
       setBatasHonorPeriode(0);
@@ -104,14 +104,18 @@ const TambahPerencanaan = () => {
     }
 
     const subInfo = allSubKegiatan.find(s => String(s.id) === String(selectedSubId));
-
     if (!subInfo || !subInfo.tanggal_mulai) return;
 
-    const tahunKegiatan = new Date(subInfo.tanggal_mulai).getFullYear().toString();
+    // Ambil Tahun dan Bulan dari Sub Kegiatan yang dipilih
+    const targetDate = new Date(subInfo.tanggal_mulai);
+    const targetYear = targetDate.getFullYear().toString();
+    const targetMonth = targetDate.getMonth(); // 0 (Jan) - 11 (Dec)
 
+    // A. Set Limit (Batas Honor) berdasarkan Tahun di database aturan_periode
+    // Nilai ini akan dianggap sebagai BATAS BULANAN
     const aturan = listAturan.find(r =>
-      String(r.tahun) === String(tahunKegiatan) ||
-      String(r.periode) === String(tahunKegiatan)
+      String(r.tahun) === String(targetYear) ||
+      String(r.periode) === String(targetYear)
     );
 
     if (aturan) {
@@ -120,6 +124,7 @@ const TambahPerencanaan = () => {
       setBatasHonorPeriode(0);
     }
 
+    // B. Hitung Akumulasi Pendapatan Mitra di BULAN & TAHUN yang sama
     const incomeMap = {};
 
     listKelompok.forEach(k => {
@@ -129,9 +134,13 @@ const TambahPerencanaan = () => {
       const sub = allSubKegiatan.find(s => s.id === perencanaan.id_subkegiatan);
       if (!sub || !sub.tanggal_mulai) return;
 
-      const subYear = new Date(sub.tanggal_mulai).getFullYear().toString();
+      // Cek apakah Perencanaan lain ini ada di Bulan & Tahun yang sama
+      const itemDate = new Date(sub.tanggal_mulai);
+      const itemYear = itemDate.getFullYear().toString();
+      const itemMonth = itemDate.getMonth();
 
-      if (subYear !== tahunKegiatan) return;
+      // [FILTER PENTING] Hanya jumlahkan jika Tahun SAMA dan Bulan SAMA
+      if (itemYear !== targetYear || itemMonth !== targetMonth) return;
 
       const honor = listHonorarium.find(h => h.id_subkegiatan === sub.id && h.kode_jabatan === k.kode_jabatan);
       const tarif = honor ? Number(honor.tarif) : 0;
@@ -147,7 +156,7 @@ const TambahPerencanaan = () => {
 
   }, [selectedSubId, allSubKegiatan, listAturan, listKelompok, listPerencanaan, listHonorarium]);
 
-  // 4. MENGHITUNG TAHUN TARGET (Untuk Filter Mitra)
+  // 4. MENGHITUNG TAHUN TARGET (Untuk Filter Mitra di UI)
   const targetYear = useMemo(() => {
     if (!selectedSubId) return null;
     const sub = allSubKegiatan.find(s => String(s.id) === String(selectedSubId));
@@ -223,7 +232,8 @@ const TambahPerencanaan = () => {
     ));
   };
 
- const handleSubmit = async () => {
+  // --- SUBMIT LOGIC ---
+  const handleSubmit = async () => {
     if (selectedMitras.length === 0) {
       return Swal.fire('Perhatian', 'Belum ada mitra yang dipilih.', 'warning');
     }
@@ -233,24 +243,10 @@ const TambahPerencanaan = () => {
       return Swal.fire('Data Belum Lengkap', `Harap pilih jabatan dan isi volume tugas (> 0) untuk mitra: ${incompleteMitra.nama_lengkap}`, 'warning');
     }
 
-    if (batasHonorPeriode > 0) {
-      const overLimitUser = selectedMitras.find(m => {
-        const hInfo = availableJabatan.find(h => h.kode_jabatan === m.assignedJabajan);
-        const tarif = hInfo ? Number(hInfo.tarif) : 0;
-        const totalHonorBaru = tarif * Number(m.assignedVolume);
-
-        const current = mitraIncomeMap[String(m.id)] || 0;
-        return (current + totalHonorBaru) > batasHonorPeriode;
-      });
-
-      if (overLimitUser) {
-        return Swal.fire(
-          'Gagal Menyimpan',
-          `Mitra <b>${overLimitUser.nama_lengkap}</b> melebihi batas honor tahunan ini. Silakan kurangi volume/honor atau hapus dari daftar.`,
-          'error'
-        );
-      }
-    }
+    // [MODIFIKASI] Hapus blokir jika melebihi batas honor
+    // Kode blokir (return Swal.fire error) dihapus agar tetap bisa disimpan.
+    // Jika ingin memberi peringatan konfirmasi, bisa ditambahkan di sini,
+    // tapi sesuai permintaan "tetap bisa ditambahkan", kita langsung proses simpan.
 
     setSubmitting(true);
     const token = localStorage.getItem('token');
@@ -259,10 +255,6 @@ const TambahPerencanaan = () => {
 
     const rawIdPengawas = user?.id;
     const idPengawas = parseInt(rawIdPengawas); 
-
-    // --- TEMPORARY DEBUG LOG ---
-    console.log('DEBUG: ID Pengawas dari localStorage:', rawIdPengawas, '-> Dikonversi:', idPengawas);
-    // ----------------------------
 
     if (isNaN(idPengawas) || idPengawas < 1) { 
         setSubmitting(false);
@@ -322,11 +314,9 @@ const TambahPerencanaan = () => {
 
       if (err.response?.status === 422) {
           const errors = err.response.data.errors;
-          
           if (Object.keys(errors).length > 0) {
             const firstErrorField = Object.keys(errors)[0];
             const firstErrorMessage = errors[firstErrorField][0];
-            
             errorMessage = `Validasi Gagal pada field <b>${firstErrorField}</b>: ${firstErrorMessage}`;
           } else {
             errorMessage = err.response.data.message || 'Validasi Gagal! Periksa kembali data Anda.';
@@ -343,16 +333,10 @@ const TambahPerencanaan = () => {
 
   // --- FILTER MITRA (TERMASUK TAHUN AKTIF) ---
   const filteredMitra = listMitra.filter(m => {
-    // 1. Filter Search
     const matchSearch = m.nama_lengkap.toLowerCase().includes(mitraSearch.toLowerCase()) || m.nik.includes(mitraSearch);
-
-    // 2. Filter Sudah Terpilih
     const notSelected = !selectedMitras.some(selected => selected.id === m.id);
-
-    // 3. Filter Sudah Ada di Database untuk SubKegiatan ini
     const notAlreadyAssigned = !unavailableMitraIds.has(String(m.id));
 
-    // 4. Filter Tahun Aktif
     let isActiveInYear = false;
     if (targetYear && m.riwayat_tahun) {
       const years = m.riwayat_tahun.split(', ');
@@ -436,6 +420,12 @@ const TambahPerencanaan = () => {
             <div className="flex justify-between items-center mb-6">
               <div className='text-sm text-gray-600'>
                 Perencanaan untuk: <span className="font-bold text-[#1A2A80] text-lg block">{allSubKegiatan.find(s => String(s.id) === String(selectedSubId))?.nama_sub_kegiatan}</span>
+                {/* Menampilkan Bulan yang terpilih */}
+                {selectedSubId && (
+                    <span className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                        <FaCalendarDay /> Periode: {new Date(allSubKegiatan.find(s => String(s.id) === String(selectedSubId))?.tanggal_mulai).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
+                    </span>
+                )}
               </div>
               <button onClick={() => setStep(1)} className="text-xs text-blue-600 underline hover:text-blue-800">Ganti Kegiatan</button>
             </div>
@@ -515,28 +505,29 @@ const TambahPerencanaan = () => {
                         filteredMitra.map(m => {
                           const currentIncome = mitraIncomeMap[String(m.id)] || 0;
                           const limit = batasHonorPeriode;
+                          // Label isFull hanya jika limit ada dan tercapai
                           const isFull = limit > 0 && currentIncome >= limit;
                           const percent = limit > 0 ? (currentIncome / limit) * 100 : 0;
 
                           return (
                             <div
                               key={m.id}
-                              onClick={() => !isFull && handleAddMitra(m)}
-                              className={`px-4 py-3 border-b last:border-none transition cursor-pointer ${isFull ? 'bg-gray-100 opacity-60 cursor-not-allowed' : 'hover:bg-blue-50'}`}
+                              onClick={() => handleAddMitra(m)}
+                              className={`px-4 py-3 border-b last:border-none transition cursor-pointer hover:bg-blue-50`}
                             >
                               <div className="flex justify-between items-start">
                                 <div>
                                   <p className="text-sm font-bold text-gray-800">{m.nama_lengkap}</p>
                                   <p className="text-xs text-gray-500">{m.nik}</p>
                                 </div>
-                                {isFull && <span className="text-[10px] font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded">PENUH</span>}
+                                {isFull && <span className="text-[10px] font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded">LIMIT</span>}
                               </div>
 
                               {limit > 0 && (
                                 <div className="mt-2">
                                   <div className="flex justify-between text-[10px] mb-1 text-gray-500">
                                     <span>Rp {currentIncome.toLocaleString('id-ID')}</span>
-                                    <span>Limit Thn: Rp {limit.toLocaleString('id-ID')}</span>
+                                    <span>Limit Bln: Rp {limit.toLocaleString('id-ID')}</span>
                                   </div>
                                   <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
                                     <div className={`h-1.5 rounded-full ${percent > 90 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${Math.min(percent, 100)}%` }}></div>
@@ -645,7 +636,7 @@ const TambahPerencanaan = () => {
                             <div className="mt-3 border-t border-gray-100 pt-2">
                               <div className="flex justify-between text-[10px] text-gray-500 mb-1">
                                 <span>Total Proyeksi: {formatRupiah(totalProjected)}</span>
-                                <span>Batas Thn: {formatRupiah(limit)}</span>
+                                <span>Batas Bln: {formatRupiah(limit)}</span>
                               </div>
                               <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden flex">
                                 <div
@@ -664,7 +655,7 @@ const TambahPerencanaan = () => {
 
                           {isOverLimit && (
                             <div className="mt-2 text-[10px] text-red-600 font-bold flex items-center gap-1 animate-pulse justify-end">
-                              <FaExclamationCircle /> Akumulasi pendapatan melebihi batas tahunan!
+                              <FaExclamationCircle /> Melebihi batas bulanan!
                             </div>
                           )}
 

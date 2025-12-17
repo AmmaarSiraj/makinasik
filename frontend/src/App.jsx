@@ -52,6 +52,7 @@ import Perencanaan from './pages/admin/Perencanaan';
 import TambahPerencanaan from './pages/admin/TambahPerencanaan';
 import EditPerencanaan from './pages/admin/EditPerencanaan';
 import DetailPerencanaan from './pages/admin/DetailPerencanaan';
+import RekapPerencanaan from './pages/admin/RekapPerencanaan';
 
 function AppRoutes() {
   return (
@@ -107,6 +108,7 @@ function AppRoutes() {
             <Route path="/admin/perencanaan/tambah" element={<TambahPerencanaan />} />
             <Route path="/admin/perencanaan/detail/:id" element={<DetailPerencanaan />} />
             <Route path="/admin/perencanaan/edit/:id" element={<EditPerencanaan />} />
+            <Route path="/admin/rekap" element={<RekapPerencanaan />} />
 
             <Route path="/admin/manajemen-mitra" element={<ManajemenMitra />} />
             <Route path="/admin/mitra/:id" element={<DetailMitra />} />
