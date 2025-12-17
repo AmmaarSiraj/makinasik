@@ -26,6 +26,7 @@ const menuItems = [
   // 2. OPERASIONAL (Kegiatan & Plotting)
   { path: "/admin/manage-kegiatan", label: "Survei/Sensus", icon: <FaClipboardList /> },
   { path: "/admin/penugasan", label: "Penugasan", icon: <FaHandshake /> },
+  { path: "/admin/perencanaan", label: "Perencanaan", icon: <FaHandshake /> },
   
   // 3. SDM (Mitra)
   { path: "/admin/manajemen-mitra", label: "Manajemen Mitra", icon: <FaUserCheck /> },

@@ -1,9 +1,9 @@
-// src/pages/admin/DetailPenugasan.jsx
+// src/pages/admin/DetailPerencanaan.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Swal from 'sweetalert2';
-import PopupTambahAnggota from '../components/admin/PopupTambahAnggota';
+import PopupTambahAnggota from '../../components/admin/PopupTambahAnggota';
 import { 
   FaArrowLeft, FaTrash, FaPlus, FaUserTie, FaChartPie, 
   FaClipboardList, FaExclamationTriangle, FaMoneyBillWave,
@@ -33,11 +33,11 @@ const SimplePieChart = ({ percentage, colorHex }) => {
   );
 };
 
-const DetailPenugasan = () => {
+const DetailPerencanaan = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   
-  const [penugasan, setPenugasan] = useState(null);
+  const [Perencanaan, setPerencanaan] = useState(null);
   const [anggota, setAnggota] = useState([]);
   const [listHonorarium, setListHonorarium] = useState([]); 
   
@@ -56,16 +56,16 @@ const DetailPenugasan = () => {
       const token = getToken();
       const config = { headers: { Authorization: `Bearer ${token}` } };
 
-      const [penugasanRes, anggotaRes, honorRes] = await Promise.all([
-        axios.get(`${API_URL}/api/penugasan/${id}`, config),
-        axios.get(`${API_URL}/api/penugasan/${id}/anggota`, config),
+      const [PerencanaanRes, anggotaRes, honorRes] = await Promise.all([
+        axios.get(`${API_URL}/api/perencanaan/${id}`, config),
+        axios.get(`${API_URL}/api/perencanaan/${id}/anggota`, config),
         axios.get(`${API_URL}/api/honorarium`, config)
       ]);
 
       // PERBAIKAN 1: Ambil properti .data lagi karena backend membungkusnya
       // Backend: { status: 'success', data: { ... } }
-      const detailPenugasan = penugasanRes.data.data; 
-      setPenugasan(detailPenugasan);
+      const detailPerencanaan = PerencanaanRes.data.data; 
+      setPerencanaan(detailPerencanaan);
 
       // Anggota dikembalikan array langsung oleh controller (lihat getAnggota di Controller)
       setAnggota(anggotaRes.data || []);
@@ -74,8 +74,8 @@ const DetailPenugasan = () => {
       // Pastikan mengakses array honorarium yang benar sebelum di-filter
       const allHonor = honorRes.data.data || []; 
       
-      // Gunakan detailPenugasan yang baru diambil untuk filter
-      const currentSubId = detailPenugasan.id_subkegiatan;
+      // Gunakan detailPerencanaan yang baru diambil untuk filter
+      const currentSubId = detailPerencanaan.id_subkegiatan;
       const filteredHonor = allHonor.filter(h => String(h.id_subkegiatan) === String(currentSubId));
       
       setListHonorarium(filteredHonor);
@@ -129,7 +129,7 @@ const DetailPenugasan = () => {
     e.preventDefault();
     try {
         const token = getToken();
-        await axios.put(`${API_URL}/api/kelompok-penugasan/${editingMember.id_kelompok}`, editForm, {
+        await axios.put(`${API_URL}/api/kelompok-perencanaan/${editingMember.id_kelompok}`, editForm, {
             headers: { Authorization: `Bearer ${token}` }
         });
         
@@ -163,7 +163,7 @@ const DetailPenugasan = () => {
     if (result.isConfirmed) {
       try {
         const token = getToken();
-        await axios.delete(`${API_URL}/api/kelompok-penugasan/${id_kelompok}`, {
+        await axios.delete(`${API_URL}/api/kelompok-perencanaan/${id_kelompok}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         fetchDetailData(); 
@@ -174,10 +174,10 @@ const DetailPenugasan = () => {
     }
   };
 
-  const handleDeletePenugasan = async () => {
+  const handleDeletePerencanaan = async () => {
     const result = await Swal.fire({
       title: 'Bubarkan Tim?',
-      text: "Seluruh data penugasan ini akan dihapus permanen!",
+      text: "Seluruh data Perencanaan ini akan dihapus permanen!",
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#d33',
@@ -187,10 +187,10 @@ const DetailPenugasan = () => {
     if (result.isConfirmed) {
       try {
         const token = getToken();
-        await axios.delete(`${API_URL}/api/penugasan/${id}`, {
+        await axios.delete(`${API_URL}/api/perencanaan/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        navigate('/penugasan');
+        navigate('/admin/perencanaan');
         Swal.fire('Dibubarkan!', 'Tim berhasil dibubarkan.', 'success');
       } catch (err) {
         Swal.fire('Gagal!', 'Gagal membubarkan tim.', 'error');
@@ -199,17 +199,17 @@ const DetailPenugasan = () => {
   };
 
   // Render Loading
-  if (isLoading) return <div className="text-center py-20 text-gray-500">Memuat detail penugasan...</div>;
-  if (!penugasan) return <div className="text-center py-20 text-red-500">Data penugasan tidak ditemukan.</div>;
+  if (isLoading) return <div className="text-center py-20 text-gray-500">Memuat detail Perencanaan...</div>;
+  if (!Perencanaan) return <div className="text-center py-20 text-red-500">Data Perencanaan tidak ditemukan.</div>;
 
   // Hitung Total Honor Seluruh Tim
   const totalHonorTim = anggota.reduce((acc, curr) => acc + (Number(curr.total_honor) || 0), 0);
 
   const popupData = {
-    year: penugasan?.tanggal_mulai 
-      ? new Date(penugasan.tanggal_mulai).getFullYear().toString() 
+    year: Perencanaan?.tanggal_mulai 
+      ? new Date(Perencanaan.tanggal_mulai).getFullYear().toString() 
       : new Date().getFullYear().toString(),
-    idSubKegiatan: penugasan?.id_subkegiatan
+    idSubKegiatan: Perencanaan?.id_subkegiatan
   };
 
   return (
@@ -220,22 +220,22 @@ const DetailPenugasan = () => {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <Link 
-              to="/penugasan" 
+              to="/admin/perencanaan" 
               className="inline-flex items-center gap-2 text-gray-500 hover:text-[#1A2A80] transition font-medium mb-2"
             >
               <FaArrowLeft size={14} /> Kembali ke Daftar
             </Link>
             <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
               <span className="bg-blue-100 text-[#1A2A80] p-2 rounded-lg text-lg"><FaClipboardList /></span>
-              {penugasan.nama_sub_kegiatan}
+              {Perencanaan.nama_sub_kegiatan}
             </h1>
             <p className="text-sm text-gray-500 mt-1 ml-11">
-              Survei/Sensus: <span className="font-medium text-gray-700">{penugasan.nama_kegiatan}</span>
+              Survei/Sensus: <span className="font-medium text-gray-700">{Perencanaan.nama_kegiatan}</span>
             </p>
           </div>
           
           <button 
-            onClick={handleDeletePenugasan}
+            onClick={handleDeletePerencanaan}
             className="flex items-center gap-2 bg-white text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 text-sm font-bold border border-red-200 transition shadow-sm"
           >
             <FaTrash size={12} /> Bubarkan Tim
@@ -251,8 +251,8 @@ const DetailPenugasan = () => {
               </div>
               <div>
                 <p className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1">Ketua Tim / Pengawas</p>
-                <p className="text-base font-bold text-gray-900">{penugasan.nama_pengawas}</p>
-                <p className="text-sm text-gray-500">{penugasan.email_pengawas}</p>
+                <p className="text-base font-bold text-gray-900">{Perencanaan.nama_pengawas}</p>
+                <p className="text-sm text-gray-500">{Perencanaan.email_pengawas}</p>
               </div>
             </div>
 
@@ -517,7 +517,7 @@ const DetailPenugasan = () => {
       <PopupTambahAnggota 
         isOpen={isPopupOpen} 
         onClose={() => setIsPopupOpen(false)} 
-        id_penugasan={id} 
+        id_Perencanaan={id} 
         existingAnggotaIds={anggota.map(a => a.id_mitra)} 
         onAnggotaAdded={fetchDetailData}
         targetYear={popupData.year} 
@@ -527,4 +527,4 @@ const DetailPenugasan = () => {
   );
 };
 
-export default DetailPenugasan;
+export default DetailPerencanaan;

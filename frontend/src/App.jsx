@@ -29,7 +29,6 @@ import BatasHonor from './pages/admin/BatasHonor';
 import TambahTemplate from './pages/admin/TambahTemplate';
 import PreviewTemplate from './pages/admin/PreviewTemplate';
 
-import LengkapiProfile from './pages/LengkapiProfile';
 import DetailKegiatanUser from './pages/DetailKegiatanUser';
 import PenugasanUser from './pages/Penugasan';
 import MitraUser from './pages/Mitra';
@@ -49,6 +48,10 @@ import AdminLayout from './layouts/AdminLayout';
 
 import RequireAuth from './components/RequireAuth';
 import AutoLogout from './components/AutoLogout';
+import Perencanaan from './pages/admin/Perencanaan';
+import TambahPerencanaan from './pages/admin/TambahPerencanaan';
+import EditPerencanaan from './pages/admin/EditPerencanaan';
+import DetailPerencanaan from './pages/admin/DetailPerencanaan';
 
 function AppRoutes() {
   return (
@@ -61,7 +64,6 @@ function AppRoutes() {
         <Route element={<RequireAuth allowedRoles={['user', 'admin']} />}>
           <Route element={<Layout />}>
             <Route path="/home" element={<Home />} />
-            <Route path="/lengkapi-profil" element={<LengkapiProfile />} />
             <Route path="/kegiatan/:id" element={<DetailKegiatanUser />} />
             <Route path="/penugasan" element={<PenugasanUser />} />
             <Route path="/daftar-mitra" element={<MitraUser />} />
@@ -99,13 +101,18 @@ function AppRoutes() {
             <Route path="/admin/penugasan" element={<Penugasan />} />
             <Route path="/admin/penugasan/tambah" element={<TambahPenugasan />} />
             <Route path="/admin/penugasan/detail/:id" element={<DetailPenugasan />} />
+            <Route path="/admin/penugasan/edit/:id" element={<EditPenugasan />} />
+
+            <Route path="/admin/perencanaan" element={<Perencanaan />} />
+            <Route path="/admin/perencanaan/tambah" element={<TambahPerencanaan />} />
+            <Route path="/admin/perencanaan/detail/:id" element={<DetailPerencanaan />} />
+            <Route path="/admin/perencanaan/edit/:id" element={<EditPerencanaan />} />
 
             <Route path="/admin/manajemen-mitra" element={<ManajemenMitra />} />
             <Route path="/admin/mitra/:id" element={<DetailMitra />} />
             <Route path="/admin/manajemen-jabatan" element={<ManajemenJabatan />} />
             <Route path="/admin/manajemen-spk" element={<ManajemenSPK />} />
             <Route path="/admin/mitra/edit/:id" element={<EditMitra />} />
-            <Route path="/admin/penugasan/edit/:id" element={<EditPenugasan />} />
             <Route path="/admin/transaksi-mitra" element={<TransaksiMitra />} />
             <Route path="/admin/batas-honor" element={<BatasHonor />} />
             <Route path="/admin/spk/templates/create" element={<TambahTemplate />} />

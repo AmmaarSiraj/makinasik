@@ -10,7 +10,7 @@ import {
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
-const TambahPenugasan = () => {
+const TambahPerencanaan = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -24,7 +24,7 @@ const TambahPenugasan = () => {
   const [listHonorarium, setListHonorarium] = useState([]);
   const [listAturan, setListAturan] = useState([]);
   const [listKelompok, setListKelompok] = useState([]);
-  const [listPenugasan, setListPenugasan] = useState([]);
+  const [listPerencanaan, setListPerencanaan] = useState([]);
 
   // Form State
   const [selectedKegiatanId, setSelectedKegiatanId] = useState('');
@@ -47,13 +47,13 @@ const TambahPenugasan = () => {
         const token = localStorage.getItem('token');
         const headers = { Authorization: `Bearer ${token}` };
 
-        const [resKeg, resMitra, resHonor, resAturan, resKelompok, resPenugasan, resAllSub] = await Promise.all([
+        const [resKeg, resMitra, resHonor, resAturan, resKelompok, resPerencanaan, resAllSub] = await Promise.all([
           axios.get(`${API_URL}/api/kegiatan`, { headers }),
           axios.get(`${API_URL}/api/mitra`, { headers }),
           axios.get(`${API_URL}/api/honorarium`, { headers }),
           axios.get(`${API_URL}/api/aturan-periode`, { headers }),
-          axios.get(`${API_URL}/api/kelompok-penugasan`, { headers }),
-          axios.get(`${API_URL}/api/penugasan`, { headers }),
+          axios.get(`${API_URL}/api/kelompok-perencanaan`, { headers }),
+          axios.get(`${API_URL}/api/perencanaan`, { headers }),
           axios.get(`${API_URL}/api/subkegiatan`, { headers })
         ]);
 
@@ -62,7 +62,7 @@ const TambahPenugasan = () => {
         setListHonorarium(resHonor.data.data);
         setListAturan(resAturan.data.data);
         setListKelompok(resKelompok.data.data);
-        setListPenugasan(resPenugasan.data.data);
+        setListPerencanaan(resPerencanaan.data.data);
         setAllSubKegiatan(resAllSub.data.data);
 
       } catch (err) {
@@ -123,10 +123,10 @@ const TambahPenugasan = () => {
     const incomeMap = {};
 
     listKelompok.forEach(k => {
-      const penugasan = listPenugasan.find(p => p.id_penugasan === k.id_penugasan);
-      if (!penugasan) return;
+      const perencanaan = listPerencanaan.find(p => p.id_perencanaan === k.id_perencanaan);
+      if (!perencanaan) return;
 
-      const sub = allSubKegiatan.find(s => s.id === penugasan.id_subkegiatan);
+      const sub = allSubKegiatan.find(s => s.id === perencanaan.id_subkegiatan);
       if (!sub || !sub.tanggal_mulai) return;
 
       const subYear = new Date(sub.tanggal_mulai).getFullYear().toString();
@@ -145,7 +145,7 @@ const TambahPenugasan = () => {
 
     setMitraIncomeMap(incomeMap);
 
-  }, [selectedSubId, allSubKegiatan, listAturan, listKelompok, listPenugasan, listHonorarium]);
+  }, [selectedSubId, allSubKegiatan, listAturan, listKelompok, listPerencanaan, listHonorarium]);
 
   // 4. MENGHITUNG TAHUN TARGET (Untuk Filter Mitra)
   const targetYear = useMemo(() => {
@@ -159,16 +159,16 @@ const TambahPenugasan = () => {
   const unavailableMitraIds = useMemo(() => {
     if (!selectedSubId) return new Set();
 
-    const relatedPenugasanIds = listPenugasan
+    const relatedPerencanaanIds = listPerencanaan
       .filter(p => String(p.id_subkegiatan) === String(selectedSubId))
-      .map(p => p.id_penugasan);
+      .map(p => p.id_perencanaan);
 
     const assignedIds = listKelompok
-      .filter(k => relatedPenugasanIds.includes(k.id_penugasan))
+      .filter(k => relatedPerencanaanIds.includes(k.id_perencanaan))
       .map(k => String(k.id_mitra));
 
     return new Set(assignedIds);
-  }, [selectedSubId, listPenugasan, listKelompok]);
+  }, [selectedSubId, listPerencanaan, listKelompok]);
 
   // 6. DATA JABATAN & PROGRESS VOLUME
   const availableJabatan = useMemo(() => {
@@ -176,12 +176,12 @@ const TambahPenugasan = () => {
   }, [listHonorarium, selectedSubId]);
 
   const getVolumeStats = (kodeJabatan, basisVolume) => {
-    const relatedPenugasanIds = listPenugasan
+    const relatedPerencanaanIds = listPerencanaan
       .filter(p => String(p.id_subkegiatan) === String(selectedSubId))
-      .map(p => p.id_penugasan);
+      .map(p => p.id_perencanaan);
 
     const usedInDB = listKelompok
-      .filter(k => relatedPenugasanIds.includes(k.id_penugasan) && k.kode_jabatan === kodeJabatan)
+      .filter(k => relatedPerencanaanIds.includes(k.id_perencanaan) && k.kode_jabatan === kodeJabatan)
       .reduce((acc, curr) => acc + (Number(curr.volume_tugas) || 0), 0);
 
     const usedInDraft = selectedMitras
@@ -270,15 +270,15 @@ const TambahPenugasan = () => {
     }
 
     try {
-      const existingPenugasan = listPenugasan.find(
+      const existingPerencanaan = listPerencanaan.find(
         p => String(p.id_subkegiatan) === String(selectedSubId)
       );
       
-      if (existingPenugasan) {
-        const idPenugasanExist = existingPenugasan.id_penugasan;
+      if (existingPerencanaan) {
+        const idPerencanaanExist = existingPerencanaan.id_perencanaan;
         const promises = selectedMitras.map(m => {
-          return axios.post(`${API_URL}/api/kelompok-penugasan`, {
-            id_penugasan: idPenugasanExist,
+          return axios.post(`${API_URL}/api/kelompok-perencanaan`, {
+            id_perencanaan: idPerencanaanExist,
             id_mitra: m.id,
             kode_jabatan: m.assignedJabatan,
             volume_tugas: m.assignedVolume
@@ -288,11 +288,11 @@ const TambahPenugasan = () => {
 
         Swal.fire({
           title: 'Berhasil',
-          text: `Mitra berhasil ditambahkan ke penugasan (ID: ${idPenugasanExist}).`,
+          text: `Mitra berhasil ditambahkan ke Perencanaan (ID: ${idPerencanaanExist}).`,
           icon: 'success',
           timer: 2000,
           showConfirmButton: false
-        }).then(() => navigate('/penugasan'));
+        }).then(() => navigate('/admin/perencanaan'));
 
       } else {
         const payload = {
@@ -304,15 +304,15 @@ const TambahPenugasan = () => {
             volume_tugas: m.assignedVolume
           }))
         };
-        await axios.post(`${API_URL}/api/penugasan`, payload, { headers });
+        await axios.post(`${API_URL}/api/perencanaan`, payload, { headers });
 
         Swal.fire({
           title: 'Berhasil',
-          text: 'Penugasan baru dan tim berhasil disimpan.',
+          text: 'Perencanaan baru dan tim berhasil disimpan.',
           icon: 'success',
           timer: 2000,
           showConfirmButton: false
-        }).then(() => navigate('/penugasan'));
+        }).then(() => navigate('/admin/perencanaan'));
       }
 
     } catch (err) {
@@ -370,7 +370,7 @@ const TambahPenugasan = () => {
     <div className="max-w-6xl mx-auto pb-20">
 
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-800">Wizard Penugasan Mitra</h1>
+        <h1 className="text-2xl font-bold text-gray-800">Wizard Perencanaan Mitra</h1>
         <div className="flex items-center gap-2 text-sm text-gray-500 mt-2">
           <span className={`px-3 py-1 rounded-full ${step === 1 ? 'bg-[#1A2A80] text-white font-bold' : 'bg-gray-200'}`}>1. Pilih Kegiatan</span>
           <span className="text-gray-300">-----</span>
@@ -435,7 +435,7 @@ const TambahPenugasan = () => {
 
             <div className="flex justify-between items-center mb-6">
               <div className='text-sm text-gray-600'>
-                Penugasan untuk: <span className="font-bold text-[#1A2A80] text-lg block">{allSubKegiatan.find(s => String(s.id) === String(selectedSubId))?.nama_sub_kegiatan}</span>
+                Perencanaan untuk: <span className="font-bold text-[#1A2A80] text-lg block">{allSubKegiatan.find(s => String(s.id) === String(selectedSubId))?.nama_sub_kegiatan}</span>
               </div>
               <button onClick={() => setStep(1)} className="text-xs text-blue-600 underline hover:text-blue-800">Ganti Kegiatan</button>
             </div>
@@ -691,4 +691,4 @@ const TambahPenugasan = () => {
   );
 };
 
-export default TambahPenugasan;
+export default TambahPerencanaan;

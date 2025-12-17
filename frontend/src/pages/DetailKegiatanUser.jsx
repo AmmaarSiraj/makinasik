@@ -1,12 +1,16 @@
-// src/pages/DetailKegiatanUser.jsx
+// src/pages/admin/DetailKegiatan.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
+import Swal from 'sweetalert2';
+// 1. IMPORT ICON
 import { 
   FaArrowLeft, 
+  FaMoneyBillWave, 
   FaUserTag, 
   FaLayerGroup,
   FaCalendarAlt,
+  FaBullhorn,
   FaCoins,
   FaBoxOpen,
   FaInfoCircle
@@ -14,7 +18,7 @@ import {
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
-const DetailKegiatanUser = () => {
+const DetailKegiatan = () => {
   const { id } = useParams(); // ID Kegiatan (Sub)
 
   const [subData, setSubData] = useState(null);
@@ -24,31 +28,27 @@ const DetailKegiatanUser = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
+    setLoading(true);
+    setError(null);
+    try {
         const token = localStorage.getItem('token');
         const headers = { Authorization: `Bearer ${token}` };
 
-        // 1. Ambil Detail Kegiatan (Sub)
-        const resSub = await axios.get(`${API_URL}/api/subkegiatan/${id}`, { headers });
-        setSubData(resSub.data);
+        const [resSub, resHon] = await Promise.all([
+            axios.get(`${API_URL}/api/subkegiatan/${id}`, { headers }),
+            axios.get(`${API_URL}/api/subkegiatan/${id}/honorarium`, { headers }),
+        ]);
 
-        // 2. Ambil Data Honorarium
-        const resHon = await axios.get(`${API_URL}/api/honorarium`, { headers });
-        if (resHon.data && Array.isArray(resHon.data)) {
-          // Filter honorarium yang sesuai dengan subkegiatan ini
-          const relevantHonors = resHon.data.filter(h => h.id_subkegiatan === id);
-          setHonorList(relevantHonors);
-        }
+        setSubData(resSub.data.data);
+        setHonorList(resHon.data.data); 
 
-      } catch (err) {
-        console.error(err);
+    } catch (err) {
+        console.error("Error fetching data:", err);
         setError(err.response?.data?.message || err.message || "Gagal memuat data.");
-      } finally {
+    } finally {
         setLoading(false);
-      }
-    };
+    }
+};
 
     if (id) fetchData();
   }, [id]);
@@ -92,15 +92,15 @@ const DetailKegiatanUser = () => {
   const statusObj = getComputedStatus(subData.tanggal_mulai, subData.tanggal_selesai);
 
   return (
-    <div className="w-full space-y-8 pb-10 container mx-auto px-4 py-8 max-w-6xl">
+    <div className="w-full space-y-8 pt-14 px-8 pb-10">
       
       {/* Header Navigasi */}
       <div>
         <Link 
-          to="/daftar-kegiatan" 
+          to="/admin/manage-kegiatan" 
           className="inline-flex items-center gap-2 text-gray-500 hover:text-[#1A2A80] transition font-medium"
         >
-          <FaArrowLeft size={14} /> Kembali ke Daftar Kegiatan
+          <FaArrowLeft size={14} /> Kembali ke Daftar Survei/Sensus
         </Link>
       </div>
 
@@ -166,8 +166,14 @@ const DetailKegiatanUser = () => {
             {honorList.length === 0 ? (
                 <div className="text-center py-16 text-gray-400 bg-white">
                     <div className="mb-3 text-gray-200 text-5xl flex justify-center"><FaUserTag /></div>
-                    <p className="text-base font-medium text-gray-500">Belum ada informasi honorarium.</p>
-                    <p className="text-sm mb-4">Silakan hubungi admin jika informasi belum tersedia.</p>
+                    <p className="text-base font-medium text-gray-500">Belum ada aturan honorarium.</p>
+                    <p className="text-sm mb-4">Silakan atur tarif jabatan di menu Edit Survei/Sensus.</p>
+                    <Link 
+                        to={`/admin/manage-kegiatan/edit/${subData.id_kegiatan}`} 
+                        className="inline-flex items-center gap-2 text-[#1A2A80] font-bold border border-blue-100 bg-blue-50 px-4 py-2 rounded-lg hover:bg-blue-100 transition"
+                    >
+                        Kelola Honorarium
+                    </Link>
                 </div>
             ) : (
                 <div className="overflow-x-auto">
@@ -244,4 +250,4 @@ const DetailKegiatanUser = () => {
   );
 };
 
-export default DetailKegiatanUser;
+export default DetailKegiatan;

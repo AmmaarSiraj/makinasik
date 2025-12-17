@@ -1,7 +1,7 @@
 // src/pages/Home.jsx
 import React, { useEffect, useState } from 'react';
-import axios from 'axios'; // Pastikan axios diimport
-import { FaChartLine, FaUsers, FaClipboardList, FaArrowDown, FaUserCheck } from 'react-icons/fa';
+import axios from 'axios';
+import { FaClipboardList, FaUsers, FaUserCheck, FaArrowDown } from 'react-icons/fa';
 import PartDaftarKegiatan from '../components/PartDaftarKegiatan';
 import Footer from '../components/Footer';
 
@@ -22,16 +22,63 @@ const Home = () => {
     }
   };
 
-  // Fetch data dari API saat komponen dimuat
+  // Fetch data & Hitung Statistik (Logic disamakan dengan Dashboard.jsx)
   useEffect(() => {
     const fetchStats = async () => {
       try {
         const token = localStorage.getItem('token');
-        // Jika endpoint public, hapus header Authorization. Jika butuh login, biarkan.
-        const res = await axios.get(`${API_URL}/api/dashboard/stats`, {
-            headers: { Authorization: `Bearer ${token}` }
+        // Gunakan header auth jika user sedang login, tapi tetap bisa jalan tanpa login (public)
+        const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+
+        // 1. Ambil data mentah dari API yang tersedia
+        const [resPenugasan, resKelompok, resMitra] = await Promise.all([
+          axios.get(`${API_URL}/api/penugasan`, config).catch(() => ({ data: { data: [] } })),
+          axios.get(`${API_URL}/api/kelompok-penugasan`, config).catch(() => ({ data: { data: [] } })),
+          axios.get(`${API_URL}/api/mitra`, config).catch(() => ({ data: { data: [] } }))
+        ]);
+
+        // 2. Handling Data Structure (Fallback ke array kosong jika null)
+        const penugasanData = resPenugasan.data.data || [];
+        const kelompokData = resKelompok.data.data || [];
+        const mitraData = resMitra.data.data || [];
+
+        // 3. Siapkan Filter Waktu (Bulan Ini)
+        const today = new Date();
+        const currentYear = today.getFullYear();
+        const currentMonth = today.getMonth(); 
+        const startOfMonth = new Date(currentYear, currentMonth, 1);
+        const endOfMonth = new Date(currentYear, currentMonth + 1, 0);
+
+        // 4. Hitung Kegiatan/Penugasan Aktif Bulan Ini
+        const activeTaskIdsMonth = new Set();
+        
+        penugasanData.forEach(task => {
+            const start = new Date(task.tanggal_mulai);
+            const end = new Date(task.tanggal_selesai);
+            
+            // Logika: Apakah rentang tugas bersinggungan dengan bulan ini?
+            if (start <= endOfMonth && end >= startOfMonth) {
+                activeTaskIdsMonth.add(task.id_penugasan);
+            }
         });
-        setStats(res.data);
+
+        // 5. Hitung Mitra Aktif Bulan Ini (Berdasarkan tugas aktif di atas)
+        const activeMitraMonthSet = new Set();
+        
+        kelompokData.forEach(k => {
+            // Jika mitra ini ada di dalam penugasan yang aktif bulan ini
+            if (activeTaskIdsMonth.has(k.id_penugasan)) {
+                activeMitraMonthSet.add(k.id_mitra);
+            }
+        });
+
+        // 6. Set State Hasil Perhitungan
+        setStats({
+          kegiatan_aktif: activeTaskIdsMonth.size, // Jumlah tugas/sub-kegiatan aktif
+          mitra_aktif: activeMitraMonthSet.size,   // Jumlah mitra unik yang bekerja
+          total_mitra: mitraData.length            // Total database mitra
+        });
+
       } catch (error) {
         console.error("Gagal memuat statistik:", error);
       }
@@ -93,7 +140,7 @@ const Home = () => {
         {/* KONTEN UTAMA */}
         <div id="konten-kegiatan" className="bg-white w-full flex-grow flex flex-col relative">
           
-          {/* STATS CARDS (DATA REAL DARI API) */}
+          {/* STATS CARDS (DATA REAL DARI PERHITUNGAN API) */}
           <div className="container mx-auto px-4 -mt-24 md:-mt-32 relative z-20 mb-12">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               
@@ -112,14 +159,14 @@ const Home = () => {
                 </div>
               </div>
 
-              {/* Card 2: Total Mitra Tahun Ini */}
+              {/* Card 2: Total Mitra (Database) */}
               <div className="bg-white p-6 rounded-2xl shadow-xl border-b-4 border-yellow-400 hover:transform hover:-translate-y-2 transition duration-300">
                 <div className="flex items-center gap-4">
                   <div className="p-3 bg-yellow-50 text-yellow-600 rounded-xl text-2xl">
                     <FaUsers />
                   </div>
                   <div>
-                    <h3 className="text-gray-500 text-sm font-bold uppercase">Total Mitra ({new Date().getFullYear()})</h3>
+                    <h3 className="text-gray-500 text-sm font-bold uppercase">Total Mitra Terdaftar</h3>
                     <p className="text-2xl font-extrabold text-gray-800">
                        {stats.total_mitra} <span className="text-sm font-normal text-gray-400">Orang</span>
                     </p>

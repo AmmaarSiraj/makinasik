@@ -2,55 +2,55 @@ import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import Swal from 'sweetalert2';
-import { 
-  FaArrowLeft, FaCheck, FaIdCard, FaSearch, FaTimes, 
-  FaUsers, FaMoneyBillWave, FaExclamationCircle, 
+import {
+  FaArrowLeft, FaCheck, FaIdCard, FaSearch, FaTimes,
+  FaUsers, FaMoneyBillWave, FaExclamationCircle,
   FaChartBar, FaBoxOpen, FaFilter
 } from 'react-icons/fa';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 const normalizeKodeJabatan = (kode) => {
-    return String(kode)
-        .replace(/[^\w-]/g, '')
-        .replace(/\s/g, '')
-        .toUpperCase();
+  return String(kode)
+    .replace(/[^\w-]/g, '')
+    .replace(/\s/g, '')
+    .toUpperCase();
 };
 
 const safeExtractData = (res, endpointName) => {
-    if (res.data && res.data.data) {
-        if (Array.isArray(res.data.data)) {
-            return res.data.data;
-        }
+  if (res.data && res.data.data) {
+    if (Array.isArray(res.data.data)) {
+      return res.data.data;
     }
-    
-    if (res.data && Array.isArray(res.data)) {
-        return res.data;
-    }
-    
-    return [];
+  }
+
+  if (res.data && Array.isArray(res.data)) {
+    return res.data;
+  }
+
+  return [];
 };
 
-const EditPenugasan = () => {
+const EditPerencanaan = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const [penugasanInfo, setPenugasanInfo] = useState(null);
+  const [PerencanaanInfo, setPerencanaanInfo] = useState(null);
   const [subKegiatanInfo, setSubKegiatanInfo] = useState(null);
 
   const [listKegiatan, setListKegiatan] = useState([]);
   const [allSubKegiatan, setAllSubKegiatan] = useState([]);
   const [listMitra, setListMitra] = useState([]);
-  const [listHonorarium, setListHonorarium] = useState([]); 
+  const [listHonorarium, setListHonorarium] = useState([]);
   const [listAturan, setListAturan] = useState([]);
   const [listKelompok, setListKelompok] = useState([]);
-  const [listPenugasan, setListPenugasan] = useState([]);
+  const [listPerencanaan, setListPerencanaan] = useState([]);
 
   const [selectedSubId, setSelectedSubId] = useState('');
 
-  const [currentMembers, setCurrentMembers] = useState([]); 
+  const [currentMembers, setCurrentMembers] = useState([]);
   const [selectedMitras, setSelectedMitras] = useState([]);
 
   const [mitraSearch, setMitraSearch] = useState('');
@@ -58,98 +58,103 @@ const EditPenugasan = () => {
 
   const [batasHonorPeriode, setBatasHonorPeriode] = useState(0);
   const [mitraIncomeMap, setMitraIncomeMap] = useState({});
-  
+
   useEffect(() => {
     const fetchData = async () => {
       try {
         const token = localStorage.getItem('token');
         const headers = { Authorization: `Bearer ${token}` };
 
-        const resPenugasanExist = await axios.get(`${API_URL}/api/penugasan/${id}`, { headers });
-        const penugasanData = resPenugasanExist.data.data;
-        
-        const idSub = penugasanData.id_subkegiatan;
+        const resPerencanaanExist = await axios.get(`${API_URL}/api/perencanaan/${id}`, { headers });
+        const PerencanaanData = resPerencanaanExist.data.data;
 
-        const [resKeg, resMitra, resHonor, resAturan, resKelompok, resAllPenugasan, resAllSub, resAnggota] = await Promise.all([
+        const idSub = PerencanaanData.id_subkegiatan;
+
+        const [resKeg, resMitra, resHonor, resAturan, resKelompok, resAllPerencanaan, resAllSub, resAnggota] = await Promise.all([
           axios.get(`${API_URL}/api/kegiatan`, { headers }),
           axios.get(`${API_URL}/api/mitra`, { headers }),
-          axios.get(`${API_URL}/api/honorarium`, { headers }), 
+          axios.get(`${API_URL}/api/honorarium`, { headers }),
           axios.get(`${API_URL}/api/aturan-periode`, { headers }),
-          axios.get(`${API_URL}/api/kelompok-penugasan`, { headers }),
-          axios.get(`${API_URL}/api/penugasan`, { headers }),
+          axios.get(`${API_URL}/api/kelompok-perencanaan`, { headers }),
+          axios.get(`${API_URL}/api/perencanaan`, { headers }),
           axios.get(`${API_URL}/api/subkegiatan`, { headers }),
-          axios.get(`${API_URL}/api/penugasan/${id}/anggota`, { headers }),
+          axios.get(`${API_URL}/api/perencanaan/${id}/anggota`, { headers }),
         ]);
-        
+
         const subKegiatanList = safeExtractData(resAllSub, 'Semua Sub Kegiatan');
         const honorList = safeExtractData(resHonor, 'Honorarium');
-        const anggotaList = safeExtractData(resAnggota, 'Penugasan Anggota');
+        const anggotaList = safeExtractData(resAnggota, 'Perencanaan Anggota');
 
         setListKegiatan(resKeg.data.data);
         setListMitra(resMitra.data.data);
         setAllSubKegiatan(subKegiatanList);
         setListAturan(resAturan.data.data);
         setListKelompok(resKelompok.data.data);
-        setListPenugasan(resAllPenugasan.data.data);
-        
+        setListPerencanaan(resAllPerencanaan.data.data);
+
         const subKegiatanData = subKegiatanList.find(s => String(s.id) === String(idSub));
-        setPenugasanInfo(penugasanData);
+        setPerencanaanInfo(PerencanaanData);
         setSubKegiatanInfo(subKegiatanData);
         setSelectedSubId(idSub);
-        
+
         const filteredHonorList = honorList.filter(h => String(h.id_subkegiatan) === String(idSub));
         setListHonorarium(filteredHonorList);
 
         const formattedMembers = anggotaList.map(m => ({
-            id: m.id_mitra,
-            nama_lengkap: m.nama_lengkap,
-            nik: m.nik,
-            assignedJabatan: normalizeKodeJabatan(m.kode_jabatan),
-            assignedVolume: m.volume_tugas,
-            isExisting: true, 
-            id_kelompok: m.id_kelompok 
+          id: m.id_mitra,
+          nama_lengkap: m.nama_lengkap,
+          nik: m.nik,
+          // Pastikan normalize kode jabatan jika perlu, 
+          // tapi yang terpenting adalah assignedVolume
+          assignedJabatan: m.kode_jabatan ? normalizeKodeJabatan(m.kode_jabatan) : '',
+
+          // PERBAIKAN: Pastikan nama properti sesuai dengan response API (volume_tugas)
+          assignedVolume: Number(m.volume_tugas) || 0,
+
+          isExisting: true,
+          id_kelompok: m.id_kelompok || m.id // Sesuaikan dengan key ID di tabel kelompok_perencanaan
         }));
         setCurrentMembers(formattedMembers);
         setSelectedMitras(formattedMembers);
 
         if (subKegiatanData && subKegiatanData.tanggal_mulai) {
-            const tahunKegiatan = new Date(subKegiatanData.tanggal_mulai).getFullYear().toString();
-            
-            const aturan = resAturan.data.data.find(r => 
-              String(r.tahun) === tahunKegiatan || String(r.periode) === tahunKegiatan
-            );
-            setBatasHonorPeriode(aturan ? Number(aturan.batas_honor) : 0);
+          const tahunKegiatan = new Date(subKegiatanData.tanggal_mulai).getFullYear().toString();
 
-            const incomeMap = {};
-            const allKelompok = resKelompok.data.data;
+          const aturan = resAturan.data.data.find(r =>
+            String(r.tahun) === tahunKegiatan || String(r.periode) === tahunKegiatan
+          );
+          setBatasHonorPeriode(aturan ? Number(aturan.batas_honor) : 0);
 
-            allKelompok.forEach(k => {
-                if (String(k.id_penugasan) === String(id)) return;
+          const incomeMap = {};
+          const allKelompok = resKelompok.data.data;
 
-                const penugasan = resAllPenugasan.data.data.find(p => p.id_penugasan === k.id_penugasan);
-                if (!penugasan) return;
+          allKelompok.forEach(k => {
+            if (String(k.id_perencanaan) === String(id)) return;
 
-                const sub = subKegiatanList.find(s => s.id === penugasan.id_subkegiatan);
-                if (!sub || !sub.tanggal_mulai) return;
+            const Perencanaan = resAllPerencanaan.data.data.find(p => p.id_perencanaan === k.id_perencanaan);
+            if (!Perencanaan) return;
 
-                const subYear = new Date(sub.tanggal_mulai).getFullYear().toString();
-                if (subYear !== tahunKegiatan) return;
+            const sub = subKegiatanList.find(s => s.id === Perencanaan.id_subkegiatan);
+            if (!sub || !sub.tanggal_mulai) return;
 
-                const honor = honorList.find(h => h.id_subkegiatan === sub.id && normalizeKodeJabatan(h.kode_jabatan) === normalizeKodeJabatan(k.kode_jabatan));
-                const tarif = honor ? Number(honor.tarif) : 0;
-                const vol = k.volume_tugas ? Number(k.volume_tugas) : 0;
+            const subYear = new Date(sub.tanggal_mulai).getFullYear().toString();
+            if (subYear !== tahunKegiatan) return;
 
-                const mId = String(k.id_mitra);
-                incomeMap[mId] = (incomeMap[mId] || 0) + (tarif * vol);
-            });
+            const honor = honorList.find(h => h.id_subkegiatan === sub.id && normalizeKodeJabatan(h.kode_jabatan) === normalizeKodeJabatan(k.kode_jabatan));
+            const tarif = honor ? Number(honor.tarif) : 0;
+            const vol = k.volume_tugas ? Number(k.volume_tugas) : 0;
 
-            setMitraIncomeMap(incomeMap);
+            const mId = String(k.id_mitra);
+            incomeMap[mId] = (incomeMap[mId] || 0) + (tarif * vol);
+          });
+
+          setMitraIncomeMap(incomeMap);
         }
 
       } catch (err) {
         console.error("Error saat memuat data:", err.response?.data || err.message, err);
-        Swal.fire('Error', 'Gagal memuat data penugasan.', 'error');
-        navigate('/penugasan');
+        Swal.fire('Error', 'Gagal memuat data Perencanaan.', 'error');
+        navigate('/admin/Perencanaan');
       } finally {
         setLoading(false);
       }
@@ -168,19 +173,19 @@ const EditPenugasan = () => {
 
   const getVolumeStats = (kodeJabatan, basisVolume) => {
     const normalizedKodeJabatan = normalizeKodeJabatan(kodeJabatan);
-    
-    const relatedPenugasanIds = listPenugasan
-        .filter(p => String(p.id_subkegiatan) === String(selectedSubId) && String(p.id_penugasan) !== String(id))
-        .map(p => p.id_penugasan);
+
+    const relatedPerencanaanIds = listPerencanaan
+      .filter(p => String(p.id_subkegiatan) === String(selectedSubId) && String(p.id_perencanaan) !== String(id))
+      .map(p => p.id_perencanaan);
 
     const usedInOtherDB = listKelompok
-        .filter(k => relatedPenugasanIds.includes(k.id_penugasan) && normalizeKodeJabatan(k.kode_jabatan) === normalizedKodeJabatan)
-        .reduce((acc, curr) => acc + (Number(curr.volume_tugas) || 0), 0);
+      .filter(k => relatedPerencanaanIds.includes(k.id_perencanaan) && normalizeKodeJabatan(k.kode_jabatan) === normalizedKodeJabatan)
+      .reduce((acc, curr) => acc + (Number(curr.volume_tugas) || 0), 0);
 
     const usedInDraft = selectedMitras
-        .filter(m => normalizeKodeJabatan(m.assignedJabatan) === normalizedKodeJabatan)
-        .reduce((acc, curr) => acc + (Number(curr.assignedVolume) || 0), 0);
-    
+      .filter(m => normalizeKodeJabatan(m.assignedJabatan) === normalizedKodeJabatan)
+      .reduce((acc, curr) => acc + (Number(curr.assignedVolume) || 0), 0);
+
     return {
       used: usedInOtherDB + usedInDraft,
       max: basisVolume || 0
@@ -193,11 +198,11 @@ const EditPenugasan = () => {
 
   const handleAddMitra = (mitra) => {
     if (selectedMitras.some(m => m.id === mitra.id)) return;
-    setSelectedMitras([...selectedMitras, { 
-        ...mitra, 
-        assignedJabatan: '', 
-        assignedVolume: 1,
-        isExisting: false
+    setSelectedMitras([...selectedMitras, {
+      ...mitra,
+      assignedJabatan: '',
+      assignedVolume: 1,
+      isExisting: false
     }]);
     setMitraSearch('');
     setShowMitraDropdown(false);
@@ -251,42 +256,42 @@ const EditPenugasan = () => {
     const headers = { Authorization: `Bearer ${token}` };
 
     try {
-        const selectedIds = new Set(selectedMitras.map(m => m.id));
-        const toDelete = currentMembers.filter(m => !selectedIds.has(m.id));
-        
-        if (toDelete.length > 0) {
-            await Promise.all(toDelete.map(m => 
-                axios.delete(`${API_URL}/api/kelompok-penugasan/${m.id_kelompok}`, { headers })
-            ));
+      const selectedIds = new Set(selectedMitras.map(m => m.id));
+      const toDelete = currentMembers.filter(m => !selectedIds.has(m.id));
+
+      if (toDelete.length > 0) {
+        await Promise.all(toDelete.map(m =>
+          axios.delete(`${API_URL}/api/kelompok-perencanaan/${m.id_kelompok}`, { headers })
+        ));
+      }
+
+      const promises = selectedMitras.map(m => {
+        const payloadJabatan = normalizeKodeJabatan(m.assignedJabatan);
+
+        if (m.isExisting) {
+          return axios.put(`${API_URL}/api/kelompok-perencanaan/${m.id_kelompok}`, {
+            kode_jabatan: payloadJabatan,
+            volume_tugas: m.assignedVolume
+          }, { headers });
+        } else {
+          return axios.post(`${API_URL}/api/kelompok-perencanaan`, {
+            id_perencanaan: id,
+            id_mitra: m.id,
+            kode_jabatan: payloadJabatan,
+            volume_tugas: m.assignedVolume
+          }, { headers });
         }
+      });
 
-        const promises = selectedMitras.map(m => {
-            const payloadJabatan = normalizeKodeJabatan(m.assignedJabatan);
+      await Promise.all(promises);
 
-            if (m.isExisting) {
-                return axios.put(`${API_URL}/api/kelompok-penugasan/${m.id_kelompok}`, {
-                    kode_jabatan: payloadJabatan,
-                    volume_tugas: m.assignedVolume
-                }, { headers });
-            } else {
-                return axios.post(`${API_URL}/api/kelompok-penugasan`, {
-                    id_penugasan: id,
-                    id_mitra: m.id,
-                    kode_jabatan: payloadJabatan,
-                    volume_tugas: m.assignedVolume
-                }, { headers });
-            }
-        });
-
-        await Promise.all(promises);
-
-        Swal.fire({
-            title: 'Berhasil',
-            text: 'Perubahan penugasan berhasil disimpan.',
-            icon: 'success',
-            timer: 2000,
-            showConfirmButton: false
-        }).then(() => navigate('/penugasan'));
+      Swal.fire({
+        title: 'Berhasil',
+        text: 'Perubahan Perencanaan berhasil disimpan.',
+        icon: 'success',
+        timer: 2000,
+        showConfirmButton: false
+      }).then(() => navigate('/admin/Perencanaan'));
 
     } catch (err) {
       console.error(err);
@@ -314,31 +319,31 @@ const EditPenugasan = () => {
     return matchSearch && notSelected && isActiveInYear;
   });
 
-  if (loading) return <div className="text-center py-20 text-gray-500">Memuat data penugasan eksisting...</div>;
-  
+  if (loading) return <div className="text-center py-20 text-gray-500">Memuat data Perencanaan eksisting...</div>;
+
   return (
     <div className="max-w-6xl mx-auto pb-20">
 
       <div className="mb-8">
         <div className="flex items-center gap-4">
-            <Link to="/penugasan" className="text-gray-500 hover:text-[#1A2A80] transition"><FaArrowLeft size={20}/></Link>
-            <div>
-                <h1 className="text-2xl font-bold text-gray-800">Edit Penugasan Tim</h1>
-                <p className="text-sm text-gray-500">ID Penugasan: {id}</p>
-            </div>
+          <Link to="/admin/Perencanaan" className="text-gray-500 hover:text-[#1A2A80] transition"><FaArrowLeft size={20} /></Link>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">Edit Perencanaan Tim</h1>
+            <p className="text-sm text-gray-500">ID Perencanaan: {id}</p>
+          </div>
         </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 min-h-[400px] p-8 flex flex-col">
-        
+
         <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
-            <div className='text-sm text-gray-600'>
-                Edit Anggota untuk Sub Kegiatan: 
-                <span className="font-bold text-[#1A2A80] text-lg block">{subKegiatanInfo?.nama_sub_kegiatan}</span>
-                <span className="text-xs text-gray-500">
-                    {subKegiatanInfo?.tanggal_mulai ? `Periode: ${new Date(subKegiatanInfo.tanggal_mulai).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}` : ''}
-                </span>
-            </div>
+          <div className='text-sm text-gray-600'>
+            Edit Anggota untuk Sub Kegiatan:
+            <span className="font-bold text-[#1A2A80] text-lg block">{subKegiatanInfo?.nama_sub_kegiatan}</span>
+            <span className="text-xs text-gray-500">
+              {subKegiatanInfo?.tanggal_mulai ? `Periode: ${new Date(subKegiatanInfo.tanggal_mulai).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}` : ''}
+            </span>
+          </div>
         </div>
 
         <div className="mb-8 p-5 bg-gray-50 border border-gray-200 rounded-xl">
@@ -567,28 +572,28 @@ const EditPenugasan = () => {
                         </div>
                       )}
 
-                          {isOverLimit && (
-                            <div className="mt-2 text-[10px] text-red-600 font-bold flex items-center gap-1 animate-pulse justify-end">
-                              <FaExclamationCircle /> Akumulasi pendapatan melebihi batas tahunan!
-                            </div>
-                          )}
-
+                      {isOverLimit && (
+                        <div className="mt-2 text-[10px] text-red-600 font-bold flex items-center gap-1 animate-pulse justify-end">
+                          <FaExclamationCircle /> Akumulasi pendapatan melebihi batas tahunan!
                         </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            </div>
+                      )}
 
-            <div className="mt-auto pt-8 flex justify-end border-t border-gray-100">
-              <button onClick={handleSubmit} disabled={submitting || selectedMitras.length === 0} className="px-8 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 shadow-lg flex items-center gap-2 disabled:opacity-50">
-                {submitting ? 'Menyimpan...' : <><FaCheck /> Simpan Perubahan</>}
-              </button>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
+        </div>
+
+        <div className="mt-auto pt-8 flex justify-end border-t border-gray-100">
+          <button onClick={handleSubmit} disabled={submitting || selectedMitras.length === 0} className="px-8 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 shadow-lg flex items-center gap-2 disabled:opacity-50">
+            {submitting ? 'Menyimpan...' : <><FaCheck /> Simpan Perubahan</>}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
 
-export default EditPenugasan;
+export default EditPerencanaan;

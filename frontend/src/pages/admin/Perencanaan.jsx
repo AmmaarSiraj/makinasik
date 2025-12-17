@@ -1,4 +1,4 @@
-// src/pages/Penugasan.jsx
+// src/pages/admin/Perencanaan.jsx
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -13,18 +13,18 @@ import {
   FaClipboardList,
   FaEdit,   
   FaTrash,
-  FaSearch, 
-  FaFilter
+  FaSearch, // Icon Search
+  FaFilter  // Icon Filter
 } from 'react-icons/fa';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 const getToken = () => localStorage.getItem('token');
 
-const Penugasan = () => {
+const Perencanaan = () => {
   const navigate = useNavigate();
 
   // --- STATE DATA ---
-  const [allPenugasan, setAllPenugasan] = useState([]); // Data Mentah (Flat)
+  const [allPerencanaan, setAllPerencanaan] = useState([]); // Data Mentah (Flat)
   const [isLoading, setIsLoading] = useState(true);
 
   // --- STATE FILTER & SEARCH ---
@@ -40,16 +40,6 @@ const Penugasan = () => {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
 
-  // --- HELPER EKSTRAKSI DATA ---
-  // Mencegah error ".forEach is not a function" jika response berupa object
-  const getList = (response) => {
-    if (response?.data) {
-        if (Array.isArray(response.data)) return response.data;
-        if (Array.isArray(response.data.data)) return response.data.data;
-    }
-    return [];
-  };
-
   // Helper Format Tanggal
   const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -61,50 +51,52 @@ const Penugasan = () => {
   };
 
   // 1. Fetch Data
-  const fetchPenugasan = async () => {
+  const fetchPerencanaan = async () => {
     setIsLoading(true);
     try {
-      const token = getToken();
-      const config = { headers: { Authorization: `Bearer ${token}` } };
-      
-      const [resPenugasan, resKelompok] = await Promise.all([
-        axios.get(`${API_URL}/api/penugasan`, config).catch(() => ({ data: [] })),
-        axios.get(`${API_URL}/api/kelompok-penugasan`, config).catch(() => ({ data: [] }))
-      ]);
-      
-      // PERBAIKAN: Gunakan getList agar aman
-      const dataPenugasan = getList(resPenugasan);
-      const dataKelompok = getList(resKelompok);
+        const token = getToken();
+        const config = { headers: { Authorization: `Bearer ${token}` } };
+        
+        const [resPerencanaan, resKelompok] = await Promise.all([
+            axios.get(`${API_URL}/api/perencanaan`, config),
+            axios.get(`${API_URL}/api/kelompok-perencanaan`, config)
+        ]);
+        
+        // PERBAIKAN DI SINI:
+        // Gunakan resPerencanaan.data.data karena backend membungkus array di dalam key 'data'
+        setAllPerencanaan(resPerencanaan.data.data); 
 
-      // Simpan data mentah (flat array)
-      setAllPenugasan(dataPenugasan);
+        // Preload Anggota ke Cache
+        const membersMap = {};
+        
+        // PERBAIKAN JUGA DI SINI (Asumsi controller kelompok-Perencanaan formatnya sama):
+        // Cek apakah resKelompok.data.data ada, jika tidak fallback ke resKelompok.data (untuk jaga-jaga)
+        const rawKelompok = resKelompok.data.data || resKelompok.data;
 
-      // Preload Anggota ke Cache
-      const membersMap = {};
-      dataKelompok.forEach(member => {
-          const cleanMember = {
-            ...member,
-            nama_lengkap: member.nama_lengkap || member.nama_mitra, 
-          };
-          const pId = member.id_penugasan;
-          if (!membersMap[pId]) {
-            membersMap[pId] = [];
-          }
-          membersMap[pId].push(cleanMember);
-      });
-      setMembersCache(membersMap);
+        if (Array.isArray(rawKelompok)) {
+            rawKelompok.forEach(member => {
+                const cleanMember = {
+                    ...member,
+                    nama_lengkap: member.nama_lengkap || member.nama_mitra, 
+                };
+                const pId = member.id_perencanaan;
+                if (!membersMap[pId]) {
+                    membersMap[pId] = [];
+                }
+                membersMap[pId].push(cleanMember);
+            });
+        }
+        setMembersCache(membersMap);
 
     } catch (err) {
-      console.error("Gagal load data:", err);
-      // Pastikan state tetap array kosong jika error
-      setAllPenugasan([]); 
+        console.error("Gagal load data:", err);
     } finally {
-      setIsLoading(false);
+        setIsLoading(false);
     }
-  };
+};
 
   useEffect(() => {
-    fetchPenugasan();
+    fetchPerencanaan();
   }, []);
 
   // 2. LOGIKA FILTER & GROUPING (useMemo)
@@ -112,23 +104,22 @@ const Penugasan = () => {
   // A. Ambil Tahun yang tersedia dari data
   const availableYears = useMemo(() => {
     const years = new Set();
-    // allPenugasan dijamin array berkat getList, jadi aman di-forEach
-    allPenugasan.forEach(item => {
+    allPerencanaan.forEach(item => {
       if (item.tanggal_mulai) {
         const y = new Date(item.tanggal_mulai).getFullYear();
         if (!isNaN(y)) years.add(y);
       }
     });
     return [...years].sort((a, b) => b - a);
-  }, [allPenugasan]);
+  }, [allPerencanaan]);
 
   // B. Filter Data -> Lalu Grouping
-  const groupedPenugasan = useMemo(() => {
+  const groupedPerencanaan = useMemo(() => {
     // 1. Filter Data Mentah
-    const filtered = allPenugasan.filter(item => {
+    const filtered = allPerencanaan.filter(item => {
       const term = searchTerm.toLowerCase();
       
-      // Pencarian berdasarkan Nama Survei/Sensus (induk), Kegiatan (anak), atau Pengawas
+      // Pencarian berdasarkan Nama Kegiatan (Survei/Sensus), Sub Kegiatan (Kegiatan), atau Pengawas
       const matchSearch = 
         (item.nama_kegiatan || '').toLowerCase().includes(term) ||
         (item.nama_sub_kegiatan || '').toLowerCase().includes(term) ||
@@ -148,7 +139,7 @@ const Penugasan = () => {
       return matchSearch && matchYear;
     });
 
-    // 2. Grouping Data Hasil Filter berdasarkan Nama Survei/Sensus (Parent)
+    // 2. Grouping Data Hasil Filter
     return filtered.reduce((acc, item) => {
       const key = item.nama_kegiatan;
       if (!acc[key]) acc[key] = [];
@@ -156,30 +147,28 @@ const Penugasan = () => {
       return acc;
     }, {});
 
-  }, [allPenugasan, searchTerm, filterYear]);
+  }, [allPerencanaan, searchTerm, filterYear]);
 
 
   // 3. Handle Klik Baris (Toggle Dropdown)
-  const toggleRow = async (id_penugasan) => {
-    if (expandedTaskId === id_penugasan) {
+  const toggleRow = async (id_perencanaan) => {
+    if (expandedTaskId === id_perencanaan) {
       setExpandedTaskId(null);
       return;
     }
-    setExpandedTaskId(id_penugasan);
+    setExpandedTaskId(id_perencanaan);
 
     // Load anggota on demand jika belum ada di cache (fallback)
-    if (!membersCache[id_penugasan]) {
+    if (!membersCache[id_perencanaan]) {
       setLoadingMembers(true);
       try {
         const token = getToken();
-        const res = await axios.get(`${API_URL}/api/penugasan/${id_penugasan}/anggota`, {
+        const res = await axios.get(`${API_URL}/api/perencanaan/${id_perencanaan}/anggota`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        // Gunakan getList juga di sini untuk keamanan
-        const members = getList(res);
-        setMembersCache(prev => ({ ...prev, [id_penugasan]: members }));
+        setMembersCache(prev => ({ ...prev, [id_perencanaan]: res.data }));
       } catch (err) {
-        setMembersCache(prev => ({ ...prev, [id_penugasan]: [] }));
+        setMembersCache(prev => ({ ...prev, [id_perencanaan]: [] }));
       } finally {
         setLoadingMembers(false);
       }
@@ -190,7 +179,7 @@ const Penugasan = () => {
   const handleDelete = async (e, id) => {
     e.stopPropagation();
     const result = await Swal.fire({
-      title: 'Hapus Penugasan?',
+      title: 'Hapus Perencanaan?',
       text: "Data anggota dan plotting mitra di dalamnya akan ikut terhapus permanen.",
       icon: 'warning',
       showCancelButton: true,
@@ -202,11 +191,11 @@ const Penugasan = () => {
     if (result.isConfirmed) {
       try {
         const token = getToken();
-        await axios.delete(`${API_URL}/api/penugasan/${id}`, {
+        await axios.delete(`${API_URL}/api/perencanaan/${id}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        Swal.fire('Terhapus!', 'Penugasan berhasil dihapus.', 'success');
-        fetchPenugasan();
+        Swal.fire('Terhapus!', 'Perencanaan berhasil dihapus.', 'success');
+        fetchPerencanaan();
       } catch (err) {
         Swal.fire('Gagal!', 'Terjadi kesalahan saat menghapus.', 'error');
       }
@@ -215,8 +204,7 @@ const Penugasan = () => {
 
   const handleEdit = (e, id) => {
     e.stopPropagation();
-    // Mengarahkan ke route admin edit penugasan
-    navigate(`/penugasan/edit/${id}`);
+    navigate(`/admin/perencanaan/edit/${id}`);
   };
 
   const handleDownloadTemplate = () => {
@@ -230,7 +218,7 @@ const Penugasan = () => {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "template_import_penugasan.csv");
+    link.setAttribute("download", "template_import_perencanaan.csv");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -246,7 +234,7 @@ const Penugasan = () => {
     setUploading(true);
     try {
       const token = getToken();
-      const response = await axios.post(`${API_URL}/api/penugasan/import`, formData, {
+      const response = await axios.post(`${API_URL}/api/perencanaan/import`, formData, {
         headers: { 'Content-Type': 'multipart/form-data', 'Authorization': `Bearer ${token}` }
       });
       const { successCount, failCount } = response.data;
@@ -255,7 +243,7 @@ const Penugasan = () => {
         html: `<pre style="text-align:left; font-size:12px">✅ Sukses: ${successCount}\n❌ Gagal: ${failCount}</pre>`,
         icon: failCount > 0 ? 'warning' : 'success'
       });
-      fetchPenugasan(); 
+      fetchPerencanaan(); 
       setMembersCache({}); 
     } catch (err) {
       Swal.fire('Error', 'Gagal mengimpor data.', 'error');
@@ -265,10 +253,10 @@ const Penugasan = () => {
     }
   };
 
-  if (isLoading) return <div className="text-center py-10 text-gray-500 animate-pulse">Memuat data penugasan...</div>;
+  if (isLoading) return <div className="text-center py-10 text-gray-500">Memuat data Perencanaan...</div>;
 
   return (
-    <div className="w-full pt-8 px-4">
+    <div className="w-full">
       <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv, .xlsx, .xls" className="hidden" />
 
       {/* --- HEADER ACTIONS --- */}
@@ -283,14 +271,13 @@ const Penugasan = () => {
           <button onClick={handleImportClick} disabled={uploading} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm disabled:opacity-50">
             <FaFileUpload /> {uploading ? '...' : 'Import Excel'}
           </button>
-          {/* Mengarahkan ke route admin tambah penugasan */}
-          <Link to="/penugasan/tambah" className="flex items-center gap-2 bg-[#1A2A80] hover:bg-blue-900 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm">
-            <FaPlus /> Tambah Penugasan
+          <Link to="/admin/perencanaan/tambah" className="flex items-center gap-2 bg-[#1A2A80] hover:bg-blue-900 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm">
+            <FaPlus /> Buat Manual
           </Link>
         </div>
       </div>
 
-      {/* --- SEARCH & FILTER SECTION --- */}
+      {/* --- SEARCH & FILTER SECTION (BARU) --- */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
          <div className="relative w-full md:w-1/2">
             <FaSearch className="absolute left-3 top-3 text-gray-400" />
@@ -315,14 +302,14 @@ const Penugasan = () => {
          </div>
       </div>
 
-      {/* --- LIST PENUGASAN (GROUPED & FILTERED) --- */}
+      {/* --- LIST Perencanaan (GROUPED & FILTERED) --- */}
       <div className="space-y-6">
-        {Object.keys(groupedPenugasan).length === 0 ? (
+        {Object.keys(groupedPerencanaan).length === 0 ? (
           <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300 text-gray-400 italic">
-            {searchTerm || filterYear ? 'Tidak ditemukan data yang sesuai filter.' : 'Belum ada data penugasan. Silakan import atau buat baru.'}
+            {searchTerm || filterYear ? 'Tidak ditemukan data yang sesuai filter.' : 'Belum ada data Perencanaan. Silakan import atau buat baru.'}
           </div>
         ) : (
-          Object.entries(groupedPenugasan).map(([kegiatanName, subItems]) => (
+          Object.entries(groupedPerencanaan).map(([kegiatanName, subItems]) => (
             <div key={kegiatanName} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
               
               {/* Header Grup (Nama Survei/Sensus) */}
@@ -337,16 +324,16 @@ const Penugasan = () => {
               {/* List Kegiatan */}
               <div className="divide-y divide-gray-100">
                 {subItems.map((task) => {
-                  const isOpen = expandedTaskId === task.id_penugasan;
-                  const members = membersCache[task.id_penugasan] || [];
+                  const isOpen = expandedTaskId === task.id_perencanaan;
+                  const members = membersCache[task.id_perencanaan] || [];
                   const membersCount = members.length;
                   
                   return (
-                    <div key={task.id_penugasan} className="group">
+                    <div key={task.id_perencanaan} className="group">
                       
                       {/* Baris Utama */}
                       <div 
-                        onClick={() => toggleRow(task.id_penugasan)} 
+                        onClick={() => toggleRow(task.id_perencanaan)} 
                         className={`px-6 py-4 cursor-pointer transition-colors flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${isOpen ? 'bg-blue-50/40' : 'hover:bg-gray-50'}`}
                       >
                         {/* Kiri: Info Kegiatan */}
@@ -378,10 +365,10 @@ const Penugasan = () => {
 
                             {/* Tombol Aksi (Edit & Hapus) */}
                             <div className="flex items-center gap-1 border-l pl-4 border-gray-200">
-                                <button onClick={(e) => handleEdit(e, task.id_penugasan)} className="p-2 text-indigo-500 hover:bg-indigo-100 rounded-full transition" title="Edit Penugasan">
+                                <button onClick={(e) => handleEdit(e, task.id_perencanaan)} className="p-2 text-indigo-500 hover:bg-indigo-100 rounded-full transition" title="Edit Perencanaan">
                                     <FaEdit size={14} />
                                 </button>
-                                <button onClick={(e) => handleDelete(e, task.id_penugasan)} className="p-2 text-red-500 hover:bg-red-100 rounded-full transition" title="Hapus Penugasan">
+                                <button onClick={(e) => handleDelete(e, task.id_perencanaan)} className="p-2 text-red-500 hover:bg-red-100 rounded-full transition" title="Hapus Perencanaan">
                                     <FaTrash size={14} />
                                 </button>
                             </div>
@@ -393,9 +380,8 @@ const Penugasan = () => {
                         <div className="bg-gray-50/30 px-6 py-5 border-t border-gray-100 text-sm animate-fade-in-down pl-6 sm:pl-14">
                            <div className="flex justify-between items-center mb-4">
                                 <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Daftar Anggota Tim:</h4>
-                                {/* Mengarahkan ke route admin detail penugasan */}
                                 <Link 
-                                    to={`/penugasan/${task.id_penugasan}`} 
+                                    to={`/admin/perencanaan/detail/${task.id_perencanaan}`} 
                                     className="text-[#1A2A80] font-bold text-xs hover:underline flex items-center gap-1 bg-white px-3 py-1.5 rounded border border-gray-200 shadow-sm hover:bg-blue-50 transition"
                                 >
                                     Kelola Tim & Print SPK <FaArrowRight size={10} />
@@ -450,4 +436,4 @@ const Penugasan = () => {
   );
 };
 
-export default Penugasan;
+export default Perencanaan;

@@ -1,4 +1,3 @@
-// src/pages/PreviewTemplateSPKUser.jsx
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -6,32 +5,38 @@ import { FaArrowLeft, FaPrint } from 'react-icons/fa';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
-const PreviewTemplateSPKUser = () => {
+const PreviewTemplate = () => {
   const { state } = useLocation();
   const navigate = useNavigate();
   const [previewData, setPreviewData] = useState(null);
 
+  // Dummy Data untuk Lampiran
   const sampleTasks = [
     { 
       nama_sub_kegiatan: 'Pendataan Lapangan Susenas', 
+      nama_jabatan: 'Pencacah Lapangan',
       tanggal_mulai: '2025-03-01', 
       tanggal_selesai: '2025-03-31', 
       target_volume: 50, 
       nama_satuan: 'Rumah Tangga', 
       harga_satuan: 20000, 
-      total_honor: 1000000 
+      total_honor: 1000000,
+      beban_anggaran: '2990.xxx.xxx'
     },
     { 
       nama_sub_kegiatan: 'Pengolahan Dokumen', 
+      nama_jabatan: 'Pengawas',
       tanggal_mulai: '2025-04-01', 
       tanggal_selesai: '2025-04-15', 
       target_volume: 25, 
       nama_satuan: 'Dokumen', 
       harga_satuan: 15000, 
-      total_honor: 375000 
+      total_honor: 375000,
+      beban_anggaran: '2990.xxx.xxx'
     }
   ];
 
+  // --- HELPER FUNGSI FORMATTING ---
   const getTerbilang = (nilai) => {
     const angka = Math.abs(nilai);
     const baca = ['', 'satu', 'dua', 'tiga', 'empat', 'lima', 'enam', 'tujuh', 'delapan', 'sembilan', 'sepuluh', 'sebelas'];
@@ -85,76 +90,24 @@ const PreviewTemplateSPKUser = () => {
     return `${hari}, tanggal ${tanggal}, bulan ${bulan} tahun ${tahun}`;
   };
 
-  const generateLampiranHTML = (tasks) => {
-    const totalHonor = tasks.reduce((acc, curr) => acc + curr.total_honor, 0);
-    const tahun = previewData?.tahun_anggaran || new Date().getFullYear();
-    const nomorSurat = previewData?.nomor_surat || '...';
-
-    const rows = tasks.map((task, index) => `
-      <tr>
-          <td class="border border-black px-2 py-2 text-center align-top">${index + 1}</td>
-          <td class="border border-black px-3 py-2 align-top"><span class="font-bold block">${task.nama_sub_kegiatan}</span></td>
-          <td class="border border-black px-3 py-2 text-center align-top text-xs">${formatDateIndo(task.tanggal_mulai)} s.d. <br/> ${formatDateIndo(task.tanggal_selesai)}</td>
-          <td class="border border-black px-3 py-2 text-center align-top">${task.target_volume}</td>
-          <td class="border border-black px-3 py-2 text-center align-top">${task.nama_satuan}</td>
-          <td class="border border-black px-3 py-2 text-right align-top">${formatRupiah(task.harga_satuan)}</td>
-          <td class="border border-black px-3 py-2 text-right align-top">${formatRupiah(task.total_honor)}</td>
-          <td class="border border-black px-3 py-2 text-center align-top text-xs">-</td>
-      </tr>
-    `).join('');
-
-    return `
-      <div class="print:break-before-page pt-10 mt-10">
-          <div class="text-center font-bold mb-8">
-              <h3 class="uppercase">LAMPIRAN</h3>
-              <h3 class="uppercase">PERJANJIAN KERJA PETUGAS PENDATAAN LAPANGAN</h3>
-              <h3 class="uppercase">KEGIATAN SURVEI/SENSUS TAHUN ${tahun}</h3>
-              <h3 class="uppercase">PADA BADAN PUSAT STATISTIK KOTA SALATIGA</h3>
-              <p class="font-normal mt-1">NOMOR: ${nomorSurat}</p>
-          </div>
-
-          <h4 class="font-bold mb-4 uppercase text-center text-sm">DAFTAR URAIAN TUGAS, JANGKA WAKTU, NILAI PERJANJIAN, DAN BEBAN ANGGARAN</h4>
-
-          <table class="w-full border-collapse border border-black text-sm">
-              <thead>
-                  <tr class="bg-gray-100">
-                      <th class="border border-black px-2 py-2 w-10 text-center">No</th>
-                      <th class="border border-black px-3 py-2 text-left">Uraian Tugas</th>
-                      <th class="border border-black px-3 py-2 text-center w-32">Jangka Waktu</th>
-                      <th class="border border-black px-3 py-2 text-center w-16">Target Volume</th>
-                      <th class="border border-black px-3 py-2 text-center w-20">Pekerjaan Satuan</th>
-                      <th class="border border-black px-3 py-2 text-right w-24">Harga Satuan</th>
-                      <th class="border border-black px-3 py-2 text-right w-28">Nilai Perjanjian</th>
-                      <th class="border border-black px-3 py-2 text-center w-24">Beban Anggaran</th>
-                  </tr>
-              </thead>
-              <tbody>
-                  ${rows}
-              </tbody>
-              <tfoot>
-                  <tr>
-                      <td colspan="6" class="border border-black px-3 py-3 font-bold text-center italic bg-gray-50">
-                          Terbilang: ${formatTerbilang(totalHonor)}
-                      </td>
-                      <td class="border border-black px-3 py-3 text-right font-bold bg-gray-50">
-                          ${formatRupiah(totalHonor)}
-                      </td>
-                      <td class="border border-black px-3 py-3 bg-gray-50"></td>
-                  </tr>
-              </tfoot>
-          </table>
-      </div>
-    `;
-  };
-
   useEffect(() => {
+    // Redirect jika state kosong
+    if (!state) {
+        navigate('/admin/manajemen-spk');
+        return;
+    }
+
     const fetchSampleData = async () => {
         const now = new Date();
         const periode = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const token = localStorage.getItem('token');
         
         try {
-            const res = await axios.get(`${API_URL}/api/spk/setting/${periode}`);
-            const setting = res.data || {};
+            const res = await axios.get(`${API_URL}/api/spk-setting/periode/${periode}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const setting = res.data.data || res.data || {};
 
             setPreviewData({
                 nama_ppk: setting.nama_ppk || '[NAMA PPK]',
@@ -164,19 +117,17 @@ const PreviewTemplateSPKUser = () => {
                 tanggal_surat: setting.tanggal_surat 
                     ? new Date(setting.tanggal_surat).toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'}) 
                     : new Date().toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'}),
-                
                 nama_mitra: 'BUDI SANTOSO',
                 nik_mitra: '3373012345678901',
                 alamat_mitra: 'Jl. Merdeka No. 45, Salatiga',
-                
                 total_honor: 'Rp 1.375.000',
                 terbilang_honor: 'satu juta tiga ratus tujuh puluh lima ribu rupiah',
-                
                 tanggal_terbilang: getTanggalTerbilangHariIni(),
                 tahun_anggaran: now.getFullYear()
             });
 
         } catch (err) {
+            console.error("Gagal memuat setting simulasi:", err);
             setPreviewData({
                 nama_ppk: '[NAMA PPK]',
                 nip_ppk: '[NIP PPK]',
@@ -195,17 +146,16 @@ const PreviewTemplateSPKUser = () => {
     };
 
     fetchSampleData();
-  }, []);
+  }, [state, navigate]);
 
   if (!state) return null;
 
-  const { header, parts, articles, id } = state;
+  const { parts, articles } = state;
 
-  const handleBackToEdit = () => {
-    // Navigasi ini diarahkan kembali ke form edit untuk User
-    // Pastikan rute ini juga ada di App.jsx
-    const targetPath = id ? `/spk/templates/edit/${id}` : '/spk/templates/create';
-    navigate(targetPath, { state: { header, parts, articles, fromPreview: true } });
+  // --- REVISI TOMBOL KEMBALI ---
+  // Menggunakan navigate(-1) untuk kembali ke halaman sebelumnya (history back)
+  const handleBack = () => {
+    navigate(-1);
   };
 
   const handlePrint = () => {
@@ -229,9 +179,7 @@ const PreviewTemplateSPKUser = () => {
     result = result.replace(/{{TAHUN}}/g, previewData.tahun_anggaran);
     result = result.replace(/{{NOMOR_SURAT}}/g, previewData.nomor_surat);
     
-    if (result.includes('{{Lampiran}}')) {
-        result = result.replace(/{{Lampiran}}/g, generateLampiranHTML(sampleTasks));
-    }
+    result = result.replace(/{{Lampiran}}/g, '');
 
     result = result.replace(
         /{{Break_Space}}/g, 
@@ -241,43 +189,95 @@ const PreviewTemplateSPKUser = () => {
     return result;
   };
 
+  const totalHonorLampiran = sampleTasks.reduce((acc, curr) => acc + curr.total_honor, 0);
+
   return (
     <div className="min-h-screen bg-gray-100 p-8 flex flex-col items-center font-sans print:p-0 print:bg-white print:block">
       
       <style>{`
-        @page { 
-          size: A4; 
-          margin: 0; 
-        }
+        /* CSS SETUP UNTUK LANDSCAPE LAMPIRAN */
         @media print {
-          html, body {
+            html, body { margin: 0 !important; padding: 0 !important; background: white; }
+            .no-print { display: none !important; }
+            @page { size: A4 portrait; margin: 0; }
+
+            .page-break-spacer {
+                page-break-before: always !important; 
+                display: block !important;
+                height: 20mm !important; 
+                width: 100%;
+                visibility: hidden;
+            }
+
+            .force-new-page {
+                break-before: page;
+                page-break-before: always;
+            }
+        }
+
+        .document-container {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 20mm; 
+            box-sizing: border-box;
+            background: white;
+            font-family: "Times New Roman", serif;
+            font-size: 11pt;
+            line-height: 1.5;
+            position: relative;
+            margin: 0 auto;
+        }
+
+        /* Container Lampiran (Rotasi) */
+        .lampiran-wrapper-rotated {
             width: 210mm;
             height: 297mm;
-            margin: 0 !important;
-            padding: 0 !important;
-          }
-          .no-print { 
-            display: none !important; 
-          }
-          .print-content {
-            box-shadow: none !important;
-            margin: 0 !important;
-            width: 100% !important;
-            padding: 20mm !important; 
-          }
-          .page-break-spacer {
-            page-break-before: always !important; 
-            display: block !important;
-            height: 20mm !important; 
-            width: 100%;
-            visibility: hidden; 
-          }
+            position: relative;
+            overflow: hidden; 
+            background: white;
+            margin: 0 auto;
+        }
+
+        .lampiran-content {
+            width: 297mm;  
+            height: 210mm; 
+            padding: 15mm;
+            box-sizing: border-box;
+            font-family: "Times New Roman", serif;
+            font-size: 10pt;
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform-origin: top left;
+            transform: translateX(210mm) rotate(90deg);
+        }
+
+        @media screen {
+            .document-container { margin-bottom: 2rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+            
+            .lampiran-wrapper-rotated {
+                width: 297mm;
+                height: 210mm;
+                margin-bottom: 2rem;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                overflow: visible;
+                break-before: auto;
+            }
+            .lampiran-content {
+                width: 100%;
+                height: 100%;
+                position: static;
+                transform: none;
+            }
+            .page-break-spacer { display: block; margin: 20px 0; color: #ccc; }
         }
       `}</style>
 
-      <div className="w-full max-w-[210mm] flex justify-between items-center mb-6 no-print">
-        <button onClick={handleBackToEdit} className="flex items-center gap-2 text-gray-600 font-bold hover:text-[#1A2A80] bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200 transition">
-            <FaArrowLeft /> Kembali Edit
+      {/* Toolbar */}
+      <div className="w-full max-w-[297mm] flex justify-between items-center mb-6 no-print">
+        {/* BUTTON KEMBALI DI SINI */}
+        <button onClick={handleBack} className="flex items-center gap-2 text-gray-600 font-bold hover:text-[#1A2A80] bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200 transition">
+            <FaArrowLeft /> Kembali
         </button>
         
         <div className="flex gap-3 items-center">
@@ -293,8 +293,8 @@ const PreviewTemplateSPKUser = () => {
         </div>
       </div>
 
-      <div className="print-content bg-white w-[210mm] min-h-[297mm] p-[20mm] shadow-2xl text-black font-serif text-[11pt] leading-relaxed relative mx-auto">
-        
+      {/* 1. KONTEN NASKAH UTAMA */}
+      <div className="document-container shadow-2xl text-black font-serif text-[11pt] leading-relaxed relative">
         <div className="text-center font-bold mb-6 pt-0 mt-0"> 
             <h3 className="uppercase text-lg m-0 leading-tight">PERJANJIAN KERJA</h3>
             <h3 className="uppercase text-lg m-0 leading-tight">PETUGAS PENDATAAN LAPANGAN</h3>
@@ -350,10 +350,81 @@ const PreviewTemplateSPKUser = () => {
                 <p>NIP. {previewData?.nip_ppk}</p>
             </div>
         </div>
+      </div>
 
+      {/* 2. LAMPIRAN (LANDSCAPE) */}
+      <div className="lampiran-wrapper-rotated force-new-page mx-auto">
+          <div className="lampiran-content">
+            <div className="text-center font-bold mb-6">
+                <h3 className="uppercase text-lg">LAMPIRAN</h3>
+                <h3 className="uppercase text-lg">PERJANJIAN KERJA PETUGAS PENDATAAN LAPANGAN</h3>
+                <h3 className="uppercase text-lg">KEGIATAN SURVEI/SENSUS TAHUN {previewData?.tahun_anggaran}</h3>
+                <h3 className="uppercase text-lg">PADA BADAN PUSAT STATISTIK KOTA SALATIGA</h3>
+                <p className="font-normal mt-1">NOMOR: {previewData?.nomor_surat}</p>
+            </div>
+
+            <h4 className="font-bold mb-4 uppercase text-center text-sm">DAFTAR URAIAN TUGAS, JANGKA WAKTU, NILAI PERJANJIAN, DAN BEBAN ANGGARAN</h4>
+
+            <table className="w-full border-collapse border border-black text-sm">
+                <thead>
+                    <tr className="bg-gray-100">
+                        <th className="border border-black px-2 py-2 w-10 text-center">No</th>
+                        <th className="border border-black px-2 py-2 text-left">Uraian Tugas</th>
+                        <th className="border border-black px-2 py-2 text-center w-32">Jangka Waktu</th>
+                        <th className="border border-black px-2 py-2 text-center w-12">Vol</th>
+                        <th className="border border-black px-2 py-2 text-center w-24">Satuan</th>
+                        <th className="border border-black px-2 py-2 text-right w-28">Harga Satuan</th>
+                        <th className="border border-black px-2 py-2 text-right w-32">Nilai Perjanjian</th>
+                        <th className="border border-black px-2 py-2 text-center w-24">Beban Anggaran</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {sampleTasks.map((task, index) => (
+                        <tr key={index}>
+                            <td className="border border-black px-2 py-2 text-center align-top">{index + 1}</td>
+                            <td className="border border-black px-2 py-2 align-top">
+                                <span className="font-bold block">{task.nama_sub_kegiatan}</span>
+                                {task.nama_jabatan && <span className="block text-[10px] italic">({task.nama_jabatan})</span>}
+                            </td>
+                            <td className="border border-black px-2 py-2 text-center align-top whitespace-nowrap">
+                                {formatDateIndo(task.tanggal_mulai)} s.d. <br/> {formatDateIndo(task.tanggal_selesai)}
+                            </td>
+                            <td className="border border-black px-2 py-2 text-center align-top">{task.target_volume}</td>
+                            <td className="border border-black px-2 py-2 text-center align-top">{task.nama_satuan}</td>
+                            <td className="border border-black px-2 py-2 text-right align-top">{formatRupiah(task.harga_satuan)}</td>
+                            <td className="border border-black px-2 py-2 text-right align-top">{formatRupiah(task.total_honor)}</td>
+                            <td className="border border-black px-2 py-2 text-center align-top">{task.beban_anggaran || '-'}</td>
+                        </tr>
+                    ))}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colSpan="6" className="border border-black px-3 py-3 font-bold text-center italic bg-gray-50">
+                            Terbilang: {formatTerbilang(totalHonorLampiran)}
+                        </td>
+                        <td className="border border-black px-3 py-3 text-right font-bold bg-gray-50 whitespace-nowrap">
+                            {formatRupiah(totalHonorLampiran)}
+                        </td>
+                        <td className="border border-black px-3 py-3 bg-gray-50"></td>
+                    </tr>
+                </tfoot>
+            </table>
+
+            <div className="mt-12 flex justify-between px-10 break-inside-avoid">
+                <div className="text-center w-64">
+                    <p className="font-bold mb-20">PIHAK KEDUA,</p>
+                    <p className="font-bold border-b border-black inline-block uppercase" dangerouslySetInnerHTML={{ __html: replaceVariables('{{NAMA_MITRA}}') }}></p>
+                </div>
+                <div className="text-center w-64">
+                    <p className="font-bold mb-20">PIHAK PERTAMA,</p>
+                    <p className="font-bold border-b border-black inline-block" dangerouslySetInnerHTML={{ __html: replaceVariables('{{NAMA_PPK}}') }}></p>
+                    <p>NIP. {previewData?.nip_ppk}</p>
+                </div>
+            </div>
+          </div>
       </div>
     </div>
   );
 };
 
-export default PreviewTemplateSPKUser;
+export default PreviewTemplate;

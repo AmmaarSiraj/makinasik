@@ -1,6 +1,6 @@
 // src/pages/ManajemenKegiatan.jsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { 
   FaChevronDown, 
@@ -22,8 +22,6 @@ const ManajemenKegiatan = () => {
   
   // State untuk Expand/Collapse
   const [expandedRow, setExpandedRow] = useState(null); 
-  const [subKegiatanMap, setSubKegiatanMap] = useState({}); 
-  const [loadingSub, setLoadingSub] = useState(false);
   
   // State untuk Filter & Search
   const [searchTerm, setSearchTerm] = useState('');
@@ -31,40 +29,36 @@ const ManajemenKegiatan = () => {
 
   const navigate = useNavigate();
 
-  // 1. FETCH DATA (Kegiatan / Survei Sensus)
+  // --- HELPER EKSTRAKSI DATA ---
+  const getList = (response) => {
+    if (response?.data) {
+        if (Array.isArray(response.data)) return response.data;
+        if (Array.isArray(response.data.data)) return response.data.data;
+    }
+    return [];
+  };
+
+  // 1. FETCH DATA
   const fetchKegiatan = async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token'); 
-      if (!token) throw new Error('No auth token found.');
-      const config = { headers: { Authorization: `Bearer ${token}` } };
+      const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
 
       const [resKeg, resSub] = await Promise.all([
-        axios.get(`${API_URL}/api/kegiatan`, config),
-        axios.get(`${API_URL}/api/subkegiatan`, config)
+        axios.get(`${API_URL}/api/kegiatan`, config).catch(() => ({ data: [] })),
+        axios.get(`${API_URL}/api/subkegiatan`, config).catch(() => ({ data: [] }))
       ]);
 
-      const allSubs = Array.isArray(resSub.data) ? resSub.data : [];
-      const allKegiatan = Array.isArray(resKeg.data) ? resKeg.data : [];
+      const allKegiatan = getList(resKeg);
+      const allSubs = getList(resSub);
       
-      // Grouping Sub Kegiatan by Nama Kegiatan (untuk mapping awal)
-      const subsGroupedByName = {};
-      allSubs.forEach(sub => {
-        if (sub.nama_kegiatan) {
-           const key = sub.nama_kegiatan.trim().toLowerCase();
-           if (!subsGroupedByName[key]) {
-             subsGroupedByName[key] = [];
-           }
-           subsGroupedByName[key].push(sub);
-        }
-      });
-
-      // Merge Data
+      // Mapping Data Induk ke Anak
       const mergedData = allKegiatan.map(k => {
-         const key = k.nama_kegiatan ? k.nama_kegiatan.trim().toLowerCase() : '';
-         const mySubs = subsGroupedByName[key] || [];
+         // Filter sub kegiatan milik induk ini
+         const mySubs = allSubs.filter(sub => sub.id_kegiatan === k.id);
          
-         // Ambil tahun aktif dari sub kegiatan
+         // Hitung tahun aktif untuk opsi filter
          const activeYears = new Set();
          mySubs.forEach(sub => {
             if (sub.tanggal_mulai) {
@@ -85,6 +79,7 @@ const ManajemenKegiatan = () => {
          };
       });
 
+      mergedData.sort((a, b) => b.id - a.id);
       setKegiatan(mergedData);
       setError(null);
     } catch (err) {
@@ -99,67 +94,84 @@ const ManajemenKegiatan = () => {
     fetchKegiatan();
   }, []);
 
-  // --- LOGIKA FILTER & SEARCH ---
+  // --- LOGIKA FILTER & SEARCH (DIPERBARUI) ---
   const filteredKegiatan = useMemo(() => {
-    return kegiatan.filter(item => {
-      const term = searchTerm.toLowerCase();
-      const namaKegiatan = item.nama_kegiatan || '';
-      
-      // Pencarian di Parent (Survei) dan Child (Kegiatan)
-      const matchParent = namaKegiatan.toLowerCase().includes(term);
-      const matchChild = item.sub_list && item.sub_list.some(sub => 
-        sub.nama_sub_kegiatan && sub.nama_sub_kegiatan.toLowerCase().includes(term)
-      );
-      const isMatchSearch = matchParent || matchChild;
-      
-      // Filter Tahun
-      const years = item.active_years || [];
-      const matchYear = filterYear ? years.includes(filterYear) : true;
+    return kegiatan
+      .map(item => {
+        // 1. Clone sub_list agar tidak memutasi state asli
+        let filteredSubs = [...(item.sub_list || [])];
 
-      return isMatchSearch && matchYear;
-    });
+        // 2. Filter Sub-Kegiatan Berdasarkan Tahun (STRICT)
+        if (filterYear) {
+          filteredSubs = filteredSubs.filter(sub => {
+             if (!sub.tanggal_mulai) return false;
+             return new Date(sub.tanggal_mulai).getFullYear().toString() === filterYear;
+          });
+        }
+
+        // 3. Filter Sub-Kegiatan Berdasarkan Search
+        if (searchTerm) {
+           const term = searchTerm.toLowerCase();
+           const parentMatches = item.nama_kegiatan && item.nama_kegiatan.toLowerCase().includes(term);
+           
+           // Jika Parent TIDAK match, maka sub-kegiatan harus match keyword
+           if (!parentMatches) {
+              filteredSubs = filteredSubs.filter(sub => 
+                 sub.nama_sub_kegiatan && sub.nama_sub_kegiatan.toLowerCase().includes(term)
+              );
+           }
+           // Jika Parent MATCH, kita biarkan semua sub (yang sudah lolos filter tahun) tetap tampil
+        }
+
+        // Kembalikan item baru dengan sub_list yang sudah disaring
+        return { ...item, sub_list: filteredSubs };
+      })
+      .filter(item => {
+         // Tentukan apakah Induk/Survei ini harus tampil di daftar utama?
+
+         // Syarat 1: Search Match
+         const term = searchTerm.toLowerCase();
+         const parentMatches = item.nama_kegiatan && item.nama_kegiatan.toLowerCase().includes(term);
+         
+         // Syarat 2: Punya Sub-Kegiatan (setelah difilter di atas)
+         const hasSubs = item.sub_list && item.sub_list.length > 0;
+
+         // Jika sedang Search:
+         if (searchTerm) {
+            // Tampil jika Induknya match ATAU salah satu anaknya match
+            return parentMatches || hasSubs;
+         }
+
+         // Jika sedang Filter Tahun (tanpa search):
+         if (filterYear) {
+            // Tampil HANYA jika punya anak di tahun tersebut
+            return hasSubs;
+         }
+
+         return true; // Tampilkan semua jika tidak ada filter
+      });
   }, [kegiatan, searchTerm, filterYear]);
 
+  // List Tahun untuk Dropdown (Berdasarkan data yang ada)
   const availableYears = useMemo(() => {
     const years = new Set();
-    if (Array.isArray(kegiatan)) {
-      kegiatan.forEach(item => {
-          const yrs = item.active_years || [];
-          if (Array.isArray(yrs)) {
-            yrs.forEach(y => years.add(y));
-          }
-      });
-    }
+    kegiatan.forEach(item => {
+        const yrs = item.active_years || [];
+        yrs.forEach(y => years.add(y));
+    });
     return [...years].sort((a, b) => b - a);
   }, [kegiatan]);
 
   // --- HANDLERS ---
-
-  const handleRowClick = async (id) => {
+  const handleRowClick = (id) => {
     if (expandedRow === id) {
       setExpandedRow(null); 
-      return;
-    }
-    setExpandedRow(id); 
-    fetchSubKegiatan(id);
-  };
-
-  const fetchSubKegiatan = async (parentId) => {
-    setLoadingSub(true);
-    try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get(`${API_URL}/api/subkegiatan/kegiatan/${parentId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setSubKegiatanMap(prev => ({ ...prev, [parentId]: res.data }));
-    } catch (err) {
-      console.error("Gagal load kegiatan:", err);
-    } finally {
-      setLoadingSub(false);
+    } else {
+      setExpandedRow(id); 
     }
   };
 
-  // --- HELPER ---
+  // --- HELPER UI ---
   const formatDateRange = (startDate, endDate) => {
     if (!startDate || !endDate) return '-';
     const options = { day: 'numeric', month: 'short', year: 'numeric' };
@@ -183,14 +195,14 @@ const ManajemenKegiatan = () => {
     return { label: 'Sedang Proses', className: 'bg-yellow-100 text-yellow-700' };
   };
 
-  if (loading) return <div className="text-center py-20 text-gray-500">Memuat data...</div>;
+  if (loading) return <div className="text-center py-20 text-gray-500 animate-pulse">Memuat data...</div>;
   if (error) return <div className="text-center py-20 text-red-600">{error}</div>;
 
   return (
-    <div className="w-full pt-24 px-4 container mx-auto max-w-6xl pb-20">
+    <div className="w-full pt-8 px-4 container mx-auto max-w-6xl pb-20">
       
       {/* HEADER */}
-      <div className="mb-8">
+      <div className="mb-8 animate-fade-in-up">
         <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
             <FaLayerGroup className="text-[#1A2A80]" /> Daftar Survei & Sensus
         </h1>
@@ -241,6 +253,7 @@ const ManajemenKegiatan = () => {
             
             return (
               <div key={item.id} className={`bg-white rounded-xl shadow-sm border transition-all duration-200 overflow-hidden ${isExpanded ? 'border-blue-300 ring-1 ring-blue-100' : 'border-gray-100 hover:border-blue-200'}`}>
+                
                 {/* Header Row (Induk) */}
                 <div onClick={() => handleRowClick(item.id)} className={`px-6 py-4 cursor-pointer flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-colors ${isExpanded ? 'bg-blue-50/30' : 'bg-white hover:bg-gray-50'}`}>
                   <div className="flex items-center gap-4 flex-1">
@@ -252,9 +265,9 @@ const ManajemenKegiatan = () => {
                       <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{item.deskripsi || 'Tidak ada deskripsi.'}</p>
                     </div>
                   </div>
-                  {/* Badge Jumlah Kegiatan */}
+                  {/* Badge Jumlah Kegiatan (Update sesuai filter) */}
                   <div className="flex items-center">
-                     <span className="text-xs font-medium text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                     <span className={`text-xs font-medium px-3 py-1 rounded-full ${isExpanded ? 'bg-blue-200 text-blue-800' : 'bg-gray-100 text-gray-500'}`}>
                         {item.sub_list ? item.sub_list.length : 0} Kegiatan
                      </span>
                   </div>
@@ -263,66 +276,58 @@ const ManajemenKegiatan = () => {
                 {/* Sub Kegiatan List (Accordion Content) */}
                 {isExpanded && (
                   <div className="bg-gray-50/50 border-t border-gray-100 animate-fade-in-down">
-                    {loadingSub && !subKegiatanMap[item.id] ? (
-                      <div className="p-6 text-center text-gray-500 text-sm italic">Memuat kegiatan...</div>
-                    ) : (
-                      <>
-                        {subKegiatanMap[item.id] && subKegiatanMap[item.id].length > 0 ? (
-                          <div className="overflow-x-auto p-4">
-                            <table className="w-full text-left text-sm bg-white rounded-lg border border-gray-200 overflow-hidden">
-                              <thead className="bg-gray-50 text-gray-500 uppercase text-xs font-bold border-b border-gray-200">
-                                <tr>
-                                  <th className="px-4 py-3 w-1/3">Nama Kegiatan</th>
-                                  <th className="px-4 py-3">Jadwal Pelaksanaan</th>
-                                  <th className="px-4 py-3 text-center">Status</th>
-                                  <th className="px-4 py-3 text-right">Detail</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-gray-100">
-                                {subKegiatanMap[item.id].map((sub) => {
-                                  const statusObj = getComputedStatus(sub.tanggal_mulai, sub.tanggal_selesai);
-                                  return (
-                                    <tr 
-                                      key={sub.id} 
-                                      // PERUBAHAN: Menambahkan onClick pada row agar bisa diklik
-                                      className="hover:bg-blue-50 transition-colors group cursor-pointer"
-                                      onClick={() => navigate(`/kegiatan/${sub.id}`)}
+                    {item.sub_list && item.sub_list.length > 0 ? (
+                      <div className="overflow-x-auto p-4">
+                        <table className="w-full text-left text-sm bg-white rounded-lg border border-gray-200 overflow-hidden">
+                          <thead className="bg-gray-50 text-gray-500 uppercase text-xs font-bold border-b border-gray-200">
+                            <tr>
+                              <th className="px-4 py-3 w-1/3">Nama Kegiatan</th>
+                              <th className="px-4 py-3">Jadwal Pelaksanaan</th>
+                              <th className="px-4 py-3 text-center">Status</th>
+                              <th className="px-4 py-3 text-right">Detail</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {item.sub_list.map((sub) => {
+                              const statusObj = getComputedStatus(sub.tanggal_mulai, sub.tanggal_selesai);
+                              return (
+                                <tr 
+                                  key={sub.id} 
+                                  className="hover:bg-blue-50 transition-colors group cursor-pointer"
+                                  onClick={() => navigate(`/kegiatan/${sub.id}`)}
+                                >
+                                  <td className="px-4 py-3 font-medium text-gray-800">
+                                    <div className="flex items-center gap-2">
+                                        <FaClipboardList className="text-gray-300 group-hover:text-[#1A2A80] transition-colors" />
+                                        {sub.nama_sub_kegiatan}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap text-xs">
+                                    <div className="flex items-center gap-2">
+                                        <FaCalendarAlt className="text-gray-400"/> 
+                                        {formatDateRange(sub.tanggal_mulai, sub.tanggal_selesai)}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 text-center">
+                                    <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full uppercase tracking-wide shadow-sm ${statusObj.className}`}>{statusObj.label}</span>
+                                  </td>
+                                  <td className="px-4 py-3 text-right">
+                                    <button 
+                                        className="inline-flex items-center gap-1 text-[#1A2A80] bg-blue-50 hover:bg-blue-100 hover:text-blue-900 px-3 py-1.5 rounded-lg transition text-xs font-bold border border-blue-100"
                                     >
-                                      <td className="px-4 py-3 font-medium text-gray-800">
-                                        <div className="flex items-center gap-2">
-                                            <FaClipboardList className="text-gray-300 group-hover:text-[#1A2A80] transition-colors" />
-                                            {sub.nama_sub_kegiatan}
-                                        </div>
-                                      </td>
-                                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap text-xs">
-                                        <div className="flex items-center gap-2">
-                                            <FaCalendarAlt className="text-gray-400"/> 
-                                            {formatDateRange(sub.tanggal_mulai, sub.tanggal_selesai)}
-                                        </div>
-                                      </td>
-                                      <td className="px-4 py-3 text-center">
-                                        <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full uppercase tracking-wide shadow-sm ${statusObj.className}`}>{statusObj.label}</span>
-                                      </td>
-                                      <td className="px-4 py-3 text-right">
-                                        <button 
-                                            // onClick sudah dihandle di tr, tapi tetap simpan button agar visual jelas
-                                            className="inline-flex items-center gap-1 text-[#1A2A80] bg-blue-50 hover:bg-blue-100 hover:text-blue-900 px-3 py-1.5 rounded-lg transition text-xs font-bold border border-blue-100"
-                                        >
-                                            <FaInfoCircle /> Info
-                                        </button>
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        ) : (
-                          <div className="p-8 text-center text-gray-400 italic text-sm">
-                            Tidak ada kegiatan di bawah survei/sensus ini.
-                          </div>
-                        )}
-                      </>
+                                        <FaInfoCircle /> Info
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="p-8 text-center text-gray-400 italic text-sm">
+                        {filterYear ? `Tidak ada kegiatan di tahun ${filterYear}.` : 'Tidak ada kegiatan di bawah survei/sensus ini.'}
+                      </div>
                     )}
                   </div>
                 )}

@@ -118,8 +118,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     Route::get('/perencanaan', [PerencanaanController::class, 'index']);
     Route::post('/perencanaan', [PerencanaanController::class, 'store']);
+    Route::get('/perencanaan/mitra/{id}/periode/{periode}', [PerencanaanController::class, 'getByMitraAndPeriode']);
     Route::get('/perencanaan/{id}', [PerencanaanController::class, 'show']);
     Route::delete('/perencanaan/{id}', [PerencanaanController::class, 'destroy']);
+    Route::get('/perencanaan/{id}/anggota', [PerencanaanController::class, 'getAnggota']);
 
     // --- KELOMPOK PERENCANAAN (DETAIL ANGGOTA) ---
     Route::get('/kelompok-perencanaan', [KelompokPerencanaanController::class, 'index']);

@@ -9,7 +9,7 @@ import {
   FaIdCard,
   FaCalendarAlt,
   FaFilter,
-  FaUser // Import ikon user baru
+  FaUser 
 } from 'react-icons/fa';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
@@ -26,6 +26,16 @@ const Mitra = () => {
   // Opsi Tahun (Mundur 2 tahun, Maju 1 tahun)
   const yearOptions = [currentYear - 2, currentYear - 1, currentYear, currentYear + 1];
 
+  // --- HELPER EKSTRAKSI DATA (FIX) ---
+  // Mencegah error .filter is not a function jika response berupa object
+  const getList = (response) => {
+    if (response?.data) {
+        if (Array.isArray(response.data)) return response.data;
+        if (Array.isArray(response.data.data)) return response.data.data;
+    }
+    return [];
+  };
+
   // Fetch Data Mitra
   useEffect(() => {
     const fetchMitra = async () => {
@@ -35,9 +45,13 @@ const Mitra = () => {
         const config = { headers: { Authorization: `Bearer ${token}` } };
         
         const response = await axios.get(`${API_URL}/api/mitra`, config);
-        setMitraList(response.data);
+        
+        // PERBAIKAN: Gunakan getList
+        setMitraList(getList(response));
+
       } catch (err) {
         console.error("Gagal memuat data mitra:", err);
+        setMitraList([]); // Fallback array kosong agar tidak error
       } finally {
         setLoading(false);
       }
@@ -48,11 +62,14 @@ const Mitra = () => {
 
   // Filter Logika Gabungan (Pencarian + Tahun Aktif)
   const filteredMitra = useMemo(() => {
+    // Pastikan mitraList adalah array sebelum di-filter
+    if (!Array.isArray(mitraList)) return [];
     if (!selectedYear) return [];
 
     return mitraList.filter(item => {
       // 1. Cek Tahun Aktif
-      const historyYears = item.riwayat_tahun ? item.riwayat_tahun.split(',').map(y => y.trim()) : [];
+      // Pastikan field riwayat_tahun ada dan berbentuk string
+      const historyYears = item.riwayat_tahun ? String(item.riwayat_tahun).split(',').map(y => y.trim()) : [];
       const isActiveInYear = historyYears.includes(String(selectedYear));
 
       if (!isActiveInYear) return false;
@@ -175,7 +192,6 @@ const Mitra = () => {
                             <tr key={item.id || idx} className="hover:bg-blue-50/30 transition-colors group">
                                 <td className="px-6 py-4 align-top">
                                     <div className="flex items-center gap-3">
-                                        {/* UBAH INISIAL JADI IKON USER DI SINI */}
                                         <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-[#1A2A80] border border-indigo-100 group-hover:bg-[#1A2A80] group-hover:text-white transition-colors">
                                             <FaUser size={18} />
                                         </div>
@@ -204,7 +220,7 @@ const Mitra = () => {
                                     <div className="space-y-1.5">
                                         <p className="flex items-center gap-2 text-gray-600">
                                             <FaPhone className="text-green-600 text-xs" />
-                                            <span className="font-medium">{item.no_hp || '-'}</span>
+                                            <span className="font-medium">{item.nomor_hp || '-'}</span>
                                         </p>
                                         <p className="flex items-start gap-2 text-gray-500 text-xs mt-1">
                                             <FaMapMarkerAlt className="text-red-500 mt-0.5 flex-shrink-0" />

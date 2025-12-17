@@ -1,3 +1,4 @@
+// src/layouts/Layout.jsx
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -15,8 +16,7 @@ const Layout = () => {
     type: 'yellow',
   });
 
-  // LOGIK BARU: Cek apakah halaman saat ini adalah Home
-  // Kita gunakan .startsWith atau regex agar lebih aman terhadap trailing slash
+  // Cek apakah halaman saat ini adalah Home
   const isHomePage = location.pathname.replace(/\/+$/, '') === '/home';
 
   useEffect(() => {
@@ -27,51 +27,37 @@ const Layout = () => {
 
         const user = JSON.parse(storedUser);
 
+        // Hanya cek status untuk role 'user'
         if (user && user.role === 'user') {
+          
           try {
-            await axios.get(`${API_URL}/api/mitra/un/users/${user.id}`);
-            setShowProfileAlert(false);
-            return; 
-          } catch (mitraErr) {
-            if (mitraErr.response && mitraErr.response.status !== 404) {
-              throw mitraErr; 
-            }
-          }
-
-          try {
-            const pengajuanRes = await axios.get(
-              `${API_URL}/api/manajemen-mitra/users/${user.id}`
-            );
+            // Cek status pengajuan (hanya tampilkan jika Pending atau Ditolak)
+           
             
             const { status } = pengajuanRes.data;
             
             if (status === 'pending') {
               setAlertMessage({
                 text: 'Status: Pengajuan mitra Anda sedang ditinjau oleh Admin.',
-                link: '/lengkapi-profil',
+                link: '/lengkapi-profile',
                 type: 'blue',
               });
               setShowProfileAlert(true);
             } else if (status === 'rejected') {
               setAlertMessage({
                 text: 'Status: Pengajuan mitra Anda ditolak.',
-                link: '/lengkapi-profil',
-                type: 'yellow',
-              });
-              setShowProfileAlert(true);
-            }
-            
-          } catch (pengajuanErr) {
-            if (pengajuanErr.response && pengajuanErr.response.status === 404) {
-              setAlertMessage({
-                text: 'Anda belum melengkapi profil mitra.',
-                link: '/lengkapi-profil',
+                link: '/lengkapi-profile',
                 type: 'yellow',
               });
               setShowProfileAlert(true);
             } else {
-              throw pengajuanErr;
+              // Jika status Approved atau lainnya, tutup alert
+              setShowProfileAlert(false);
             }
+            
+          } catch (err) {
+            // JIKA ERROR (Termasuk 404/Belum punya data), DIAMKAN SAJA (Tutup Alert)
+            setShowProfileAlert(false);
           }
         }
       } catch (err) {
@@ -80,7 +66,7 @@ const Layout = () => {
     };
 
     checkMitraStatus();
-  }, []);
+  }, [location.pathname]);
 
   const alertClasses =
     alertMessage.type === 'yellow'
@@ -92,6 +78,7 @@ const Layout = () => {
       
       <Header />
       
+      {/* Alert hanya muncul jika showProfileAlert = true (Pending/Rejected) */}
       {showProfileAlert && (
         <div className={`border-b-2 text-center p-3 shadow-md ${alertClasses}`}>
           <p>
@@ -113,7 +100,6 @@ const Layout = () => {
         <Outlet />
       </main>
 
-      {/* RENDER KONDISIONAL: Footer Layout HANYA muncul jika BUKAN halaman Home */}
       {!isHomePage && <Footer />}
       
     </div>

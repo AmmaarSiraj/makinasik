@@ -33,16 +33,27 @@ const PartDaftarKegiatan = () => {
 
         // Ambil Data Kegiatan (Induk) & Sub-Kegiatan (Anak)
         const [resKegiatan, resSubKegiatan] = await Promise.all([
-          axios.get(`${API_URL}/api/kegiatan`, config),
-          axios.get(`${API_URL}/api/subkegiatan`, config)
+          axios.get(`${API_URL}/api/kegiatan`, config).catch(() => ({ data: [] })),
+          axios.get(`${API_URL}/api/subkegiatan`, config).catch(() => ({ data: [] }))
         ]);
 
-        const allInduk = resKegiatan.data || [];
-        const allAnak = resSubKegiatan.data || [];
+        // PERBAIKAN: Helper untuk mengekstrak array data dengan aman
+        // Laravel bisa mengembalikan array langsung [...] atau object { data: [...] }
+        const getList = (response) => {
+            if (Array.isArray(response.data)) {
+                return response.data;
+            } else if (response.data && Array.isArray(response.data.data)) {
+                return response.data.data;
+            }
+            return [];
+        };
+
+        const allInduk = getList(resKegiatan);
+        const allAnak = getList(resSubKegiatan);
 
         // Gabungkan Sub ke Induk
-        // Urutkan berdasarkan ID descending (terbaru di atas) jika perlu
-        const sortedInduk = allInduk.sort((a, b) => b.id - a.id); 
+        // Gunakan [...allInduk] untuk membuat salinan array agar aman saat di-sort
+        const sortedInduk = [...allInduk].sort((a, b) => b.id - a.id); 
 
         const mergedData = sortedInduk.map(induk => {
           const mySubs = allAnak.filter(sub => sub.id_kegiatan === induk.id);
@@ -55,25 +66,40 @@ const PartDaftarKegiatan = () => {
         const storedUser = localStorage.getItem('user');
         if (storedUser) {
           const user = JSON.parse(storedUser);
+          
+          // Cek apakah user ini terdaftar sebagai Mitra
+          // Note: Error 404 di console wajar jika user belum jadi mitra
           try {
-            const resMitra = await axios.get(`${API_URL}/api/mitra/un/users/${user.id}`);
-            const myMitra = resMitra.data;
+            // Kita coba ambil data mitra berdasarkan User ID
+            // Pastikan endpoint ini tersedia di backend Anda. 
+            // Jika belum ada, Anda mungkin perlu menyesuaikan endpoint ini.
+            // Saat ini kita pakai try-catch agar tidak memblokir UI jika 404.
+            const resMitra = await axios.get(`${API_URL}/api/mitra`, config); 
+            const allMitra = getList(resMitra);
+            
+            // Cari mitra yang punya user_id sama dengan user login
+            const myMitra = allMitra.find(m => m.user_id === user.id || m.id_user === user.id);
+
             if (myMitra) {
               setMitraData(myMitra);
+              
               const resKelompok = await axios.get(`${API_URL}/api/kelompok-penugasan`, config);
+              const allKelompok = getList(resKelompok);
+
               const myTasks = new Set(
-                resKelompok.data
+                allKelompok
                   .filter(kp => kp.id_mitra === myMitra.id)
                   .map(kp => kp.id_penugasan)
               );
               setUserTasks(myTasks);
             }
           } catch (err) {
-            // User belum terdaftar mitra
+            // Silent error: User mungkin belum jadi mitra, biarkan saja
+            console.log("Info: User belum terdaftar sebagai mitra atau endpoint belum siap.");
           }
         }
       } catch (err) {
-        console.error("Gagal memuat data:", err);
+        console.error("Gagal memuat data kegiatan:", err);
       } finally {
         setLoading(false);
       }
@@ -116,7 +142,7 @@ const PartDaftarKegiatan = () => {
       alert("Berhasil mendaftar!");
       setUserTasks(prev => new Set(prev).add(subItem.id_penugasan));
     } catch (err) {
-      alert(err.response?.data?.error || "Gagal mengambil pekerjaan.");
+      alert(err.response?.data?.message || err.response?.data?.error || "Gagal mengambil pekerjaan.");
     } finally {
       setProcessingId(null);
     }
@@ -144,8 +170,6 @@ const PartDaftarKegiatan = () => {
   return (
     <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
       
-      {/* Header Widget Dihapus sesuai permintaan user */}
-
       {/* List Content */}
       <div className="divide-y divide-gray-50">
         {displayedList.length === 0 ? (
@@ -212,7 +236,12 @@ const PartDaftarKegiatan = () => {
                                   <td className="px-6 py-3 text-right align-middle">
                                     {/* Logic Tombol Aksi */}
                                     {!mitraData ? (
-                                      <span className="text-[10px] text-gray-400 italic">Login sbg Mitra</span>
+                                      <button 
+                                        onClick={(e) => { e.stopPropagation(); navigate('/lengkapi-profile'); }}
+                                        className="text-[10px] bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded transition"
+                                      >
+                                        Daftar Mitra
+                                      </button>
                                     ) : !sub.id_penugasan ? (
                                       <span className="text-[10px] text-gray-400 italic">Belum Dibuka</span>
                                     ) : isTerdaftar ? (
@@ -247,7 +276,7 @@ const PartDaftarKegiatan = () => {
         )}
       </div>
 
-      {/* Footer "Lihat Selengkapnya" - Hanya muncul jika data > 5 */}
+      {/* Footer "Lihat Selengkapnya" */}
       {hasMore && (
         <div className="bg-gray-50 border-t border-gray-100 p-3 text-center">
             <button 
