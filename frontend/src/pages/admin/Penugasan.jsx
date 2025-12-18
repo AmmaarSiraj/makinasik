@@ -13,8 +13,10 @@ import {
   FaClipboardList,
   FaEdit,   
   FaTrash,
-  FaSearch, // Icon Search
-  FaFilter  // Icon Filter
+  FaSearch, 
+  FaFilter,
+  FaCheckCircle, // Icon untuk Setujui
+  FaUndoAlt      // Icon untuk Batalkan
 } from 'react-icons/fa';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
@@ -24,7 +26,7 @@ const Penugasan = () => {
   const navigate = useNavigate();
 
   // --- STATE DATA ---
-  const [allPenugasan, setAllPenugasan] = useState([]); // Data Mentah (Flat)
+  const [allPenugasan, setAllPenugasan] = useState([]); 
   const [isLoading, setIsLoading] = useState(true);
 
   // --- STATE FILTER & SEARCH ---
@@ -36,8 +38,9 @@ const Penugasan = () => {
   const [membersCache, setMembersCache] = useState({});
   const [loadingMembers, setLoadingMembers] = useState(false);
 
-  // --- STATE IMPORT ---
+  // --- STATE IMPORT & PROCESS ---
   const [uploading, setUploading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false); // Untuk loading tombol setujui
   const fileInputRef = useRef(null);
 
   // Helper Format Tanggal
@@ -62,15 +65,10 @@ const Penugasan = () => {
             axios.get(`${API_URL}/api/kelompok-penugasan`, config)
         ]);
         
-        // PERBAIKAN DI SINI:
-        // Gunakan resPenugasan.data.data karena backend membungkus array di dalam key 'data'
         setAllPenugasan(resPenugasan.data.data); 
 
         // Preload Anggota ke Cache
         const membersMap = {};
-        
-        // PERBAIKAN JUGA DI SINI (Asumsi controller kelompok-penugasan formatnya sama):
-        // Cek apakah resKelompok.data.data ada, jika tidak fallback ke resKelompok.data (untuk jaga-jaga)
         const rawKelompok = resKelompok.data.data || resKelompok.data;
 
         if (Array.isArray(rawKelompok)) {
@@ -93,15 +91,13 @@ const Penugasan = () => {
     } finally {
         setIsLoading(false);
     }
-};
+  };
 
   useEffect(() => {
     fetchPenugasan();
   }, []);
 
-  // 2. LOGIKA FILTER & GROUPING (useMemo)
-  
-  // A. Ambil Tahun yang tersedia dari data
+  // 2. LOGIKA FILTER & GROUPING
   const availableYears = useMemo(() => {
     const years = new Set();
     allPenugasan.forEach(item => {
@@ -113,19 +109,14 @@ const Penugasan = () => {
     return [...years].sort((a, b) => b - a);
   }, [allPenugasan]);
 
-  // B. Filter Data -> Lalu Grouping
   const groupedPenugasan = useMemo(() => {
-    // 1. Filter Data Mentah
     const filtered = allPenugasan.filter(item => {
       const term = searchTerm.toLowerCase();
-      
-      // Pencarian berdasarkan Nama Kegiatan (Survei/Sensus), Sub Kegiatan (Kegiatan), atau Pengawas
       const matchSearch = 
         (item.nama_kegiatan || '').toLowerCase().includes(term) ||
         (item.nama_sub_kegiatan || '').toLowerCase().includes(term) ||
         (item.nama_pengawas || '').toLowerCase().includes(term);
 
-      // Filter Tahun
       let matchYear = true;
       if (filterYear) {
         if (item.tanggal_mulai) {
@@ -135,11 +126,9 @@ const Penugasan = () => {
           matchYear = false;
         }
       }
-
       return matchSearch && matchYear;
     });
 
-    // 2. Grouping Data Hasil Filter
     return filtered.reduce((acc, item) => {
       const key = item.nama_kegiatan;
       if (!acc[key]) acc[key] = [];
@@ -149,8 +138,7 @@ const Penugasan = () => {
 
   }, [allPenugasan, searchTerm, filterYear]);
 
-
-  // 3. Handle Klik Baris (Toggle Dropdown)
+  // 3. Handle Klik Baris
   const toggleRow = async (id_penugasan) => {
     if (expandedTaskId === id_penugasan) {
       setExpandedTaskId(null);
@@ -158,7 +146,6 @@ const Penugasan = () => {
     }
     setExpandedTaskId(id_penugasan);
 
-    // Load anggota on demand jika belum ada di cache (fallback)
     if (!membersCache[id_penugasan]) {
       setLoadingMembers(true);
       try {
@@ -175,7 +162,86 @@ const Penugasan = () => {
     }
   };
 
-  // --- HANDLE ACTIONS ---
+  // --- NEW: HANDLE STATUS CHANGE (SINGLE) ---
+  const handleStatusChange = async (e, id, currentStatus) => {
+    e.stopPropagation();
+    
+    // Tentukan status target
+    const newStatus = currentStatus === 'disetujui' ? 'menunggu' : 'disetujui';
+    const actionText = newStatus === 'disetujui' ? 'Menyetujui' : 'Membatalkan';
+
+    try {
+      // Optimistic update (Update UI dulu biar cepat)
+      setAllPenugasan(prev => prev.map(p => 
+        p.id_penugasan === id ? { ...p, status_penugasan: newStatus } : p
+      ));
+
+      const token = getToken();
+      // SESUAIKAN endpoint ini dengan route backend Anda.
+      // Bisa PUT /api/penugasan/{id} dengan body { status_penugasan: newStatus }
+      await axios.put(`${API_URL}/api/penugasan/${id}`, 
+        { status_penugasan: newStatus }, 
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      // Swal.fire('Sukses', `Berhasil ${actionText} penugasan.`, 'success'); 
+      // (Optional: Alert dimatikan agar tidak mengganggu flow klik cepat)
+
+    } catch (err) {
+      console.error(err);
+      Swal.fire('Gagal', `Gagal mengubah status.`, 'error');
+      fetchPenugasan(); // Revert data jika gagal
+    }
+  };
+
+  // --- NEW: HANDLE STATUS CHANGE (GROUP) ---
+  const handleGroupStatusChange = async (subItems) => {
+    // 1. Cek apakah semua sudah disetujui?
+    const allApproved = subItems.every(item => item.status_penugasan === 'disetujui');
+    const targetStatus = allApproved ? 'menunggu' : 'disetujui';
+    const actionText = targetStatus === 'disetujui' ? 'Menyetujui Semua' : 'Membatalkan Semua';
+
+    const result = await Swal.fire({
+        title: `${actionText}?`,
+        text: `Akan mengubah status ${subItems.length} penugasan dalam grup ini menjadi '${targetStatus}'.`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: targetStatus === 'disetujui' ? '#10B981' : '#F59E0B',
+        confirmButtonText: `Ya, ${actionText}`
+    });
+
+    if (result.isConfirmed) {
+        setIsProcessing(true);
+        try {
+            const token = getToken();
+            const config = { headers: { Authorization: `Bearer ${token}` } };
+            
+            // Loop request (karena backend belum tentu punya endpoint bulk update)
+            const promises = subItems.map(item => {
+                // Hanya update jika statusnya berbeda dengan target
+                if (item.status_penugasan !== targetStatus) {
+                    return axios.put(`${API_URL}/api/penugasan/${item.id_penugasan}`, {
+                        status_penugasan: targetStatus
+                    }, config);
+                }
+                return Promise.resolve();
+            });
+
+            await Promise.all(promises);
+
+            Swal.fire('Sukses', 'Status grup berhasil diperbarui!', 'success');
+            fetchPenugasan(); // Refresh data total
+
+        } catch (err) {
+            console.error(err);
+            Swal.fire('Error', 'Terjadi kesalahan saat memproses grup.', 'error');
+        } finally {
+            setIsProcessing(false);
+        }
+    }
+  };
+
+  // --- HANDLE ACTIONS LAINNYA ---
   const handleDelete = async (e, id) => {
     e.stopPropagation();
     const result = await Swal.fire({
@@ -211,8 +277,7 @@ const Penugasan = () => {
     const csvHeader = "nik,kegiatan_id,nama_kegiatan_ref,kode_jabatan,volume_tugas";
     const csvRows = [
       "'3301020304050002,sub1,Persiapan Awal,PML-01,10",
-      "'6253761257157635,sub2,Pencacahan,PPL-01,50",
-      "'3322122703210001,sub3,Pengolahan,ENT-01,200"
+      "'6253761257157635,sub2,Pencacahan,PPL-01,50"
     ];
     const csvContent = "data:text/csv;charset=utf-8," + csvHeader + "\n" + csvRows.join("\n");
     const encodedUri = encodeURI(csvContent);
@@ -277,7 +342,7 @@ const Penugasan = () => {
         </div>
       </div>
 
-      {/* --- SEARCH & FILTER SECTION (BARU) --- */}
+      {/* --- SEARCH & FILTER SECTION --- */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
          <div className="relative w-full md:w-1/2">
             <FaSearch className="absolute left-3 top-3 text-gray-400" />
@@ -309,127 +374,176 @@ const Penugasan = () => {
             {searchTerm || filterYear ? 'Tidak ditemukan data yang sesuai filter.' : 'Belum ada data penugasan. Silakan import atau buat baru.'}
           </div>
         ) : (
-          Object.entries(groupedPenugasan).map(([kegiatanName, subItems]) => (
-            <div key={kegiatanName} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-              
-              {/* Header Grup (Nama Survei/Sensus) */}
-              <div className="bg-gray-50/50 px-6 py-4 border-b border-gray-100 flex items-center gap-3">
-                 <span className="text-[#1A2A80]"><FaClipboardList size={18} /></span>
-                 <h2 className="text-lg font-bold text-gray-800">{kegiatanName}</h2>
-                 <span className="text-xs font-medium bg-white text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full ml-auto">
-                    {subItems.length} Tim
-                 </span>
-              </div>
+          Object.entries(groupedPenugasan).map(([kegiatanName, subItems]) => {
+            
+            // Logic Tombol Grup: Cek apakah semua item sudah 'disetujui'
+            const allApproved = subItems.length > 0 && subItems.every(i => i.status_penugasan === 'disetujui');
+            
+            return (
+              <div key={kegiatanName} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                
+                {/* Header Grup (Nama Survei/Sensus) & Tombol Grup */}
+                <div className="bg-gray-50/50 px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center gap-3">
+                   <div className="flex items-center gap-3 flex-1">
+                      <span className="text-[#1A2A80]"><FaClipboardList size={18} /></span>
+                      <h2 className="text-lg font-bold text-gray-800">{kegiatanName}</h2>
+                      <span className="text-xs font-medium bg-white text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">
+                          {subItems.length} Tim
+                      </span>
+                   </div>
 
-              {/* List Kegiatan */}
-              <div className="divide-y divide-gray-100">
-                {subItems.map((task) => {
-                  const isOpen = expandedTaskId === task.id_penugasan;
-                  const members = membersCache[task.id_penugasan] || [];
-                  const membersCount = members.length;
-                  
-                  return (
-                    <div key={task.id_penugasan} className="group">
-                      
-                      {/* Baris Utama */}
-                      <div 
-                        onClick={() => toggleRow(task.id_penugasan)} 
-                        className={`px-6 py-4 cursor-pointer transition-colors flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${isOpen ? 'bg-blue-50/40' : 'hover:bg-gray-50'}`}
-                      >
-                        {/* Kiri: Info Kegiatan */}
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-1">
-                            <div className={`p-1 rounded-full transition-transform duration-200 ${isOpen ? 'rotate-180 text-[#1A2A80] bg-blue-100' : 'text-gray-400'}`}>
-                                <FaChevronDown size={10} />
-                            </div>
-                            <h3 className={`font-bold text-sm ${isOpen ? 'text-[#1A2A80]' : 'text-gray-700'}`}>
-                                {task.nama_sub_kegiatan}
-                            </h3>
-                          </div>
-                          
-                          <div className="pl-7 flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-500">
-                            <span className="flex items-center gap-1">
-                              📅 {formatDate(task.tanggal_mulai)} - {formatDate(task.tanggal_selesai)}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              👤 Pengawas: <span className="font-medium text-gray-700">{task.nama_pengawas}</span>
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Kanan: Info Anggota & Tombol Aksi */}
-                        <div className="flex items-center gap-4 min-w-fit">
-                            <div className="text-xs font-medium text-gray-400 group-hover:text-[#1A2A80] transition-colors flex items-center gap-2">
-                                <FaUsers /> {membersCount} Anggota
-                            </div>
-
-                            {/* Tombol Aksi (Edit & Hapus) */}
-                            <div className="flex items-center gap-1 border-l pl-4 border-gray-200">
-                                <button onClick={(e) => handleEdit(e, task.id_penugasan)} className="p-2 text-indigo-500 hover:bg-indigo-100 rounded-full transition" title="Edit Penugasan">
-                                    <FaEdit size={14} />
-                                </button>
-                                <button onClick={(e) => handleDelete(e, task.id_penugasan)} className="p-2 text-red-500 hover:bg-red-100 rounded-full transition" title="Hapus Penugasan">
-                                    <FaTrash size={14} />
-                                </button>
-                            </div>
-                        </div>
-                      </div>
-                      
-                      {/* Konten Detail (Accordion) */}
-                      {isOpen && (
-                        <div className="bg-gray-50/30 px-6 py-5 border-t border-gray-100 text-sm animate-fade-in-down pl-6 sm:pl-14">
-                           <div className="flex justify-between items-center mb-4">
-                                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Daftar Anggota Tim:</h4>
-                                <Link 
-                                    to={`/admin/penugasan/detail/${task.id_penugasan}`} 
-                                    className="text-[#1A2A80] font-bold text-xs hover:underline flex items-center gap-1 bg-white px-3 py-1.5 rounded border border-gray-200 shadow-sm hover:bg-blue-50 transition"
-                                >
-                                    Kelola Tim & Print SPK <FaArrowRight size={10} />
-                                </Link>
-                           </div>
-
-                           {loadingMembers ? (
-                             <p className="text-gray-400 italic text-center py-4">Memuat data anggota...</p>
-                           ) : (
-                             members.length === 0 ? (
-                               <div className="text-center py-6 bg-white rounded border border-dashed border-gray-200 text-gray-400 text-xs">
-                                 Belum ada anggota di tim ini.
-                               </div>
-                             ) : (
-                               <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                 {members.map((m, idx) => (
-                                   <li key={m.id_mitra || idx} className="flex items-center gap-3 bg-white px-3 py-2.5 rounded-lg border border-gray-200 shadow-sm">
-                                     <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-xs font-bold">
-                                        {m.nama_lengkap ? m.nama_lengkap.charAt(0) : '?'}
-                                     </div>
-                                     <div className="overflow-hidden w-full">
-                                        <div className="flex justify-between items-center w-full">
-                                            <p className="text-gray-700 font-bold text-xs truncate">
-                                                {m.nama_lengkap || m.nama_mitra || 'Nama Tidak Tersedia'}
-                                            </p>
-                                            {m.volume_tugas > 0 && (
-                                                <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 rounded border border-blue-100">
-                                                    Vol: {m.volume_tugas}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <p className="text-xs text-gray-400 truncate">
-                                            {m.nama_jabatan || '-'}
-                                        </p>
-                                     </div>
-                                   </li>
-                                 ))}
-                               </ul>
-                             )
-                           )}
-                        </div>
+                   {/* TOMBOL AKSI GRUP */}
+                   <button 
+                      onClick={() => handleGroupStatusChange(subItems)}
+                      disabled={isProcessing}
+                      className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition shadow-sm 
+                        ${allApproved 
+                          ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-200' 
+                          : 'bg-green-100 text-green-700 hover:bg-green-200 border border-green-200'}
+                        disabled:opacity-50 disabled:cursor-not-allowed
+                      `}
+                   >
+                      {isProcessing ? 'Memproses...' : (
+                        allApproved ? (
+                          <><FaUndoAlt /> Batalkan Semua</>
+                        ) : (
+                          <><FaCheckCircle /> Setujui Semua</>
+                        )
                       )}
-                    </div>
-                  )
-                })}
+                   </button>
+                </div>
+
+                {/* List Kegiatan */}
+                <div className="divide-y divide-gray-100">
+                  {subItems.map((task) => {
+                    const isOpen = expandedTaskId === task.id_penugasan;
+                    const members = membersCache[task.id_penugasan] || [];
+                    const membersCount = members.length;
+                    
+                    // Logic Status Single
+                    const isApproved = task.status_penugasan === 'disetujui';
+
+                    return (
+                      <div key={task.id_penugasan} className="group">
+                        
+                        {/* Baris Utama */}
+                        <div 
+                          onClick={() => toggleRow(task.id_penugasan)} 
+                          className={`px-6 py-4 cursor-pointer transition-colors flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${isOpen ? 'bg-blue-50/40' : 'hover:bg-gray-50'}`}
+                        >
+                          {/* Kiri: Info Kegiatan */}
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-1">
+                              <div className={`p-1 rounded-full transition-transform duration-200 ${isOpen ? 'rotate-180 text-[#1A2A80] bg-blue-100' : 'text-gray-400'}`}>
+                                  <FaChevronDown size={10} />
+                              </div>
+                              <h3 className={`font-bold text-sm ${isOpen ? 'text-[#1A2A80]' : 'text-gray-700'}`}>
+                                  {task.nama_sub_kegiatan}
+                              </h3>
+                              
+                              {/* BADGE STATUS */}
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border uppercase
+                                ${isApproved 
+                                  ? 'bg-green-50 text-green-600 border-green-100' 
+                                  : 'bg-gray-100 text-gray-500 border-gray-200'}
+                              `}>
+                                {task.status_penugasan || 'Menunggu'}
+                              </span>
+                            </div>
+                            
+                            <div className="pl-7 flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-500">
+                              <span className="flex items-center gap-1">
+                                📅 {formatDate(task.tanggal_mulai)} - {formatDate(task.tanggal_selesai)}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                👤 Pengawas: <span className="font-medium text-gray-700">{task.nama_pengawas}</span>
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Kanan: Info Anggota & Tombol Aksi */}
+                          <div className="flex items-center gap-4 min-w-fit">
+                              <div className="text-xs font-medium text-gray-400 group-hover:text-[#1A2A80] transition-colors flex items-center gap-2">
+                                  <FaUsers /> {membersCount} Anggota
+                              </div>
+
+                              <div className="flex items-center gap-1 border-l pl-4 border-gray-200">
+                                  
+                                  {/* TOMBOL SETUJUI / BATALKAN (PER BARIS) */}
+                                  <button 
+                                    onClick={(e) => handleStatusChange(e, task.id_penugasan, task.status_penugasan)}
+                                    className={`p-2 rounded-full transition ${isApproved ? 'text-amber-500 hover:bg-amber-100' : 'text-green-600 hover:bg-green-100'}`}
+                                    title={isApproved ? "Batalkan Persetujuan" : "Setujui Penugasan"}
+                                  >
+                                    {isApproved ? <FaUndoAlt size={14} /> : <FaCheckCircle size={14} />}
+                                  </button>
+
+                                  <button onClick={(e) => handleEdit(e, task.id_penugasan)} className="p-2 text-indigo-500 hover:bg-indigo-100 rounded-full transition" title="Edit Penugasan">
+                                      <FaEdit size={14} />
+                                  </button>
+                                  <button onClick={(e) => handleDelete(e, task.id_penugasan)} className="p-2 text-red-500 hover:bg-red-100 rounded-full transition" title="Hapus Penugasan">
+                                      <FaTrash size={14} />
+                                  </button>
+                              </div>
+                          </div>
+                        </div>
+                        
+                        {/* Konten Detail (Accordion) */}
+                        {isOpen && (
+                          <div className="bg-gray-50/30 px-6 py-5 border-t border-gray-100 text-sm animate-fade-in-down pl-6 sm:pl-14">
+                             <div className="flex justify-between items-center mb-4">
+                                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Daftar Anggota Tim:</h4>
+                                  <Link 
+                                      to={`/admin/penugasan/detail/${task.id_penugasan}`} 
+                                      className="text-[#1A2A80] font-bold text-xs hover:underline flex items-center gap-1 bg-white px-3 py-1.5 rounded border border-gray-200 shadow-sm hover:bg-blue-50 transition"
+                                  >
+                                      Kelola Tim & Print SPK <FaArrowRight size={10} />
+                                  </Link>
+                             </div>
+
+                             {loadingMembers ? (
+                               <p className="text-gray-400 italic text-center py-4">Memuat data anggota...</p>
+                             ) : (
+                               members.length === 0 ? (
+                                 <div className="text-center py-6 bg-white rounded border border-dashed border-gray-200 text-gray-400 text-xs">
+                                   Belum ada anggota di tim ini.
+                                 </div>
+                               ) : (
+                                 <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                   {members.map((m, idx) => (
+                                     <li key={m.id_mitra || idx} className="flex items-center gap-3 bg-white px-3 py-2.5 rounded-lg border border-gray-200 shadow-sm">
+                                       <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-xs font-bold">
+                                          {m.nama_lengkap ? m.nama_lengkap.charAt(0) : '?'}
+                                       </div>
+                                       <div className="overflow-hidden w-full">
+                                          <div className="flex justify-between items-center w-full">
+                                              <p className="text-gray-700 font-bold text-xs truncate">
+                                                  {m.nama_lengkap || m.nama_mitra || 'Nama Tidak Tersedia'}
+                                              </p>
+                                              {m.volume_tugas > 0 && (
+                                                  <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 rounded border border-blue-100">
+                                                      Vol: {m.volume_tugas}
+                                                  </span>
+                                              )}
+                                          </div>
+                                          <p className="text-xs text-gray-400 truncate">
+                                              {m.nama_jabatan || '-'}
+                                          </p>
+                                       </div>
+                                     </li>
+                                   ))}
+                                 </ul>
+                               )
+                             )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

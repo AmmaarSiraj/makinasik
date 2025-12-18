@@ -235,7 +235,7 @@ const TambahPenugasan = () => {
 
     if (batasHonorPeriode > 0) {
       const overLimitUser = selectedMitras.find(m => {
-        const hInfo = availableJabatan.find(h => h.kode_jabatan === m.assignedJabajan);
+        const hInfo = availableJabatan.find(h => h.kode_jabatan === m.assignedJabatan);
         const tarif = hInfo ? Number(hInfo.tarif) : 0;
         const totalHonorBaru = tarif * Number(m.assignedVolume);
 
@@ -252,6 +252,23 @@ const TambahPenugasan = () => {
       }
     }
 
+    // --- VALIDASI BATAS KUOTA / VOLUME TUGAS ---
+    for (const jabatan of availableJabatan) {
+      const stats = getVolumeStats(jabatan.kode_jabatan, jabatan.basis_volume);
+      
+      if (stats.max > 0 && stats.used > stats.max) {
+        return Swal.fire(
+          'Kuota Terlampaui',
+          `Total penugasan untuk jabatan <b>${jabatan.nama_jabatan}</b> melebihi batas kuota!<br/><br/>
+           Maksimal: ${stats.max}<br/>
+           Terpakai (termasuk baru): ${stats.used}<br/><br/>
+           Silakan kurangi jumlah petugas atau volume tugasnya.`,
+          'warning'
+        );
+      }
+    }
+    // ------------------------------------------
+
     setSubmitting(true);
     const token = localStorage.getItem('token');
     const user = JSON.parse(localStorage.getItem('user'));
@@ -259,10 +276,6 @@ const TambahPenugasan = () => {
 
     const rawIdPengawas = user?.id;
     const idPengawas = parseInt(rawIdPengawas); 
-
-    // --- TEMPORARY DEBUG LOG ---
-    console.log('DEBUG: ID Pengawas dari localStorage:', rawIdPengawas, '-> Dikonversi:', idPengawas);
-    // ----------------------------
 
     if (isNaN(idPengawas) || idPengawas < 1) { 
         setSubmitting(false);

@@ -614,7 +614,7 @@ const Perencanaan = () => {
                                                     </p>
                                                     {m.volume_tugas > 0 && (
                                                         <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 rounded border border-blue-100">
-                                                            Tugas Ini: {m.volume_tugas}
+                                                            Jumlah Tugas: {m.volume_tugas}
                                                         </span>
                                                     )}
                                                 </div>

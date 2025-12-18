@@ -16,7 +16,6 @@ const TambahPenugasan = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  // Data Master
   const [listKegiatan, setListKegiatan] = useState([]);
   const [listSubKegiatan, setListSubKegiatan] = useState([]);
   const [allSubKegiatan, setAllSubKegiatan] = useState([]);
@@ -26,7 +25,6 @@ const TambahPenugasan = () => {
   const [listKelompok, setListKelompok] = useState([]);
   const [listPenugasan, setListPenugasan] = useState([]);
 
-  // Form State
   const [selectedKegiatanId, setSelectedKegiatanId] = useState('');
   const [selectedSubId, setSelectedSubId] = useState('');
 
@@ -35,11 +33,9 @@ const TambahPenugasan = () => {
   const [mitraSearch, setMitraSearch] = useState('');
   const [showMitraDropdown, setShowMitraDropdown] = useState(false);
 
-  // Finance State
   const [batasHonorPeriode, setBatasHonorPeriode] = useState(0);
   const [mitraIncomeMap, setMitraIncomeMap] = useState({});
 
-  // 1. FETCH DATA MASTER
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -75,7 +71,6 @@ const TambahPenugasan = () => {
     fetchData();
   }, []);
 
-  // 2. FILTER SUB KEGIATAN DROPDOWN
   useEffect(() => {
     const fetchSubDropdown = async () => {
       if (!selectedKegiatanId) {
@@ -95,7 +90,6 @@ const TambahPenugasan = () => {
     fetchSubDropdown();
   }, [selectedKegiatanId]);
 
-  // 3. HITUNG PENDAPATAN & LIMIT (HISTORIS - TAHUNAN)
   useEffect(() => {
     if (!selectedSubId) {
       setBatasHonorPeriode(0);
@@ -147,7 +141,6 @@ const TambahPenugasan = () => {
 
   }, [selectedSubId, allSubKegiatan, listAturan, listKelompok, listPenugasan, listHonorarium]);
 
-  // 4. MENGHITUNG TAHUN TARGET (Untuk Filter Mitra)
   const targetYear = useMemo(() => {
     if (!selectedSubId) return null;
     const sub = allSubKegiatan.find(s => String(s.id) === String(selectedSubId));
@@ -155,7 +148,6 @@ const TambahPenugasan = () => {
     return new Date(sub.tanggal_mulai).getFullYear().toString();
   }, [selectedSubId, allSubKegiatan]);
 
-  // 5. FILTER MITRA SUDAH BERTUGAS DI SUB INI
   const unavailableMitraIds = useMemo(() => {
     if (!selectedSubId) return new Set();
 
@@ -170,7 +162,6 @@ const TambahPenugasan = () => {
     return new Set(assignedIds);
   }, [selectedSubId, listPenugasan, listKelompok]);
 
-  // 6. DATA JABATAN & PROGRESS VOLUME
   const availableJabatan = useMemo(() => {
     return listHonorarium.filter(h => String(h.id_subkegiatan) === String(selectedSubId));
   }, [listHonorarium, selectedSubId]);
@@ -223,7 +214,7 @@ const TambahPenugasan = () => {
     ));
   };
 
- const handleSubmit = async () => {
+  const handleSubmit = async () => {
     if (selectedMitras.length === 0) {
       return Swal.fire('Perhatian', 'Belum ada mitra yang dipilih.', 'warning');
     }
@@ -235,7 +226,7 @@ const TambahPenugasan = () => {
 
     if (batasHonorPeriode > 0) {
       const overLimitUser = selectedMitras.find(m => {
-        const hInfo = availableJabatan.find(h => h.kode_jabatan === m.assignedJabajan);
+        const hInfo = availableJabatan.find(h => h.kode_jabatan === m.assignedJabatan);
         const tarif = hInfo ? Number(hInfo.tarif) : 0;
         const totalHonorBaru = tarif * Number(m.assignedVolume);
 
@@ -252,6 +243,21 @@ const TambahPenugasan = () => {
       }
     }
 
+    for (const jabatan of availableJabatan) {
+      const stats = getVolumeStats(jabatan.kode_jabatan, jabatan.basis_volume);
+      
+      if (stats.max > 0 && stats.used > stats.max) {
+        return Swal.fire(
+          'Kuota Terlampaui',
+          `Total penugasan untuk jabatan <b>${jabatan.nama_jabatan}</b> melebihi batas kuota!<br/><br/>
+           Maksimal: ${stats.max}<br/>
+           Terpakai (termasuk baru): ${stats.used}<br/><br/>
+           Silakan kurangi jumlah petugas atau volume tugasnya.`,
+          'warning'
+        );
+      }
+    }
+
     setSubmitting(true);
     const token = localStorage.getItem('token');
     const user = JSON.parse(localStorage.getItem('user'));
@@ -259,10 +265,6 @@ const TambahPenugasan = () => {
 
     const rawIdPengawas = user?.id;
     const idPengawas = parseInt(rawIdPengawas); 
-
-    // --- TEMPORARY DEBUG LOG ---
-    console.log('DEBUG: ID Pengawas dari localStorage:', rawIdPengawas, '-> Dikonversi:', idPengawas);
-    // ----------------------------
 
     if (isNaN(idPengawas) || idPengawas < 1) { 
         setSubmitting(false);
@@ -341,18 +343,13 @@ const TambahPenugasan = () => {
     }
   };
 
-  // --- FILTER MITRA (TERMASUK TAHUN AKTIF) ---
   const filteredMitra = listMitra.filter(m => {
-    // 1. Filter Search
     const matchSearch = m.nama_lengkap.toLowerCase().includes(mitraSearch.toLowerCase()) || m.nik.includes(mitraSearch);
 
-    // 2. Filter Sudah Terpilih
     const notSelected = !selectedMitras.some(selected => selected.id === m.id);
 
-    // 3. Filter Sudah Ada di Database untuk SubKegiatan ini
     const notAlreadyAssigned = !unavailableMitraIds.has(String(m.id));
 
-    // 4. Filter Tahun Aktif
     let isActiveInYear = false;
     if (targetYear && m.riwayat_tahun) {
       const years = m.riwayat_tahun.split(', ');
@@ -380,7 +377,6 @@ const TambahPenugasan = () => {
 
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden min-h-[400px] flex flex-col">
 
-        {/* STEP 1: PILIH KEGIATAN */}
         {step === 1 && (
           <div className="p-8 animate-fade-in-up flex-1 flex flex-col">
             <h2 className="text-lg font-bold text-gray-700 mb-6 flex items-center gap-2">
@@ -429,7 +425,6 @@ const TambahPenugasan = () => {
           </div>
         )}
 
-        {/* STEP 2: PILIH MITRA & VOLUME */}
         {step === 2 && (
           <div className="p-8 animate-fade-in-up flex-1 flex flex-col">
 
@@ -440,7 +435,6 @@ const TambahPenugasan = () => {
               <button onClick={() => setStep(1)} className="text-xs text-blue-600 underline hover:text-blue-800">Ganti Kegiatan</button>
             </div>
 
-            {/* INFO KUOTA */}
             <div className="mb-8 p-5 bg-gray-50 border border-gray-200 rounded-xl">
               <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
                 <FaChartBar /> Informasi Kuota & Honorarium
@@ -484,7 +478,6 @@ const TambahPenugasan = () => {
 
             <div className="flex flex-col md:flex-row gap-8 h-full">
 
-              {/* KIRI: PENCARIAN */}
               <div className="md:w-1/3">
                 <h3 className="text-sm font-bold text-gray-700 mb-3 uppercase flex items-center gap-2">
                   <FaSearch /> Tambah Mitra
@@ -552,7 +545,6 @@ const TambahPenugasan = () => {
                 </div>
               </div>
 
-              {/* KANAN: DAFTAR SELEKSI */}
               <div className="md:w-2/3 bg-gray-50 rounded-xl border border-gray-200 p-5 flex flex-col">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-sm font-bold text-gray-700 uppercase flex items-center gap-2">

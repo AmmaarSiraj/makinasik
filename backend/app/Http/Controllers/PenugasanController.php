@@ -81,7 +81,6 @@ class PenugasanController extends Controller
                 'message' => 'Penugasan berhasil dibuat beserta anggota tim.',
                 'data' => $this->formatSingle($penugasan->id)
             ], 201);
-
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['error' => 'Gagal membuat penugasan: ' . $e->getMessage()], 500);
@@ -110,10 +109,10 @@ class PenugasanController extends Controller
 
             // 1. Loop setiap ID Perencanaan yang dikirim
             foreach ($request->ids_perencanaan as $idPerencanaan) {
-                
+
                 // Ambil Data Perencanaan & Anggotanya (Gunakan 'kelompok' sesuai Model)
                 $perencanaan = Perencanaan::with('kelompok')->find($idPerencanaan);
-                
+
                 if (!$perencanaan) continue;
 
                 // 2. LOGIKA HEADER PENUGASAN (Upsert berdasarkan id_subkegiatan)
@@ -122,8 +121,8 @@ class PenugasanController extends Controller
                         'id_subkegiatan' => $perencanaan->id_subkegiatan
                     ],
                     [
-                        'id_pengawas' => $perencanaan->id_pengawas, 
-                        'updated_at'  => now() 
+                        'id_pengawas' => $perencanaan->id_pengawas,
+                        'updated_at'  => now()
                     ]
                 );
                 $countHeader++;
@@ -131,7 +130,7 @@ class PenugasanController extends Controller
                 // 3. LOGIKA ANGGOTA (KELOMPOK PENUGASAN)
                 // Loop menggunakan properti 'kelompok' dari relasi di Model Perencanaan
                 foreach ($perencanaan->kelompok as $anggotaPlan) {
-                    
+
                     // Upsert berdasarkan id_penugasan DAN id_mitra
                     KelompokPenugasan::updateOrCreate(
                         [
@@ -154,7 +153,6 @@ class PenugasanController extends Controller
                 'status' => 'success',
                 'message' => "Berhasil meneruskan data.\n{$countHeader} Kegiatan diproses.\n{$countMembers} Anggota berhasil disinkronisasi."
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['message' => 'Gagal meneruskan data: ' . $e->getMessage()], 500);
@@ -175,7 +173,48 @@ class PenugasanController extends Controller
     }
 
     /**
-     * 5. GET ANGGOTA BY PENUGASAN ID
+     * 5. UPDATE PENUGASAN (STATUS & DATA LAIN)
+     * Digunakan untuk mengubah status (menunggu/disetujui) atau mengedit data header.
+     */
+    public function update(Request $request, $id)
+    {
+        $penugasan = Penugasan::find($id);
+        if (!$penugasan) {
+            return response()->json(['message' => 'Data tidak ditemukan'], 404);
+        }
+
+        // Validasi input
+        $validator = Validator::make($request->all(), [
+            'status_penugasan' => 'nullable|in:menunggu,disetujui',
+            'id_subkegiatan'   => 'nullable|exists:subkegiatan,id',
+            'id_pengawas'      => 'nullable|exists:user,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        try {
+            // Update data (hanya field yang dikirim saja)
+            $penugasan->update($request->only([
+                'status_penugasan', 
+                'id_subkegiatan', 
+                'id_pengawas'
+            ]));
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Penugasan berhasil diperbarui.',
+                'data' => $this->formatItem($penugasan) // Return data terbaru dengan format lengkap
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Gagal update: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 6. GET ANGGOTA BY PENUGASAN ID
      */
     public function getAnggota($id)
     {
@@ -206,15 +245,14 @@ class PenugasanController extends Controller
                 ->orderBy('m.nama_lengkap', 'asc')
                 ->get();
 
-            return response()->json($anggota); 
-
+            return response()->json($anggota);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Terjadi kesalahan: ' . $e->getMessage()], 500);
         }
     }
 
     /**
-     * 6. GET BY MITRA AND PERIODE
+     * 7. GET BY MITRA AND PERIODE
      */
     public function getByMitraAndPeriode($id_mitra, $periode)
     {
@@ -233,11 +271,11 @@ class PenugasanController extends Controller
                 ->join('subkegiatan as s', 'p.id_subkegiatan', '=', 's.id')
                 ->join('kegiatan as k', 's.id_kegiatan', '=', 'k.id')
                 ->leftJoin('jabatan_mitra as jm', 'kp.kode_jabatan', '=', 'jm.kode_jabatan')
-                
+
                 // Join ke Honorarium
                 ->leftJoin('honorarium as h', function ($join) {
                     $join->on('h.id_subkegiatan', '=', 's.id')
-                         ->on('h.kode_jabatan', '=', 'kp.kode_jabatan');
+                        ->on('h.kode_jabatan', '=', 'kp.kode_jabatan');
                 })
 
                 // Join Satuan Kegiatan lewat Honorarium
@@ -251,11 +289,11 @@ class PenugasanController extends Controller
                     's.tanggal_mulai',
                     's.tanggal_selesai',
                     'kp.volume_tugas as target_volume',
-                    'sat.nama_satuan', 
+                    'sat.nama_satuan',
                     'jm.nama_jabatan',
                     DB::raw("IFNULL(h.tarif, 0) as harga_satuan"),
                     DB::raw("(kp.volume_tugas * IFNULL(h.tarif, 0)) as total_honor"),
-                    DB::raw("COALESCE(h.beban_anggaran) as beban_anggaran") 
+                    DB::raw("COALESCE(h.beban_anggaran) as beban_anggaran")
                 ])
                 ->orderBy('s.tanggal_mulai', 'asc')
                 ->get();
@@ -264,14 +302,13 @@ class PenugasanController extends Controller
                 'status' => 'success',
                 'data' => $tasks
             ]);
-
         } catch (\Exception $e) {
             return response()->json(['message' => 'Terjadi kesalahan: ' . $e->getMessage()], 500);
         }
     }
 
     /**
-     * 7. DELETE PENUGASAN
+     * 8. DELETE PENUGASAN
      */
     public function destroy($id)
     {
@@ -280,7 +317,7 @@ class PenugasanController extends Controller
             return response()->json(['message' => 'Data tidak ditemukan'], 404);
         }
 
-        $penugasan->delete(); 
+        $penugasan->delete();
         return response()->json(['status' => 'success', 'message' => 'Penugasan berhasil dihapus.']);
     }
 
@@ -300,20 +337,24 @@ class PenugasanController extends Controller
     {
         return [
             'id_penugasan'         => $item->id,
+            
+            // --- TAMBAHAN: STATUS PENUGASAN ---
+            'status_penugasan'     => $item->status_penugasan ?? 'menunggu', 
+            
             'penugasan_created_at' => $item->created_at,
 
             // Data Subkegiatan
             'id_subkegiatan'       => $item->subkegiatan ? $item->subkegiatan->id : null,
             'nama_sub_kegiatan'    => $item->subkegiatan ? $item->subkegiatan->nama_sub_kegiatan : '-',
-            
+
             // Format Tanggal Bersih YYYY-MM-DD
-            'tanggal_mulai'        => $item->subkegiatan && $item->subkegiatan->tanggal_mulai 
-                                      ? Carbon::parse($item->subkegiatan->tanggal_mulai)->format('Y-m-d') 
-                                      : null,
-            'tanggal_selesai'      => $item->subkegiatan && $item->subkegiatan->tanggal_selesai 
-                                      ? Carbon::parse($item->subkegiatan->tanggal_selesai)->format('Y-m-d') 
-                                      : null,
-            
+            'tanggal_mulai'        => $item->subkegiatan && $item->subkegiatan->tanggal_mulai
+                ? Carbon::parse($item->subkegiatan->tanggal_mulai)->format('Y-m-d')
+                : null,
+            'tanggal_selesai'      => $item->subkegiatan && $item->subkegiatan->tanggal_selesai
+                ? Carbon::parse($item->subkegiatan->tanggal_selesai)->format('Y-m-d')
+                : null,
+
             // Data Kegiatan (Induk)
             'id_kegiatan'          => $item->subkegiatan && $item->subkegiatan->kegiatan ? $item->subkegiatan->kegiatan->id : null,
             'nama_kegiatan'        => $item->subkegiatan && $item->subkegiatan->kegiatan ? $item->subkegiatan->kegiatan->nama_kegiatan : '-',

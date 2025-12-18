@@ -105,10 +105,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/penugasan', [PenugasanController::class, 'index']);
     Route::post('/penugasan', [PenugasanController::class, 'store']);
     Route::get('/penugasan/{id}', [PenugasanController::class, 'show']);
+    Route::put('/penugasan/{id}', [PenugasanController::class, 'update']);
     Route::get('/penugasan/mitra/{id}/periode/{periode}', [PenugasanController::class, 'getByMitraAndPeriode']);
     Route::delete('/penugasan/{id}', [PenugasanController::class, 'destroy']);
     Route::get('/penugasan/{id}/anggota', [PenugasanController::class, 'getAnggota']);
     Route::post('/penugasan/import-perencanaan', [App\Http\Controllers\PenugasanController::class, 'importFromPerencanaan']);
+    
 
 
     // --- KELOMPOK PENUGASAN (DETAIL ANGGOTA) ---

@@ -10,10 +10,12 @@ class Penugasan extends Model
     use HasFactory;
 
     protected $table = 'penugasan';
+    protected $primaryKey = 'id_penugasan';
 
     protected $fillable = [
         'id_subkegiatan',
         'id_pengawas',
+        'status_penugasan',
     ];
 
     // Relasi ke Subkegiatan
