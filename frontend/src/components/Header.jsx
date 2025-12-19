@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { FaBars, FaTimes, FaSignOutAlt, FaUserCircle, FaChevronDown } from 'react-icons/fa';
-import logoSikinerja from '../assets/logo.png';
+import logoMAKINASIK from '../assets/logo.png';
 
 const Header = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -40,12 +40,12 @@ const Header = () => {
           <div className="flex-shrink-0 flex items-center gap-3">
             <Link to="/home" className="flex items-center gap-2">
               <img 
-                src={logoSikinerja} 
+                src={logoMAKINASIK} 
                 alt="Logo" 
                 className="h-8 w-auto" 
               />
               <span className="text-xl font-extrabold text-[#1A2A80] tracking-tight">
-                SIKINERJA
+                MAKINASIK
               </span>
             </Link>
           </div>

@@ -381,6 +381,7 @@ class PenugasanController extends Controller
                 ->where('p.status_penugasan', 'disetujui') 
 
                 ->select([
+                    'k.nama_kegiatan', // <--- DITAMBAHKAN: Nama Survei/Sensus (Induk)
                     's.nama_sub_kegiatan',
                     's.tanggal_mulai',
                     's.tanggal_selesai',

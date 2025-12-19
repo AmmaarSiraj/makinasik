@@ -94,7 +94,7 @@ const Home = () => {
       <div className="fixed inset-0 z-0">
         <img 
           src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop" 
-          alt="Background SIKINERJA"
+          alt="Background MAKINASIK"
           className="w-full h-full object-cover scale-105"
         />
         <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/50 to-blue-900/40"></div>
@@ -110,13 +110,13 @@ const Home = () => {
               Badan Pusat Statistik
             </span>
             <h1 className="text-5xl md:text-7xl font-extrabold text-white tracking-tight drop-shadow-2xl leading-tight">
-              Optimalkan Kinerja <br />
+              <br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-200">
-                Mitra Statistik
+                MAKINASIK
               </span>
             </h1>
             <p className="text-gray-200 text-lg md:text-xl max-w-2xl mx-auto font-light leading-relaxed">
-              Sistem Informasi Manajemen Kinerja Mitra Statistik untuk pengelolaan data yang lebih akurat, transparan, dan efisien.
+              Manajemen Kinerja dan Administrasi Mitra Statistik
             </p>
             <div className="pt-8">
               <button 

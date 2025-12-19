@@ -3,7 +3,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Swal from 'sweetalert2';
-import PopupTambahAnggota from '../../components/admin/PopupTambahAnggota';
+// --- PERUBAHAN DI SINI: Import Component Baru ---
+import PopupTambahAnggotaPerencanaan from '../../components/admin/PopupTambahAnggotaPerencanaan';
+// ------------------------------------------------
 import { 
   FaArrowLeft, FaTrash, FaPlus, FaUserTie, FaChartPie, 
   FaClipboardList, FaExclamationTriangle, FaMoneyBillWave,
@@ -15,7 +17,6 @@ const getToken = () => localStorage.getItem('token');
 
 // --- KOMPONEN DIAGRAM LINGKARAN (PIE CHART) ---
 const SimplePieChart = ({ percentage, colorHex }) => {
-  // Batasi visual antara 0% - 100%
   const visualPercent = Math.min(Math.max(percentage, 0), 100);
   
   return (
@@ -62,26 +63,20 @@ const DetailPerencanaan = () => {
         axios.get(`${API_URL}/api/honorarium`, config)
       ]);
 
-      // PERBAIKAN 1: Ambil properti .data lagi karena backend membungkusnya
-      // Backend: { status: 'success', data: { ... } }
       const detailPerencanaan = PerencanaanRes.data.data; 
       setPerencanaan(detailPerencanaan);
 
-      // Anggota dikembalikan array langsung oleh controller (lihat getAnggota di Controller)
       setAnggota(anggotaRes.data || []);
       
-      // PERBAIKAN 2: Honorarium juga dibungkus dalam .data (biasanya)
-      // Pastikan mengakses array honorarium yang benar sebelum di-filter
       const allHonor = honorRes.data.data || []; 
       
-      // Gunakan detailPerencanaan yang baru diambil untuk filter
       const currentSubId = detailPerencanaan.id_subkegiatan;
       const filteredHonor = allHonor.filter(h => String(h.id_subkegiatan) === String(currentSubId));
       
       setListHonorarium(filteredHonor);
 
     } catch (err) { 
-      console.error("Detail Error:", err); // Debugging lebih jelas
+      console.error("Detail Error:", err);
       Swal.fire('Error', 'Gagal memuat data detail.', 'error');
     } finally {
       setIsLoading(false);
@@ -198,11 +193,9 @@ const DetailPerencanaan = () => {
     }
   };
 
-  // Render Loading
   if (isLoading) return <div className="text-center py-20 text-gray-500">Memuat detail Perencanaan...</div>;
   if (!Perencanaan) return <div className="text-center py-20 text-red-500">Data Perencanaan tidak ditemukan.</div>;
 
-  // Hitung Total Honor Seluruh Tim
   const totalHonorTim = anggota.reduce((acc, curr) => acc + (Number(curr.total_honor) || 0), 0);
 
   const popupData = {
@@ -299,7 +292,6 @@ const DetailPerencanaan = () => {
                         const stats = getJobStats(job.kode_jabatan, job.basis_volume);
                         const isOver = stats.assigned > stats.target;
                         
-                        // Warna Chart: Merah (Over), Hijau (Pas), Biru (Proses)
                         let chartColor = '#3b82f6'; // Blue
                         if (stats.percentage >= 100 && !isOver) chartColor = '#22c55e'; // Green
                         if (isOver) chartColor = '#ef4444'; // Red
@@ -307,7 +299,6 @@ const DetailPerencanaan = () => {
                         return (
                             <div key={job.id_honorarium} className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex items-center gap-5 relative overflow-hidden group hover:border-blue-300 transition-colors">
                                 
-                                {/* Info Kiri */}
                                 <div className="flex-1 space-y-3">
                                     <div>
                                         <h4 className="font-bold text-gray-800 text-sm leading-tight">{job.nama_jabatan}</h4>
@@ -329,7 +320,6 @@ const DetailPerencanaan = () => {
                                     </div>
                                 </div>
 
-                                {/* Chart Kanan */}
                                 <div className="flex flex-col items-center justify-center">
                                     <SimplePieChart percentage={stats.percentage} colorHex={chartColor} />
                                     {isOver && (
@@ -513,11 +503,11 @@ const DetailPerencanaan = () => {
         </div>
       )}
 
-      {/* MODAL TAMBAH ANGGOTA (IMPORT) */}
-      <PopupTambahAnggota 
+      {/* --- MODAL TAMBAH ANGGOTA (KHUSUS PERENCANAAN) --- */}
+      <PopupTambahAnggotaPerencanaan 
         isOpen={isPopupOpen} 
         onClose={() => setIsPopupOpen(false)} 
-        id_Perencanaan={id} 
+        id_perencanaan={id} // Props ID disesuaikan
         existingAnggotaIds={anggota.map(a => a.id_mitra)} 
         onAnggotaAdded={fetchDetailData}
         targetYear={popupData.year} 

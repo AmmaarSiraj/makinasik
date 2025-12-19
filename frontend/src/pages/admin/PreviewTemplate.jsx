@@ -10,9 +10,10 @@ const PreviewTemplate = () => {
   const navigate = useNavigate();
   const [previewData, setPreviewData] = useState(null);
 
-  // Dummy Data untuk Lampiran
+  // Dummy Data untuk Lampiran (Diupdate dengan nama_kegiatan)
   const sampleTasks = [
     { 
+      nama_kegiatan: 'Survei Sosial Ekonomi Nasional',
       nama_sub_kegiatan: 'Pendataan Lapangan Susenas', 
       nama_jabatan: 'Pencacah Lapangan',
       tanggal_mulai: '2025-03-01', 
@@ -24,6 +25,7 @@ const PreviewTemplate = () => {
       beban_anggaran: '2990.xxx.xxx'
     },
     { 
+      nama_kegiatan: 'Survei Sosial Ekonomi Nasional',
       nama_sub_kegiatan: 'Pengolahan Dokumen', 
       nama_jabatan: 'Pengawas',
       tanggal_mulai: '2025-04-01', 
@@ -152,8 +154,6 @@ const PreviewTemplate = () => {
 
   const { parts, articles } = state;
 
-  // --- REVISI TOMBOL KEMBALI ---
-  // Menggunakan navigate(-1) untuk kembali ke halaman sebelumnya (history back)
   const handleBack = () => {
     navigate(-1);
   };
@@ -275,7 +275,6 @@ const PreviewTemplate = () => {
 
       {/* Toolbar */}
       <div className="w-full max-w-[297mm] flex justify-between items-center mb-6 no-print">
-        {/* BUTTON KEMBALI DI SINI */}
         <button onClick={handleBack} className="flex items-center gap-2 text-gray-600 font-bold hover:text-[#1A2A80] bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200 transition">
             <FaArrowLeft /> Kembali
         </button>
@@ -369,7 +368,10 @@ const PreviewTemplate = () => {
                 <thead>
                     <tr className="bg-gray-100">
                         <th className="border border-black px-2 py-2 w-10 text-center">No</th>
-                        <th className="border border-black px-2 py-2 text-left">Uraian Tugas</th>
+                        {/* HEADER DIUBAH */}
+                        <th className="border border-black px-2 py-2 text-left">Survei dan Kegiatan</th>
+                        <th className="border border-black px-2 py-2 text-center w-24">Jabatan</th>
+                        
                         <th className="border border-black px-2 py-2 text-center w-32">Jangka Waktu</th>
                         <th className="border border-black px-2 py-2 text-center w-12">Vol</th>
                         <th className="border border-black px-2 py-2 text-center w-24">Satuan</th>
@@ -382,10 +384,18 @@ const PreviewTemplate = () => {
                     {sampleTasks.map((task, index) => (
                         <tr key={index}>
                             <td className="border border-black px-2 py-2 text-center align-top">{index + 1}</td>
+                            
+                            {/* KONTEN URAIAN TUGAS (SURVEI & KEGIATAN) */}
                             <td className="border border-black px-2 py-2 align-top">
-                                <span className="font-bold block">{task.nama_sub_kegiatan}</span>
-                                {task.nama_jabatan && <span className="block text-[10px] italic">({task.nama_jabatan})</span>}
+                                <span className="font-bold block">{task.nama_kegiatan}</span>
+                                <span className="block text-sm">{task.nama_sub_kegiatan}</span>
                             </td>
+
+                            {/* KOLOM BARU JABATAN */}
+                            <td className="border border-black px-2 py-2 text-center align-top">
+                                {task.nama_jabatan || '-'}
+                            </td>
+
                             <td className="border border-black px-2 py-2 text-center align-top whitespace-nowrap">
                                 {formatDateIndo(task.tanggal_mulai)} s.d. <br/> {formatDateIndo(task.tanggal_selesai)}
                             </td>
@@ -399,7 +409,8 @@ const PreviewTemplate = () => {
                 </tbody>
                 <tfoot>
                     <tr>
-                        <td colSpan="6" className="border border-black px-3 py-3 font-bold text-center italic bg-gray-50">
+                        {/* COLSPAN DISESUAIKAN JADI 7 */}
+                        <td colSpan="7" className="border border-black px-3 py-3 font-bold text-center italic bg-gray-50">
                             Terbilang: {formatTerbilang(totalHonorLampiran)}
                         </td>
                         <td className="border border-black px-3 py-3 text-right font-bold bg-gray-50 whitespace-nowrap">

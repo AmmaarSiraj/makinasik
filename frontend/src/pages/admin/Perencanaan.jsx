@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Swal from 'sweetalert2'; 
+import * as XLSX from 'xlsx'; // Import library xlsx
 import { 
   FaDownload, 
   FaFileUpload, 
@@ -17,7 +18,7 @@ import {
   FaMoneyBillWave,
   FaExclamationCircle,
   FaPaperPlane,
-  FaTimes // Ditambahkan untuk Modal Import
+  FaTimes
 } from 'react-icons/fa';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
@@ -43,7 +44,7 @@ const Perencanaan = () => {
   const [membersCache, setMembersCache] = useState({});
   const [loadingMembers, setLoadingMembers] = useState(false);
 
-  // --- STATE MODAL IMPORT (BARU) ---
+  // --- STATE MODAL IMPORT ---
   const [showImportModal, setShowImportModal] = useState(false);
   const [importKegiatanList, setImportKegiatanList] = useState([]);
   const [importSubList, setImportSubList] = useState([]);
@@ -450,22 +451,31 @@ const Perencanaan = () => {
     }
   };
 
+  // --- PERUBAHAN DI SINI: Menggunakan XLSX ---
   const handleDownloadTemplate = () => {
-    // Template sederhana
-    const csvHeader = "sobat_id,nama_lengkap,posisi";
-    const csvRows = [
-      "337322040034,Trian Yunita Hestiarini,Petugas Pendataan Lapangan (PPL Survei)",
-      "337322040036,TRIYANI WIDYASTUTI,Petugas Pemeriksaan Lapangan (PML Survei)"
+    // Data dummy untuk template
+    const rows = [
+      { 
+        sobat_id: "337322040034", 
+        nama_lengkap: "Trian Yunita Hestiarini", 
+        posisi: "Petugas Pendataan Lapangan (PPL Survei)" 
+      },
+      { 
+        sobat_id: "337322040036", 
+        nama_lengkap: "TRIYANI WIDYASTUTI", 
+        posisi: "Petugas Pemeriksaan Lapangan (PML Survei)" 
+      }
     ];
-    const csvContent = "data:text/csv;charset=utf-8," + csvHeader + "\n" + csvRows.join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "template_import_perencanaan.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+
+    // Membuat worksheet dan workbook
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Template");
+
+    // Download file .xlsx
+    XLSX.writeFile(workbook, "template_import_perencanaan.xlsx");
   };
+  // ------------------------------------------
 
   if (isLoading) return <div className="text-center py-10 text-gray-500">Memuat data Perencanaan...</div>;
 
@@ -477,8 +487,9 @@ const Perencanaan = () => {
           Kelola tim dan alokasi mitra untuk setiap kegiatan.
         </div>
         <div className="flex gap-2">
+          {/* Tombol telah diupdate labelnya */}
           <button onClick={handleDownloadTemplate} className="flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 transition shadow-sm">
-            <FaDownload /> Template CSV
+            <FaDownload /> Template Excel
           </button>
           {/* TOMBOL IMPORT MEMBUKA MODAL */}
           <button onClick={() => setShowImportModal(true)} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm">

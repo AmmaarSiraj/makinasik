@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Swal from 'sweetalert2'; 
+import * as XLSX from 'xlsx'; 
 import { 
   FaDownload, 
   FaFileUpload, 
@@ -35,7 +36,8 @@ const Penugasan = () => {
   const [membersCache, setMembersCache] = useState({});
   const [loadingMembers, setLoadingMembers] = useState(false);
 
-  const [isProcessing, setIsProcessing] = useState(false);
+  // --- PERBAIKAN 1: State diganti dari boolean menjadi string (menyimpan nama grup) ---
+  const [processingGroup, setProcessingGroup] = useState(null);
   
   const [showImportModal, setShowImportModal] = useState(false);
   const [importKegiatanList, setImportKegiatanList] = useState([]);
@@ -282,7 +284,8 @@ const Penugasan = () => {
     }
   };
 
-  const handleGroupStatusChange = async (subItems) => {
+  // --- PERBAIKAN 2: Menerima parameter groupName ---
+  const handleGroupStatusChange = async (subItems, groupName) => {
     const allApproved = subItems.every(item => item.status_penugasan === 'disetujui');
     const targetStatus = allApproved ? 'menunggu' : 'disetujui';
     const actionText = targetStatus === 'disetujui' ? 'Menyetujui Semua' : 'Membatalkan Semua';
@@ -297,7 +300,7 @@ const Penugasan = () => {
     });
 
     if (result.isConfirmed) {
-        setIsProcessing(true);
+        setProcessingGroup(groupName); // Set grup spesifik yang sedang diproses
         try {
             const token = getToken();
             const config = { headers: { Authorization: `Bearer ${token}` } };
@@ -320,7 +323,7 @@ const Penugasan = () => {
             console.error(err);
             Swal.fire('Error', 'Terjadi kesalahan saat memproses grup.', 'error');
         } finally {
-            setIsProcessing(false);
+            setProcessingGroup(null); // Reset
         }
     }
   };
@@ -357,19 +360,24 @@ const Penugasan = () => {
   };
 
   const handleDownloadTemplate = () => {
-    const csvHeader = "sobat_id,nama_lengkap,posisi";
-    const csvRows = [
-      "337322040034,Trian Yunita Hestiarini,Petugas Pendataan Lapangan (PPL Survei)",
-      "337322040036,TRIYANI WIDYASTUTI,Petugas Pendataan Lapangan (PPL Survei)"
+    const rows = [
+      { 
+        sobat_id: "337322040034", 
+        nama_lengkap: "Trian Yunita Hestiarini", 
+        posisi: "Petugas Pendataan Lapangan (PPL Survei)" 
+      },
+      { 
+        sobat_id: "337322040036", 
+        nama_lengkap: "TRIYANI WIDYASTUTI", 
+        posisi: "Petugas Pendataan Lapangan (PPL Survei)" 
+      }
     ];
-    const csvContent = "data:text/csv;charset=utf-8," + csvHeader + "\n" + csvRows.join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "template_import_penugasan.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Template");
+
+    XLSX.writeFile(workbook, "template_import_penugasan.xlsx");
   };
 
   if (isLoading) return <div className="text-center py-10 text-gray-500">Memuat data penugasan...</div>;
@@ -382,7 +390,7 @@ const Penugasan = () => {
         </div>
         <div className="flex gap-2">
           <button onClick={handleDownloadTemplate} className="flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 transition shadow-sm">
-            <FaDownload /> Template CSV
+            <FaDownload /> Template Excel
           </button>
           <button onClick={() => setShowImportModal(true)} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm">
             <FaFileUpload /> Import Penugasan
@@ -427,6 +435,9 @@ const Penugasan = () => {
             
             const allApproved = subItems.length > 0 && subItems.every(i => i.status_penugasan === 'disetujui');
             
+            // --- PERBAIKAN 3: Cek apakah grup ini yang sedang diproses ---
+            const isThisGroupProcessing = processingGroup === kegiatanName;
+
             return (
               <div key={kegiatanName} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 
@@ -440,8 +451,10 @@ const Penugasan = () => {
                    </div>
 
                    <button 
-                      onClick={() => handleGroupStatusChange(subItems)}
-                      disabled={isProcessing}
+                      // Pass nama kegiatan ke fungsi
+                      onClick={() => handleGroupStatusChange(subItems, kegiatanName)}
+                      // Disable hanya jika grup ini sedang diproses (atau ada grup lain jika Anda ingin strict, tapi umumnya per grup saja cukup)
+                      disabled={isThisGroupProcessing || processingGroup !== null}
                       className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition shadow-sm 
                         ${allApproved 
                           ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-200' 
@@ -449,7 +462,7 @@ const Penugasan = () => {
                         disabled:opacity-50 disabled:cursor-not-allowed
                       `}
                    >
-                      {isProcessing ? 'Memproses...' : (
+                      {isThisGroupProcessing ? 'Memproses...' : (
                         allApproved ? (
                           <><FaUndoAlt /> Batalkan Semua</>
                         ) : (
@@ -588,7 +601,7 @@ const Penugasan = () => {
       {showImportModal && (
         <div 
             className="fixed inset-0 z-50 flex items-center justify-center p-4" 
-            style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }} // INLINE STYLE UNTUK JAMINAN TRANSPARAN
+            style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
         >
             <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-fade-in-down">
                 <div className="bg-[#1A2A80] p-4 flex justify-between items-center text-white">

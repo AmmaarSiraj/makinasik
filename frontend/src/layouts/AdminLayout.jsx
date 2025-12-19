@@ -18,7 +18,7 @@ import {
   FaMoneyBillWave,
 } from 'react-icons/fa';
 
-import logoSikinerja from '../assets/logo.png'; 
+import logoMAKINASIK from '../assets/logo.png'; 
 import PartDetailProfileAdmin from '../components/admin/PartDetailProfileAdmin';
 
 const menuItems = [
@@ -179,14 +179,14 @@ const Sidebar = ({ handleLogout, onMenuClick }) => {
         <div className="inline-block group">
           <div className="w-20 h-20 rounded-2xl bg-white mx-auto border-2 border-white/20 overflow-hidden shadow-lg p-2 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
             <img 
-              src={logoSikinerja} 
-              alt="Logo SIKINERJA" 
+              src={logoMAKINASIK} 
+              alt="Logo MAKINASIK" 
               className="w-full h-full object-contain" 
             />
           </div>
         </div>
-        <h1 className="mt-4 text-2xl font-extrabold tracking-wider">SIKINERJA</h1>
-        <p className="text-xs font-medium text-blue-200 mt-1">Sistem Manajemen Kinerja Mitra</p>
+        <h1 className="mt-4 text-2xl font-extrabold tracking-wider">MAKINASIK</h1>
+        <p className="text-xs font-medium text-blue-200 mt-1">Manajemen Kinerja dan Administrasi Mitra Statistik</p>
       </div>
 
       <nav className="flex-1 py-6 space-y-2 overflow-y-auto no-scrollbar relative z-10">
