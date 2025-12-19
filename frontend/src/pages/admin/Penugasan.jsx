@@ -1,5 +1,4 @@
-// src/pages/admin/Penugasan.jsx
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Swal from 'sweetalert2'; 
@@ -15,8 +14,9 @@ import {
   FaTrash,
   FaSearch, 
   FaFilter,
-  FaCheckCircle, // Icon untuk Setujui
-  FaUndoAlt      // Icon untuk Batalkan
+  FaCheckCircle,
+  FaUndoAlt,
+  FaTimes
 } from 'react-icons/fa';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
@@ -25,25 +25,27 @@ const getToken = () => localStorage.getItem('token');
 const Penugasan = () => {
   const navigate = useNavigate();
 
-  // --- STATE DATA ---
   const [allPenugasan, setAllPenugasan] = useState([]); 
   const [isLoading, setIsLoading] = useState(true);
 
-  // --- STATE FILTER & SEARCH ---
   const [searchTerm, setSearchTerm] = useState('');
   const [filterYear, setFilterYear] = useState('');
 
-  // --- STATE DROPDOWN & CACHE ---
   const [expandedTaskId, setExpandedTaskId] = useState(null); 
   const [membersCache, setMembersCache] = useState({});
   const [loadingMembers, setLoadingMembers] = useState(false);
 
-  // --- STATE IMPORT & PROCESS ---
-  const [uploading, setUploading] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false); // Untuk loading tombol setujui
-  const fileInputRef = useRef(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importKegiatanList, setImportKegiatanList] = useState([]);
+  const [importSubList, setImportSubList] = useState([]);
+  
+  const [selectedKegiatanId, setSelectedKegiatanId] = useState('');
+  const [selectedSubId, setSelectedSubId] = useState('');
+  const [importFile, setImportFile] = useState(null);
+  const [isPreviewing, setIsPreviewing] = useState(false);
 
-  // Helper Format Tanggal
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleDateString('id-ID', { 
@@ -53,7 +55,6 @@ const Penugasan = () => {
     });
   };
 
-  // 1. Fetch Data
   const fetchPenugasan = async () => {
     setIsLoading(true);
     try {
@@ -67,7 +68,6 @@ const Penugasan = () => {
         
         setAllPenugasan(resPenugasan.data.data); 
 
-        // Preload Anggota ke Cache
         const membersMap = {};
         const rawKelompok = resKelompok.data.data || resKelompok.data;
 
@@ -97,7 +97,105 @@ const Penugasan = () => {
     fetchPenugasan();
   }, []);
 
-  // 2. LOGIKA FILTER & GROUPING
+  useEffect(() => {
+    if (showImportModal) {
+        axios.get(`${API_URL}/api/kegiatan`, { headers: { Authorization: `Bearer ${getToken()}` } })
+            .then(res => setImportKegiatanList(res.data.data || res.data))
+            .catch(err => console.error(err));
+    }
+  }, [showImportModal]);
+
+  const handleKegiatanChange = async (e) => {
+    const kId = e.target.value;
+    setSelectedKegiatanId(kId);
+    setSelectedSubId('');
+    setImportSubList([]);
+    
+    if (kId) {
+        try {
+            const res = await axios.get(`${API_URL}/api/subkegiatan/kegiatan/${kId}`, { 
+                headers: { Authorization: `Bearer ${getToken()}` } 
+            });
+            setImportSubList(res.data.data || res.data);
+        } catch (err) {
+            console.error(err);
+        }
+    }
+  };
+
+  const handleProcessImport = async () => {
+    if (!selectedSubId || !importFile) {
+        Swal.fire('Error', 'Pilih kegiatan dan file terlebih dahulu!', 'error');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', importFile);
+    formData.append('id_subkegiatan', selectedSubId);
+
+    setIsPreviewing(true);
+    try {
+        const token = getToken();
+        const res = await axios.post(`${API_URL}/api/penugasan/preview-import`, formData, {
+            headers: { 
+                'Content-Type': 'multipart/form-data',
+                Authorization: `Bearer ${token}` 
+            }
+        });
+
+        const { valid_data, warnings, subkegiatan } = res.data;
+
+        setShowImportModal(false);
+
+        if (warnings.length > 0) {
+            await Swal.fire({
+                title: 'Peringatan Validasi Import',
+                html: `
+                    <div style="text-align:left; max-height: 200px; overflow-y:auto; font-size:12px;">
+                        <p class="font-bold mb-2 text-red-600">${warnings.length} Baris Data Ditolak:</p>
+                        <ul class="list-disc pl-4 text-gray-700">
+                            ${warnings.map(w => `<li>${w}</li>`).join('')}
+                        </ul>
+                        <p class="mt-4 font-bold text-green-600">
+                            ${valid_data.length} data valid siap diproses. Lanjutkan?
+                        </p>
+                    </div>
+                `,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Ya, Lanjutkan',
+                cancelButtonText: 'Batal',
+                width: '600px'
+            }).then((result) => {
+                if (result.isConfirmed && valid_data.length > 0) {
+                    goToTambahPenugasan(subkegiatan, valid_data);
+                }
+            });
+        } else {
+            if (valid_data.length > 0) {
+                goToTambahPenugasan(subkegiatan, valid_data);
+            } else {
+                Swal.fire('Info', 'Tidak ada data valid yang ditemukan dalam file.', 'info');
+            }
+        }
+
+    } catch (err) {
+        console.error(err);
+        Swal.fire('Gagal', err.response?.data?.message || 'Terjadi kesalahan saat memproses file.', 'error');
+    } finally {
+        setIsPreviewing(false);
+    }
+  };
+
+  const goToTambahPenugasan = (subkegiatanData, importedMembers) => {
+    navigate('/admin/penugasan/tambah', { 
+        state: {
+            preSelectedSubKegiatan: subkegiatanData,
+            importedMembers: importedMembers
+        }
+    });
+  };
+
   const availableYears = useMemo(() => {
     const years = new Set();
     allPenugasan.forEach(item => {
@@ -138,7 +236,6 @@ const Penugasan = () => {
 
   }, [allPenugasan, searchTerm, filterYear]);
 
-  // 3. Handle Klik Baris
   const toggleRow = async (id_penugasan) => {
     if (expandedTaskId === id_penugasan) {
       setExpandedTaskId(null);
@@ -162,41 +259,30 @@ const Penugasan = () => {
     }
   };
 
-  // --- NEW: HANDLE STATUS CHANGE (SINGLE) ---
   const handleStatusChange = async (e, id, currentStatus) => {
     e.stopPropagation();
     
-    // Tentukan status target
     const newStatus = currentStatus === 'disetujui' ? 'menunggu' : 'disetujui';
-    const actionText = newStatus === 'disetujui' ? 'Menyetujui' : 'Membatalkan';
 
     try {
-      // Optimistic update (Update UI dulu biar cepat)
       setAllPenugasan(prev => prev.map(p => 
         p.id_penugasan === id ? { ...p, status_penugasan: newStatus } : p
       ));
 
       const token = getToken();
-      // SESUAIKAN endpoint ini dengan route backend Anda.
-      // Bisa PUT /api/penugasan/{id} dengan body { status_penugasan: newStatus }
       await axios.put(`${API_URL}/api/penugasan/${id}`, 
         { status_penugasan: newStatus }, 
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
-      // Swal.fire('Sukses', `Berhasil ${actionText} penugasan.`, 'success'); 
-      // (Optional: Alert dimatikan agar tidak mengganggu flow klik cepat)
-
     } catch (err) {
       console.error(err);
       Swal.fire('Gagal', `Gagal mengubah status.`, 'error');
-      fetchPenugasan(); // Revert data jika gagal
+      fetchPenugasan();
     }
   };
 
-  // --- NEW: HANDLE STATUS CHANGE (GROUP) ---
   const handleGroupStatusChange = async (subItems) => {
-    // 1. Cek apakah semua sudah disetujui?
     const allApproved = subItems.every(item => item.status_penugasan === 'disetujui');
     const targetStatus = allApproved ? 'menunggu' : 'disetujui';
     const actionText = targetStatus === 'disetujui' ? 'Menyetujui Semua' : 'Membatalkan Semua';
@@ -216,9 +302,7 @@ const Penugasan = () => {
             const token = getToken();
             const config = { headers: { Authorization: `Bearer ${token}` } };
             
-            // Loop request (karena backend belum tentu punya endpoint bulk update)
             const promises = subItems.map(item => {
-                // Hanya update jika statusnya berbeda dengan target
                 if (item.status_penugasan !== targetStatus) {
                     return axios.put(`${API_URL}/api/penugasan/${item.id_penugasan}`, {
                         status_penugasan: targetStatus
@@ -230,7 +314,7 @@ const Penugasan = () => {
             await Promise.all(promises);
 
             Swal.fire('Sukses', 'Status grup berhasil diperbarui!', 'success');
-            fetchPenugasan(); // Refresh data total
+            fetchPenugasan();
 
         } catch (err) {
             console.error(err);
@@ -241,7 +325,6 @@ const Penugasan = () => {
     }
   };
 
-  // --- HANDLE ACTIONS LAINNYA ---
   const handleDelete = async (e, id) => {
     e.stopPropagation();
     const result = await Swal.fire({
@@ -274,10 +357,10 @@ const Penugasan = () => {
   };
 
   const handleDownloadTemplate = () => {
-    const csvHeader = "nik,kegiatan_id,nama_kegiatan_ref,kode_jabatan,volume_tugas";
+    const csvHeader = "sobat_id,nama_lengkap,posisi";
     const csvRows = [
-      "'3301020304050002,sub1,Persiapan Awal,PML-01,10",
-      "'6253761257157635,sub2,Pencacahan,PPL-01,50"
+      "337322040034,Trian Yunita Hestiarini,Petugas Pendataan Lapangan (PPL Survei)",
+      "337322040036,TRIYANI WIDYASTUTI,Petugas Pendataan Lapangan (PPL Survei)"
     ];
     const csvContent = "data:text/csv;charset=utf-8," + csvHeader + "\n" + csvRows.join("\n");
     const encodedUri = encodeURI(csvContent);
@@ -289,42 +372,10 @@ const Penugasan = () => {
     document.body.removeChild(link);
   };
 
-  const handleImportClick = () => { fileInputRef.current.click(); };
-
-  const handleFileChange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const formData = new FormData();
-    formData.append('file', file);
-    setUploading(true);
-    try {
-      const token = getToken();
-      const response = await axios.post(`${API_URL}/api/penugasan/import`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data', 'Authorization': `Bearer ${token}` }
-      });
-      const { successCount, failCount } = response.data;
-      Swal.fire({
-        title: 'Import Selesai',
-        html: `<pre style="text-align:left; font-size:12px">✅ Sukses: ${successCount}\n❌ Gagal: ${failCount}</pre>`,
-        icon: failCount > 0 ? 'warning' : 'success'
-      });
-      fetchPenugasan(); 
-      setMembersCache({}); 
-    } catch (err) {
-      Swal.fire('Error', 'Gagal mengimpor data.', 'error');
-    } finally {
-      setUploading(false);
-      e.target.value = null; 
-    }
-  };
-
   if (isLoading) return <div className="text-center py-10 text-gray-500">Memuat data penugasan...</div>;
 
   return (
     <div className="w-full">
-      <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv, .xlsx, .xls" className="hidden" />
-
-      {/* --- HEADER ACTIONS --- */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
         <div className="text-gray-500 text-sm">
           Kelola tim dan alokasi mitra untuk setiap kegiatan.
@@ -333,8 +384,8 @@ const Penugasan = () => {
           <button onClick={handleDownloadTemplate} className="flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 transition shadow-sm">
             <FaDownload /> Template CSV
           </button>
-          <button onClick={handleImportClick} disabled={uploading} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm disabled:opacity-50">
-            <FaFileUpload /> {uploading ? '...' : 'Import Excel'}
+          <button onClick={() => setShowImportModal(true)} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm">
+            <FaFileUpload /> Import Penugasan
           </button>
           <Link to="/admin/penugasan/tambah" className="flex items-center gap-2 bg-[#1A2A80] hover:bg-blue-900 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm">
             <FaPlus /> Buat Manual
@@ -342,7 +393,6 @@ const Penugasan = () => {
         </div>
       </div>
 
-      {/* --- SEARCH & FILTER SECTION --- */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
          <div className="relative w-full md:w-1/2">
             <FaSearch className="absolute left-3 top-3 text-gray-400" />
@@ -367,7 +417,6 @@ const Penugasan = () => {
          </div>
       </div>
 
-      {/* --- LIST PENUGASAN (GROUPED & FILTERED) --- */}
       <div className="space-y-6">
         {Object.keys(groupedPenugasan).length === 0 ? (
           <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300 text-gray-400 italic">
@@ -376,13 +425,11 @@ const Penugasan = () => {
         ) : (
           Object.entries(groupedPenugasan).map(([kegiatanName, subItems]) => {
             
-            // Logic Tombol Grup: Cek apakah semua item sudah 'disetujui'
             const allApproved = subItems.length > 0 && subItems.every(i => i.status_penugasan === 'disetujui');
             
             return (
               <div key={kegiatanName} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 
-                {/* Header Grup (Nama Survei/Sensus) & Tombol Grup */}
                 <div className="bg-gray-50/50 px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center gap-3">
                    <div className="flex items-center gap-3 flex-1">
                       <span className="text-[#1A2A80]"><FaClipboardList size={18} /></span>
@@ -392,7 +439,6 @@ const Penugasan = () => {
                       </span>
                    </div>
 
-                   {/* TOMBOL AKSI GRUP */}
                    <button 
                       onClick={() => handleGroupStatusChange(subItems)}
                       disabled={isProcessing}
@@ -413,25 +459,21 @@ const Penugasan = () => {
                    </button>
                 </div>
 
-                {/* List Kegiatan */}
                 <div className="divide-y divide-gray-100">
                   {subItems.map((task) => {
                     const isOpen = expandedTaskId === task.id_penugasan;
                     const members = membersCache[task.id_penugasan] || [];
                     const membersCount = members.length;
                     
-                    // Logic Status Single
                     const isApproved = task.status_penugasan === 'disetujui';
 
                     return (
                       <div key={task.id_penugasan} className="group">
                         
-                        {/* Baris Utama */}
                         <div 
                           onClick={() => toggleRow(task.id_penugasan)} 
                           className={`px-6 py-4 cursor-pointer transition-colors flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${isOpen ? 'bg-blue-50/40' : 'hover:bg-gray-50'}`}
                         >
-                          {/* Kiri: Info Kegiatan */}
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-1">
                               <div className={`p-1 rounded-full transition-transform duration-200 ${isOpen ? 'rotate-180 text-[#1A2A80] bg-blue-100' : 'text-gray-400'}`}>
@@ -441,7 +483,6 @@ const Penugasan = () => {
                                   {task.nama_sub_kegiatan}
                               </h3>
                               
-                              {/* BADGE STATUS */}
                               <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border uppercase
                                 ${isApproved 
                                   ? 'bg-green-50 text-green-600 border-green-100' 
@@ -461,7 +502,6 @@ const Penugasan = () => {
                             </div>
                           </div>
 
-                          {/* Kanan: Info Anggota & Tombol Aksi */}
                           <div className="flex items-center gap-4 min-w-fit">
                               <div className="text-xs font-medium text-gray-400 group-hover:text-[#1A2A80] transition-colors flex items-center gap-2">
                                   <FaUsers /> {membersCount} Anggota
@@ -469,7 +509,6 @@ const Penugasan = () => {
 
                               <div className="flex items-center gap-1 border-l pl-4 border-gray-200">
                                   
-                                  {/* TOMBOL SETUJUI / BATALKAN (PER BARIS) */}
                                   <button 
                                     onClick={(e) => handleStatusChange(e, task.id_penugasan, task.status_penugasan)}
                                     className={`p-2 rounded-full transition ${isApproved ? 'text-amber-500 hover:bg-amber-100' : 'text-green-600 hover:bg-green-100'}`}
@@ -488,7 +527,6 @@ const Penugasan = () => {
                           </div>
                         </div>
                         
-                        {/* Konten Detail (Accordion) */}
                         {isOpen && (
                           <div className="bg-gray-50/30 px-6 py-5 border-t border-gray-100 text-sm animate-fade-in-down pl-6 sm:pl-14">
                              <div className="flex justify-between items-center mb-4">
@@ -546,6 +584,83 @@ const Penugasan = () => {
           })
         )}
       </div>
+
+      {showImportModal && (
+        <div 
+            className="fixed inset-0 z-50 flex items-center justify-center p-4" 
+            style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }} // INLINE STYLE UNTUK JAMINAN TRANSPARAN
+        >
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-fade-in-down">
+                <div className="bg-[#1A2A80] p-4 flex justify-between items-center text-white">
+                    <h3 className="font-bold">Import Data Penugasan</h3>
+                    <button onClick={() => setShowImportModal(false)} className="hover:text-red-300"><FaTimes /></button>
+                </div>
+
+                <div className="p-6 space-y-4">
+                    
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Pilih Survei/Sensus (Induk)</label>
+                        <select 
+                            className="w-full border rounded p-2 text-sm"
+                            value={selectedKegiatanId}
+                            onChange={handleKegiatanChange}
+                        >
+                            <option value="">-- Pilih Kegiatan Induk --</option>
+                            {importKegiatanList.map(k => (
+                                <option key={k.id} value={k.id}>{k.nama_kegiatan}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Pilih Kegiatan</label>
+                        <select 
+                            className="w-full border rounded p-2 text-sm"
+                            value={selectedSubId}
+                            onChange={(e) => setSelectedSubId(e.target.value)}
+                            disabled={!selectedKegiatanId}
+                        >
+                            <option value="">-- Pilih Sub Kegiatan --</option>
+                            {importSubList.map(sub => (
+                                <option key={sub.id} value={sub.id}>{sub.nama_sub_kegiatan}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:bg-gray-50 transition relative">
+                        <input 
+                            type="file" 
+                            accept=".csv, .xlsx, .xls"
+                            onChange={(e) => setImportFile(e.target.files[0])}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        />
+                        <div className="space-y-2 pointer-events-none">
+                            <FaFileUpload className="mx-auto text-gray-400 text-3xl" />
+                            {importFile ? (
+                                <p className="text-sm font-bold text-green-600">{importFile.name}</p>
+                            ) : (
+                                <p className="text-sm text-gray-500">Klik atau tarik file Excel/CSV ke sini</p>
+                            )}
+                        </div>
+                    </div>
+
+                </div>
+
+                <div className="p-4 bg-gray-50 flex justify-end gap-2 border-t">
+                    <button onClick={() => setShowImportModal(false)} className="px-4 py-2 rounded text-gray-600 hover:bg-gray-200 text-sm">Batal</button>
+                    <button 
+                        onClick={handleProcessImport} 
+                        disabled={isPreviewing || !selectedSubId || !importFile}
+                        className="px-4 py-2 rounded bg-[#1A2A80] text-white hover:bg-blue-900 text-sm font-bold disabled:opacity-50 flex items-center gap-2"
+                    >
+                        {isPreviewing && <span className="animate-spin">↻</span>}
+                        Proses & Lanjut
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
+
     </div>
   );
 };

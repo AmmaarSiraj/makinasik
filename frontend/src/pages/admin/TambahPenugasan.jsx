@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom'; // Tambahkan useLocation
 import Swal from 'sweetalert2';
 import {
   FaArrowRight, FaArrowLeft, FaCheck, FaClipboardList,
@@ -12,6 +12,8 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 const TambahPenugasan = () => {
   const navigate = useNavigate();
+  const location = useLocation(); // Hook untuk menangkap data import
+
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -36,6 +38,7 @@ const TambahPenugasan = () => {
   const [batasHonorPeriode, setBatasHonorPeriode] = useState(0);
   const [mitraIncomeMap, setMitraIncomeMap] = useState({});
 
+  // 1. Fetch Data Master
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -53,13 +56,13 @@ const TambahPenugasan = () => {
           axios.get(`${API_URL}/api/subkegiatan`, { headers })
         ]);
 
-        setListKegiatan(resKeg.data.data);
-        setListMitra(resMitra.data.data);
-        setListHonorarium(resHonor.data.data);
-        setListAturan(resAturan.data.data);
-        setListKelompok(resKelompok.data.data);
-        setListPenugasan(resPenugasan.data.data);
-        setAllSubKegiatan(resAllSub.data.data);
+        setListKegiatan(resKeg.data.data || resKeg.data);
+        setListMitra(resMitra.data.data || resMitra.data);
+        setListHonorarium(resHonor.data.data || resHonor.data);
+        setListAturan(resAturan.data.data || resAturan.data);
+        setListKelompok(resKelompok.data.data || resKelompok.data);
+        setListPenugasan(resPenugasan.data.data || resPenugasan.data);
+        setAllSubKegiatan(resAllSub.data.data || resAllSub.data);
 
       } catch (err) {
         console.error(err);
@@ -71,6 +74,7 @@ const TambahPenugasan = () => {
     fetchData();
   }, []);
 
+  // 2. Fetch Sub Kegiatan Dropdown saat Kegiatan Berubah
   useEffect(() => {
     const fetchSubDropdown = async () => {
       if (!selectedKegiatanId) {
@@ -82,7 +86,7 @@ const TambahPenugasan = () => {
         const res = await axios.get(`${API_URL}/api/subkegiatan/kegiatan/${selectedKegiatanId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        setListSubKegiatan(res.data);
+        setListSubKegiatan(res.data.data || res.data);
       } catch (err) {
         console.error("Gagal load sub kegiatan:", err);
       }
@@ -90,6 +94,67 @@ const TambahPenugasan = () => {
     fetchSubDropdown();
   }, [selectedKegiatanId]);
 
+  // 3. [NEW] Handle Data dari Import (Auto-Fill)
+  useEffect(() => {
+    // Jalankan logika ini hanya jika loading master data selesai
+    if (!loading && location.state) {
+        const { preSelectedSubKegiatan, importedMembers } = location.state;
+
+        // A. Auto-select Kegiatan & Subkegiatan
+        if (preSelectedSubKegiatan) {
+            setSelectedKegiatanId(preSelectedSubKegiatan.id_kegiatan);
+            setSelectedSubId(preSelectedSubKegiatan.id);
+            setStep(2); // Langsung lompat ke langkah 2
+        }
+
+        // B. Auto-fill Mitra dari Import
+        if (importedMembers && Array.isArray(importedMembers) && listMitra.length > 0) {
+            const mappedMembers = importedMembers.map(imp => {
+                // Cari data lengkap mitra di listMitra (untuk dapat NIK, dll)
+                const fullMitra = listMitra.find(m => m.id === imp.id_mitra);
+                
+                if (fullMitra) {
+                    return {
+                        ...fullMitra,
+                        assignedJabatan: imp.kode_jabatan,
+                        assignedVolume: imp.volume_tugas
+                    };
+                }
+                
+                // Fallback jika tidak ketemu di list (jarang terjadi)
+                return {
+                    id: imp.id_mitra,
+                    nama_lengkap: imp.nama_lengkap,
+                    nik: imp.sobat_id || '-',
+                    assignedJabatan: imp.kode_jabatan,
+                    assignedVolume: imp.volume_tugas
+                };
+            });
+
+            // Hindari duplikasi jika effect jalan 2x
+            setSelectedMitras(prev => {
+                if (prev.length === 0) return mappedMembers;
+                return prev; 
+            });
+
+            // Notifikasi kecil
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: `${importedMembers.length} Mitra berhasil diimpor`,
+                showConfirmButton: false,
+                timer: 3000
+            });
+            
+            // Bersihkan state agar tidak loop (opsional, tergantung preferensi navigasi)
+            // window.history.replaceState({}, document.title);
+        }
+    }
+  }, [loading, location.state, listMitra]);
+
+
+  // 4. Hitung Batas Honor & Pendapatan Mitra
   useEffect(() => {
     if (!selectedSubId) {
       setBatasHonorPeriode(0);

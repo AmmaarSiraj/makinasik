@@ -110,6 +110,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::delete('/penugasan/{id}', [PenugasanController::class, 'destroy']);
     Route::get('/penugasan/{id}/anggota', [PenugasanController::class, 'getAnggota']);
     Route::post('/penugasan/import-perencanaan', [App\Http\Controllers\PenugasanController::class, 'importFromPerencanaan']);
+    Route::post('/penugasan/preview-import', [PenugasanController::class, 'previewImport']);
     
 
 
@@ -125,6 +126,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/perencanaan/{id}', [PerencanaanController::class, 'show']);
     Route::delete('/perencanaan/{id}', [PerencanaanController::class, 'destroy']);
     Route::get('/perencanaan/{id}/anggota', [PerencanaanController::class, 'getAnggota']);
+    Route::post('/perencanaan/preview-import', [PerencanaanController::class, 'previewImport']);
 
     Route::get('/rekap/bulanan', [PerencanaanController::class, 'getRekapBulanan']);
     Route::get('/rekap/mitra', [PerencanaanController::class, 'getRekapMitra']);

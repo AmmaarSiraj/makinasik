@@ -1,5 +1,4 @@
-// src/pages/admin/Perencanaan.jsx
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Swal from 'sweetalert2'; 
@@ -17,7 +16,8 @@ import {
   FaFilter,
   FaMoneyBillWave,
   FaExclamationCircle,
-  FaPaperPlane 
+  FaPaperPlane,
+  FaTimes // Ditambahkan untuk Modal Import
 } from 'react-icons/fa';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
@@ -30,7 +30,7 @@ const Perencanaan = () => {
   const [allPerencanaan, setAllPerencanaan] = useState([]); 
   const [isLoading, setIsLoading] = useState(true);
 
-  // --- STATE INCOME & LIMIT ---
+  // --- STATE INCOME & LIMIT (Untuk Progress Bar) ---
   const [incomeStats, setIncomeStats] = useState({}); // Map: "mitraId-Year-Month" -> TotalIncome
   const [limitMap, setLimitMap] = useState({});       // Map: "Year" -> Limit
 
@@ -43,9 +43,14 @@ const Perencanaan = () => {
   const [membersCache, setMembersCache] = useState({});
   const [loadingMembers, setLoadingMembers] = useState(false);
 
-  // --- STATE IMPORT ---
-  const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef(null);
+  // --- STATE MODAL IMPORT (BARU) ---
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importKegiatanList, setImportKegiatanList] = useState([]);
+  const [importSubList, setImportSubList] = useState([]);
+  const [selectedKegiatanId, setSelectedKegiatanId] = useState('');
+  const [selectedSubId, setSelectedSubId] = useState('');
+  const [importFile, setImportFile] = useState(null);
+  const [isPreviewing, setIsPreviewing] = useState(false);
 
   // Helper Format Tanggal
   const formatDate = (dateString) => {
@@ -152,7 +157,108 @@ const Perencanaan = () => {
     fetchPerencanaan();
   }, []);
 
-  // 2. LOGIKA FILTER
+  // 2. LOGIKA IMPORT (MODAL)
+  useEffect(() => {
+    if (showImportModal) {
+      axios.get(`${API_URL}/api/kegiatan`, { headers: { Authorization: `Bearer ${getToken()}` } })
+        .then(res => setImportKegiatanList(res.data.data || res.data))
+        .catch(err => console.error(err));
+    }
+  }, [showImportModal]);
+
+  const handleKegiatanChange = async (e) => {
+    const kId = e.target.value;
+    setSelectedKegiatanId(kId);
+    setSelectedSubId('');
+    setImportSubList([]);
+    
+    if (kId) {
+        try {
+            const res = await axios.get(`${API_URL}/api/subkegiatan/kegiatan/${kId}`, { 
+                headers: { Authorization: `Bearer ${getToken()}` } 
+            });
+            setImportSubList(res.data.data || res.data);
+        } catch (err) {
+            console.error(err);
+        }
+    }
+  };
+
+  const handleProcessImport = async () => {
+    if (!selectedSubId || !importFile) {
+        Swal.fire('Error', 'Pilih kegiatan dan file terlebih dahulu!', 'error');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', importFile);
+    formData.append('id_subkegiatan', selectedSubId);
+
+    setIsPreviewing(true);
+    try {
+        const token = getToken();
+        // Menggunakan endpoint preview-import yang sudah diperbaiki di controller
+        const res = await axios.post(`${API_URL}/api/perencanaan/preview-import`, formData, {
+            headers: { 
+                'Content-Type': 'multipart/form-data',
+                Authorization: `Bearer ${token}` 
+            }
+        });
+
+        const { valid_data, warnings, subkegiatan } = res.data;
+
+        setShowImportModal(false);
+
+        if (warnings.length > 0) {
+            await Swal.fire({
+                title: 'Peringatan Validasi Import',
+                html: `
+                    <div style="text-align:left; max-height: 200px; overflow-y:auto; font-size:12px;">
+                        <p class="font-bold mb-2 text-red-600">${warnings.length} Baris Data Ditolak:</p>
+                        <ul class="list-disc pl-4 text-gray-700">
+                            ${warnings.map(w => `<li>${w}</li>`).join('')}
+                        </ul>
+                        <p class="mt-4 font-bold text-green-600">
+                            ${valid_data.length} data valid siap diproses. Lanjutkan?
+                        </p>
+                    </div>
+                `,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Ya, Lanjutkan',
+                cancelButtonText: 'Batal',
+                width: '600px'
+            }).then((result) => {
+                if (result.isConfirmed && valid_data.length > 0) {
+                    goToTambahPerencanaan(subkegiatan, valid_data);
+                }
+            });
+        } else {
+            if (valid_data.length > 0) {
+                goToTambahPerencanaan(subkegiatan, valid_data);
+            } else {
+                Swal.fire('Info', 'Tidak ada data valid yang ditemukan dalam file.', 'info');
+            }
+        }
+
+    } catch (err) {
+        console.error(err);
+        Swal.fire('Gagal', err.response?.data?.message || 'Terjadi kesalahan saat memproses file.', 'error');
+    } finally {
+        setIsPreviewing(false);
+    }
+  };
+
+  const goToTambahPerencanaan = (subkegiatanData, importedMembers) => {
+    navigate('/admin/perencanaan/tambah', { 
+        state: {
+            preSelectedSubKegiatan: subkegiatanData,
+            importedMembers: importedMembers
+        }
+    });
+  };
+
+  // 3. LOGIKA FILTER & SORT
   const availableYears = useMemo(() => {
     const years = new Set();
     allPerencanaan.forEach(item => {
@@ -247,9 +353,6 @@ const Perencanaan = () => {
     navigate(`/admin/perencanaan/edit/${id}`);
   };
 
-  // =========================================================================
-  // [MODIFIKASI] FITUR TERUSKAN KE PENUGASAN DENGAN VALIDASI
-  // =========================================================================
   const handleForwardToPenugasan = async (e, idsArray, title) => {
     e.stopPropagation();
 
@@ -281,20 +384,15 @@ const Perencanaan = () => {
                 const totalIncome = incomeStats[key] || 0;
                 
                 if (totalIncome > monthlyLimit) {
-                    // Gunakan Set/Flag agar tidak spam error nama sama berkali-kali jika batch
-                    // Disini kita push string simple
                     errorMessages.push(`❌ <b>${member.nama_lengkap}</b>: Pendapatan (${formatRupiah(totalIncome)}) melebihi batas.`);
                 } 
-                // Opsional: Warning jika pendapatan sangat rendah (misal 0), tapi biasanya Volume < Target sudah mengcover ini.
             });
         }
     });
 
     // 2. JIKA ADA ERROR (BLOCKER)
     if (errorMessages.length > 0) {
-        // Hilangkan duplikat pesan jika perlu
         const uniqueErrors = [...new Set(errorMessages)];
-        
         return Swal.fire({
             title: 'Tidak Bisa Meneruskan',
             html: `<div style="text-align:left; font-size:13px;">Terdapat pelanggaran batas:<br/><br/>${uniqueErrors.join('<br/>')}</div>`,
@@ -306,13 +404,12 @@ const Perencanaan = () => {
     // 3. JIKA ADA WARNING (KONFIRMASI)
     if (warningMessages.length > 0) {
         const uniqueWarnings = [...new Set(warningMessages)];
-        
         const confirmResult = await Swal.fire({
             title: 'Peringatan: Belum Sempurna',
             html: `<div style="text-align:left; font-size:13px;">Data belum mencapai target/batas:<br/><br/>${uniqueWarnings.join('<br/>')}<br/><br/><b>Apakah Anda yakin tetap ingin meneruskan?</b></div>`,
             icon: 'warning',
             showCancelButton: true,
-            confirmButtonColor: '#f59e0b', // Yellow/Orange
+            confirmButtonColor: '#f59e0b', 
             cancelButtonColor: '#d33',
             confirmButtonText: 'Ya, Teruskan Saja',
             cancelButtonText: 'Batal'
@@ -321,8 +418,7 @@ const Perencanaan = () => {
         if (!confirmResult.isConfirmed) return;
     }
 
-    // 4. JIKA LOLOS SEMUA VALIDASI (atau Warning dikonfirmasi) -> Eksekusi API
-    // Konfirmasi standar terakhir
+    // 4. JIKA LOLOS
     if (warningMessages.length === 0) {
         const finalConfirm = await Swal.fire({
             title: 'Teruskan ke Penugasan?',
@@ -355,11 +451,11 @@ const Perencanaan = () => {
   };
 
   const handleDownloadTemplate = () => {
-    const csvHeader = "nik,kegiatan_id,nama_kegiatan_ref,kode_jabatan,volume_tugas";
+    // Template sederhana
+    const csvHeader = "sobat_id,nama_lengkap,posisi";
     const csvRows = [
-      "'3301020304050002,sub1,Persiapan Awal,PML-01,10",
-      "'6253761257157635,sub2,Pencacahan,PPL-01,50",
-      "'3322122703210001,sub3,Pengolahan,ENT-01,200"
+      "337322040034,Trian Yunita Hestiarini,Petugas Pendataan Lapangan (PPL Survei)",
+      "337322040036,TRIYANI WIDYASTUTI,Petugas Pemeriksaan Lapangan (PML Survei)"
     ];
     const csvContent = "data:text/csv;charset=utf-8," + csvHeader + "\n" + csvRows.join("\n");
     const encodedUri = encodeURI(csvContent);
@@ -371,41 +467,10 @@ const Perencanaan = () => {
     document.body.removeChild(link);
   };
 
-  const handleImportClick = () => { fileInputRef.current.click(); };
-
-  const handleFileChange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const formData = new FormData();
-    formData.append('file', file);
-    setUploading(true);
-    try {
-      const token = getToken();
-      const response = await axios.post(`${API_URL}/api/perencanaan/import`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data', 'Authorization': `Bearer ${token}` }
-      });
-      const { successCount, failCount } = response.data;
-      Swal.fire({
-        title: 'Import Selesai',
-        html: `<pre style="text-align:left; font-size:12px">✅ Sukses: ${successCount}\n❌ Gagal: ${failCount}</pre>`,
-        icon: failCount > 0 ? 'warning' : 'success'
-      });
-      fetchPerencanaan(); 
-      setMembersCache({}); 
-    } catch (err) {
-      Swal.fire('Error', 'Gagal mengimpor data.', 'error');
-    } finally {
-      setUploading(false);
-      e.target.value = null; 
-    }
-  };
-
   if (isLoading) return <div className="text-center py-10 text-gray-500">Memuat data Perencanaan...</div>;
 
   return (
     <div className="w-full">
-      <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv, .xlsx, .xls" className="hidden" />
-
       {/* --- HEADER ACTIONS --- */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
         <div className="text-gray-500 text-sm">
@@ -415,8 +480,9 @@ const Perencanaan = () => {
           <button onClick={handleDownloadTemplate} className="flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 transition shadow-sm">
             <FaDownload /> Template CSV
           </button>
-          <button onClick={handleImportClick} disabled={uploading} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm disabled:opacity-50">
-            <FaFileUpload /> {uploading ? '...' : 'Import Excel'}
+          {/* TOMBOL IMPORT MEMBUKA MODAL */}
+          <button onClick={() => setShowImportModal(true)} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm">
+            <FaFileUpload /> Import Excel
           </button>
           <Link to="/admin/perencanaan/tambah" className="flex items-center gap-2 bg-[#1A2A80] hover:bg-blue-900 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm">
             <FaPlus /> Buat Manual
@@ -671,6 +737,84 @@ const Perencanaan = () => {
           ))
         )}
       </div>
+
+      {/* --- MODAL IMPORT POPUP --- */}
+      {showImportModal && (
+        <div 
+            className="fixed inset-0 z-50 flex items-center justify-center p-4" 
+            style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }} 
+        >
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-fade-in-down">
+                <div className="bg-[#1A2A80] p-4 flex justify-between items-center text-white">
+                    <h3 className="font-bold">Import Data Perencanaan</h3>
+                    <button onClick={() => setShowImportModal(false)} className="hover:text-red-300"><FaTimes /></button>
+                </div>
+
+                <div className="p-6 space-y-4">
+                    
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Pilih Survei/Sensus (Induk)</label>
+                        <select 
+                            className="w-full border rounded p-2 text-sm"
+                            value={selectedKegiatanId}
+                            onChange={handleKegiatanChange}
+                        >
+                            <option value="">-- Pilih Kegiatan Induk --</option>
+                            {importKegiatanList.map(k => (
+                                <option key={k.id} value={k.id}>{k.nama_kegiatan}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Pilih Kegiatan</label>
+                        <select 
+                            className="w-full border rounded p-2 text-sm"
+                            value={selectedSubId}
+                            onChange={(e) => setSelectedSubId(e.target.value)}
+                            disabled={!selectedKegiatanId}
+                        >
+                            <option value="">-- Pilih Sub Kegiatan --</option>
+                            {importSubList.map(sub => (
+                                <option key={sub.id} value={sub.id}>{sub.nama_sub_kegiatan}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:bg-gray-50 transition relative">
+                        <input 
+                            type="file" 
+                            accept=".csv, .xlsx, .xls"
+                            onChange={(e) => setImportFile(e.target.files[0])}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        />
+                        <div className="space-y-2 pointer-events-none">
+                            <FaFileUpload className="mx-auto text-gray-400 text-3xl" />
+                            {importFile ? (
+                                <p className="text-sm font-bold text-green-600">{importFile.name}</p>
+                            ) : (
+                                <p className="text-sm text-gray-500">Klik atau tarik file Excel/CSV ke sini</p>
+                            )}
+                        </div>
+                    </div>
+
+                </div>
+
+                <div className="p-4 bg-gray-50 flex justify-end gap-2 border-t">
+                    <button onClick={() => setShowImportModal(false)} className="px-4 py-2 rounded text-gray-600 hover:bg-gray-200 text-sm">Batal</button>
+                    <button 
+                        onClick={handleProcessImport} 
+                        disabled={isPreviewing || !selectedSubId || !importFile}
+                        className="px-4 py-2 rounded bg-[#1A2A80] text-white hover:bg-blue-900 text-sm font-bold disabled:opacity-50 flex items-center gap-2"
+                    >
+                        {isPreviewing && <span className="animate-spin">↻</span>}
+                        Proses & Lanjut
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
+
     </div>
   );
 };

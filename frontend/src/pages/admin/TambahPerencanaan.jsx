@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom'; // Tambahkan useLocation
 import Swal from 'sweetalert2';
 import {
   FaArrowRight, FaArrowLeft, FaCheck, FaClipboardList,
@@ -12,6 +12,8 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 const TambahPerencanaan = () => {
   const navigate = useNavigate();
+  const location = useLocation(); // Hook untuk menangkap data import
+
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -56,13 +58,13 @@ const TambahPerencanaan = () => {
           axios.get(`${API_URL}/api/subkegiatan`, { headers })
         ]);
 
-        setListKegiatan(resKeg.data.data);
-        setListMitra(resMitra.data.data);
-        setListHonorarium(resHonor.data.data);
-        setListAturan(resAturan.data.data);
-        setListKelompok(resKelompok.data.data);
-        setListPerencanaan(resPerencanaan.data.data);
-        setAllSubKegiatan(resAllSub.data.data);
+        setListKegiatan(resKeg.data.data || resKeg.data);
+        setListMitra(resMitra.data.data || resMitra.data);
+        setListHonorarium(resHonor.data.data || resHonor.data);
+        setListAturan(resAturan.data.data || resAturan.data);
+        setListKelompok(resKelompok.data.data || resKelompok.data);
+        setListPerencanaan(resPerencanaan.data.data || resPerencanaan.data);
+        setAllSubKegiatan(resAllSub.data.data || resAllSub.data);
 
       } catch (err) {
         console.error(err);
@@ -86,7 +88,7 @@ const TambahPerencanaan = () => {
         const res = await axios.get(`${API_URL}/api/subkegiatan/kegiatan/${selectedKegiatanId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        setListSubKegiatan(res.data);
+        setListSubKegiatan(res.data.data || res.data);
       } catch (err) {
         console.error("Gagal load sub kegiatan:", err);
       }
@@ -94,8 +96,47 @@ const TambahPerencanaan = () => {
     fetchSubDropdown();
   }, [selectedKegiatanId]);
 
-  // 3. HITUNG PENDAPATAN & LIMIT (BULANAN)
-  // [MODIFIKASI: Filter berdasarkan Tahun DAN Bulan yang sama]
+  // 3. [BARU] LOGIKA MENANGKAP DATA IMPORT
+  useEffect(() => {
+    if (!loading && location.state) {
+        const { preSelectedSubKegiatan, importedMembers } = location.state;
+
+        // A. Auto Select Kegiatan & Sub
+        if (preSelectedSubKegiatan) {
+            setSelectedKegiatanId(preSelectedSubKegiatan.id_kegiatan);
+            setSelectedSubId(preSelectedSubKegiatan.id);
+            setStep(2); // Langsung ke step 2
+        }
+
+        // B. Auto Fill Mitra
+        if (importedMembers && Array.isArray(importedMembers) && listMitra.length > 0) {
+            const mappedMembers = importedMembers.map(imp => {
+                const fullMitra = listMitra.find(m => m.id === imp.id_mitra);
+                return {
+                    ...(fullMitra || {}),
+                    id: imp.id_mitra,
+                    nama_lengkap: imp.nama_lengkap || fullMitra?.nama_lengkap,
+                    nik: fullMitra?.nik || imp.sobat_id || '-',
+                    assignedJabatan: imp.kode_jabatan, 
+                    assignedVolume: imp.volume_tugas 
+                };
+            });
+
+            setSelectedMitras(prev => prev.length === 0 ? mappedMembers : prev);
+            
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: `${importedMembers.length} Mitra berhasil diimpor`,
+                showConfirmButton: false,
+                timer: 3000
+            });
+        }
+    }
+  }, [loading, location.state, listMitra]);
+
+  // 4. HITUNG PENDAPATAN & LIMIT (BULANAN)
   useEffect(() => {
     if (!selectedSubId) {
       setBatasHonorPeriode(0);
@@ -106,13 +147,10 @@ const TambahPerencanaan = () => {
     const subInfo = allSubKegiatan.find(s => String(s.id) === String(selectedSubId));
     if (!subInfo || !subInfo.tanggal_mulai) return;
 
-    // Ambil Tahun dan Bulan dari Sub Kegiatan yang dipilih
     const targetDate = new Date(subInfo.tanggal_mulai);
     const targetYear = targetDate.getFullYear().toString();
-    const targetMonth = targetDate.getMonth(); // 0 (Jan) - 11 (Dec)
+    const targetMonth = targetDate.getMonth(); 
 
-    // A. Set Limit (Batas Honor) berdasarkan Tahun di database aturan_periode
-    // Nilai ini akan dianggap sebagai BATAS BULANAN
     const aturan = listAturan.find(r =>
       String(r.tahun) === String(targetYear) ||
       String(r.periode) === String(targetYear)
@@ -124,7 +162,6 @@ const TambahPerencanaan = () => {
       setBatasHonorPeriode(0);
     }
 
-    // B. Hitung Akumulasi Pendapatan Mitra di BULAN & TAHUN yang sama
     const incomeMap = {};
 
     listKelompok.forEach(k => {
@@ -134,12 +171,10 @@ const TambahPerencanaan = () => {
       const sub = allSubKegiatan.find(s => s.id === perencanaan.id_subkegiatan);
       if (!sub || !sub.tanggal_mulai) return;
 
-      // Cek apakah Perencanaan lain ini ada di Bulan & Tahun yang sama
       const itemDate = new Date(sub.tanggal_mulai);
       const itemYear = itemDate.getFullYear().toString();
       const itemMonth = itemDate.getMonth();
 
-      // [FILTER PENTING] Hanya jumlahkan jika Tahun SAMA dan Bulan SAMA
       if (itemYear !== targetYear || itemMonth !== targetMonth) return;
 
       const honor = listHonorarium.find(h => h.id_subkegiatan === sub.id && h.kode_jabatan === k.kode_jabatan);
@@ -156,7 +191,7 @@ const TambahPerencanaan = () => {
 
   }, [selectedSubId, allSubKegiatan, listAturan, listKelompok, listPerencanaan, listHonorarium]);
 
-  // 4. MENGHITUNG TAHUN TARGET (Untuk Filter Mitra di UI)
+  // 5. MENGHITUNG TAHUN TARGET
   const targetYear = useMemo(() => {
     if (!selectedSubId) return null;
     const sub = allSubKegiatan.find(s => String(s.id) === String(selectedSubId));
@@ -164,7 +199,7 @@ const TambahPerencanaan = () => {
     return new Date(sub.tanggal_mulai).getFullYear().toString();
   }, [selectedSubId, allSubKegiatan]);
 
-  // 5. FILTER MITRA SUDAH BERTUGAS DI SUB INI
+  // 6. FILTER MITRA SUDAH BERTUGAS
   const unavailableMitraIds = useMemo(() => {
     if (!selectedSubId) return new Set();
 
@@ -179,7 +214,7 @@ const TambahPerencanaan = () => {
     return new Set(assignedIds);
   }, [selectedSubId, listPerencanaan, listKelompok]);
 
-  // 6. DATA JABATAN & PROGRESS VOLUME
+  // 7. DATA JABATAN & PROGRESS VOLUME
   const availableJabatan = useMemo(() => {
     return listHonorarium.filter(h => String(h.id_subkegiatan) === String(selectedSubId));
   }, [listHonorarium, selectedSubId]);
@@ -212,6 +247,19 @@ const TambahPerencanaan = () => {
       Swal.fire('Perhatian', 'Silakan pilih Kegiatan dan Sub Kegiatan terlebih dahulu.', 'warning');
       return;
     }
+    // Cek Duplikasi Perencanaan di SubKegiatan yang sama (jika ingin membatasi 1 planning per sub)
+    const exist = listPerencanaan.find(p => String(p.id_subkegiatan) === String(selectedSubId));
+    if (exist) {
+        Swal.fire({
+            title: 'Sudah Ada',
+            text: 'Perencanaan untuk sub kegiatan ini sudah dibuat. Anda akan diarahkan ke mode Edit.',
+            icon: 'info',
+            confirmButtonText: 'Ke Halaman Edit'
+        }).then(() => {
+            navigate(`/admin/perencanaan/edit/${exist.id_perencanaan}`);
+        });
+        return;
+    }
     setStep(2);
   };
 
@@ -232,7 +280,6 @@ const TambahPerencanaan = () => {
     ));
   };
 
-  // --- SUBMIT LOGIC ---
   const handleSubmit = async () => {
     if (selectedMitras.length === 0) {
       return Swal.fire('Perhatian', 'Belum ada mitra yang dipilih.', 'warning');
@@ -243,17 +290,12 @@ const TambahPerencanaan = () => {
       return Swal.fire('Data Belum Lengkap', `Harap pilih jabatan dan isi volume tugas (> 0) untuk mitra: ${incompleteMitra.nama_lengkap}`, 'warning');
     }
 
-    // [MODIFIKASI] Hapus blokir jika melebihi batas honor
-    // Kode blokir (return Swal.fire error) dihapus agar tetap bisa disimpan.
-    // Jika ingin memberi peringatan konfirmasi, bisa ditambahkan di sini,
-    // tapi sesuai permintaan "tetap bisa ditambahkan", kita langsung proses simpan.
-
     setSubmitting(true);
     const token = localStorage.getItem('token');
     const user = JSON.parse(localStorage.getItem('user'));
     const headers = { Authorization: `Bearer ${token}` };
 
-    const rawIdPengawas = user?.id;
+    const rawIdPengawas = user?.id; // AMBIL OTOMATIS DARI LOGIN
     const idPengawas = parseInt(rawIdPengawas); 
 
     if (isNaN(idPengawas) || idPengawas < 1) { 
@@ -262,31 +304,6 @@ const TambahPerencanaan = () => {
     }
 
     try {
-      const existingPerencanaan = listPerencanaan.find(
-        p => String(p.id_subkegiatan) === String(selectedSubId)
-      );
-      
-      if (existingPerencanaan) {
-        const idPerencanaanExist = existingPerencanaan.id_perencanaan;
-        const promises = selectedMitras.map(m => {
-          return axios.post(`${API_URL}/api/kelompok-perencanaan`, {
-            id_perencanaan: idPerencanaanExist,
-            id_mitra: m.id,
-            kode_jabatan: m.assignedJabatan,
-            volume_tugas: m.assignedVolume
-          }, { headers });
-        });
-        await Promise.all(promises);
-
-        Swal.fire({
-          title: 'Berhasil',
-          text: `Mitra berhasil ditambahkan ke Perencanaan (ID: ${idPerencanaanExist}).`,
-          icon: 'success',
-          timer: 2000,
-          showConfirmButton: false
-        }).then(() => navigate('/admin/perencanaan'));
-
-      } else {
         const payload = {
           id_subkegiatan: selectedSubId,
           id_pengawas: idPengawas, 
@@ -305,7 +322,6 @@ const TambahPerencanaan = () => {
           timer: 2000,
           showConfirmButton: false
         }).then(() => navigate('/admin/perencanaan'));
-      }
 
     } catch (err) {
       console.error(err);
@@ -331,7 +347,6 @@ const TambahPerencanaan = () => {
     }
   };
 
-  // --- FILTER MITRA (TERMASUK TAHUN AKTIF) ---
   const filteredMitra = listMitra.filter(m => {
     const matchSearch = m.nama_lengkap.toLowerCase().includes(mitraSearch.toLowerCase()) || m.nik.includes(mitraSearch);
     const notSelected = !selectedMitras.some(selected => selected.id === m.id);
@@ -364,7 +379,6 @@ const TambahPerencanaan = () => {
 
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden min-h-[400px] flex flex-col">
 
-        {/* STEP 1: PILIH KEGIATAN */}
         {step === 1 && (
           <div className="p-8 animate-fade-in-up flex-1 flex flex-col">
             <h2 className="text-lg font-bold text-gray-700 mb-6 flex items-center gap-2">
@@ -413,14 +427,12 @@ const TambahPerencanaan = () => {
           </div>
         )}
 
-        {/* STEP 2: PILIH MITRA & VOLUME */}
         {step === 2 && (
           <div className="p-8 animate-fade-in-up flex-1 flex flex-col">
 
             <div className="flex justify-between items-center mb-6">
               <div className='text-sm text-gray-600'>
                 Perencanaan untuk: <span className="font-bold text-[#1A2A80] text-lg block">{allSubKegiatan.find(s => String(s.id) === String(selectedSubId))?.nama_sub_kegiatan}</span>
-                {/* Menampilkan Bulan yang terpilih */}
                 {selectedSubId && (
                     <span className="text-xs text-gray-500 flex items-center gap-1 mt-1">
                         <FaCalendarDay /> Periode: {new Date(allSubKegiatan.find(s => String(s.id) === String(selectedSubId))?.tanggal_mulai).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
@@ -505,7 +517,6 @@ const TambahPerencanaan = () => {
                         filteredMitra.map(m => {
                           const currentIncome = mitraIncomeMap[String(m.id)] || 0;
                           const limit = batasHonorPeriode;
-                          // Label isFull hanya jika limit ada dan tercapai
                           const isFull = limit > 0 && currentIncome >= limit;
                           const percent = limit > 0 ? (currentIncome / limit) * 100 : 0;
 

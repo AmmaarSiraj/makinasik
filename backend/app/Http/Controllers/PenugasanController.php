@@ -5,26 +5,27 @@ namespace App\Http\Controllers;
 use App\Models\Penugasan;
 use App\Models\Perencanaan;
 use App\Models\KelompokPenugasan;
-use App\Models\KelompokPerencanaan;
+use App\Models\Mitra;
+use App\Models\Subkegiatan;
+use App\Models\TahunAktif;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Carbon\Carbon;
+use Maatwebsite\Excel\Facades\Excel; 
 
 class PenugasanController extends Controller
 {
     /**
      * 1. GET ALL PENUGASAN
-     * Mengembalikan data dalam format flat (datar) dengan tanggal yang sudah diformat bersih.
      */
     public function index()
     {
-        // Load relasi nested: subkegiatan -> kegiatan, dan pengawas
         $penugasan = Penugasan::with(['subkegiatan.kegiatan', 'pengawas'])
             ->latest()
             ->get();
 
-        // Transformasi data
         $formattedData = $penugasan->map(function ($item) {
             return $this->formatItem($item);
         });
@@ -33,8 +34,7 @@ class PenugasanController extends Controller
     }
 
     /**
-     * 2. CREATE PENUGASAN
-     * Membuat penugasan baru beserta anggota tim (jika ada).
+     * 2. CREATE PENUGASAN MANUAL
      */
     public function store(Request $request)
     {
@@ -53,13 +53,14 @@ class PenugasanController extends Controller
 
         DB::beginTransaction();
         try {
-            // A. Buat Header Penugasan
+            // Buat Header Penugasan
             $penugasan = Penugasan::create([
                 'id_subkegiatan' => $request->id_subkegiatan,
-                'id_pengawas'    => $request->id_pengawas
+                'id_pengawas'    => $request->id_pengawas,
+                'status_penugasan' => 'menunggu'
             ]);
 
-            // B. Masukkan Anggota (Jika ada)
+            // Masukkan Anggota Tim
             if ($request->has('anggota') && is_array($request->anggota)) {
                 foreach ($request->anggota as $anggota) {
                     $vol = isset($anggota['volume_tugas']) ? intval($anggota['volume_tugas']) : 0;
@@ -75,7 +76,6 @@ class PenugasanController extends Controller
 
             DB::commit();
 
-            // Return data yang baru dibuat dengan format lengkap
             return response()->json([
                 'status' => 'success',
                 'message' => 'Penugasan berhasil dibuat beserta anggota tim.',
@@ -88,13 +88,138 @@ class PenugasanController extends Controller
     }
 
     /**
-     * 3. IMPORT DARI PERENCANAAN
-     * Menyalin data dari Perencanaan ke Penugasan.
+     * 3. PREVIEW IMPORT (FIXED COLUMN NAME & ENCODING)
+     */
+    public function previewImport(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt,xlsx,xls',
+            'id_subkegiatan' => 'required|exists:subkegiatan,id'
+        ]);
+
+        $idSubkegiatan = $request->id_subkegiatan;
+        $subkegiatan = Subkegiatan::findOrFail($idSubkegiatan);
+        $tahunKegiatan = date('Y', strtotime($subkegiatan->tanggal_mulai));
+
+        // A. Ambil Referensi Jabatan & Honor di Subkegiatan ini
+        $allowedJabatan = DB::table('honorarium as h')
+            ->join('jabatan_mitra as j', 'h.kode_jabatan', '=', 'j.kode_jabatan')
+            ->where('h.id_subkegiatan', $idSubkegiatan)
+            ->select('j.nama_jabatan', 'j.kode_jabatan', 'h.tarif')
+            ->get()
+            ->mapWithKeys(function ($item) {
+                return [Str::lower(trim($item->nama_jabatan)) => [
+                    'kode' => $item->kode_jabatan,
+                    'tarif' => $item->tarif,
+                    'nama_resmi' => $item->nama_jabatan
+                ]];
+            });
+
+        // B. Cek Data Existing (untuk validasi duplikat)
+        $existingPenugasan = Penugasan::where('id_subkegiatan', $idSubkegiatan)->first();
+        $existingMitraIds = [];
+        if ($existingPenugasan) {
+            $existingMitraIds = KelompokPenugasan::where('id_penugasan', $existingPenugasan->id)
+                ->pluck('id_mitra')
+                ->toArray();
+        }
+
+        // C. BACA FILE
+        try {
+            $data = Excel::toArray([], $request->file('file'));
+            $rows = $data[0] ?? [];
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Gagal membaca file: ' . $e->getMessage()], 400);
+        }
+
+        if (empty($rows)) {
+            return response()->json(['message' => 'File kosong.'], 400);
+        }
+
+        // Hapus Header
+        $headerRow = array_shift($rows); 
+        
+        $validData = [];
+        $warnings = [];
+
+        foreach ($rows as $index => $row) {
+            if (count($row) < 3 || (empty($row[0]) && empty($row[1]))) continue;
+
+            $sobatId = trim((string)$row[0]); 
+            $namaLengkap = trim((string)$row[1]);
+            $posisiText = Str::lower(trim((string)$row[2]));
+
+            // 1. Cari Mitra
+            $mitra = Mitra::where('sobat_id', $sobatId)->first();
+            
+            if (!$mitra) {
+                $warnings[] = "Baris " . ($index + 2) . ": Mitra ID '$sobatId' ($namaLengkap) tidak ditemukan.";
+                continue;
+            }
+
+            // 2. Validasi Aktif (FIXED: column 'status' bukan 'status_aktif')
+            $isAktif = TahunAktif::where('user_id', $mitra->id)
+                ->where('tahun', $tahunKegiatan)
+                ->where('status', 'aktif') // <--- PERBAIKAN DI SINI
+                ->exists();
+
+            if (!$isAktif) {
+                $warnings[] = "Baris " . ($index + 2) . ": Mitra '$namaLengkap' TIDAK AKTIF di tahun $tahunKegiatan.";
+                continue;
+            }
+
+            // 3. Validasi Jabatan
+            $matchedJabatan = null;
+            if (isset($allowedJabatan[$posisiText])) {
+                $matchedJabatan = $allowedJabatan[$posisiText];
+            } else {
+                foreach ($allowedJabatan as $key => $val) {
+                    if (str_contains($posisiText, $key) || str_contains($key, $posisiText)) {
+                         $matchedJabatan = $val;
+                         break;
+                    }
+                }
+                
+                if (!$matchedJabatan) {
+                    $warnings[] = "Baris " . ($index + 2) . ": Posisi '$row[2]' tidak terdaftar di honorarium.";
+                    continue;
+                }
+            }
+
+            // 4. Validasi Duplikasi
+            if (in_array($mitra->id, $existingMitraIds)) {
+                $warnings[] = "Baris " . ($index + 2) . ": Mitra '$namaLengkap' sudah ada di tim ini.";
+                continue;
+            }
+
+            $validData[] = [
+                'id_mitra' => $mitra->id,
+                'sobat_id' => $mitra->sobat_id,
+                'nama_lengkap' => $mitra->nama_lengkap,
+                'kode_jabatan' => $matchedJabatan['kode'],
+                'nama_jabatan' => $matchedJabatan['nama_resmi'],
+                'volume_tugas' => 1,
+                'harga_satuan' => $matchedJabatan['tarif']
+            ];
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'subkegiatan' => $subkegiatan,
+            'valid_data' => $validData,
+            'warnings' => $warnings,
+            'total_processed' => count($rows),
+            'total_valid' => count($validData)
+        ]);
+    }
+
+    /**
+     * 4. IMPORT DARI PERENCANAAN
      */
     public function importFromPerencanaan(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'ids_perencanaan' => 'required|array', // Array ID Perencanaan yang mau diteruskan
+            'ids_perencanaan' => 'required|array',
             'ids_perencanaan.*' => 'exists:perencanaan,id',
         ]);
 
@@ -107,31 +232,17 @@ class PenugasanController extends Controller
             $countHeader = 0;
             $countMembers = 0;
 
-            // 1. Loop setiap ID Perencanaan yang dikirim
             foreach ($request->ids_perencanaan as $idPerencanaan) {
-
-                // Ambil Data Perencanaan & Anggotanya (Gunakan 'kelompok' sesuai Model)
                 $perencanaan = Perencanaan::with('kelompok')->find($idPerencanaan);
-
                 if (!$perencanaan) continue;
 
-                // 2. LOGIKA HEADER PENUGASAN (Upsert berdasarkan id_subkegiatan)
                 $penugasan = Penugasan::updateOrCreate(
-                    [
-                        'id_subkegiatan' => $perencanaan->id_subkegiatan
-                    ],
-                    [
-                        'id_pengawas' => $perencanaan->id_pengawas,
-                        'updated_at'  => now()
-                    ]
+                    ['id_subkegiatan' => $perencanaan->id_subkegiatan],
+                    ['id_pengawas' => $perencanaan->id_pengawas, 'updated_at'  => now()]
                 );
                 $countHeader++;
 
-                // 3. LOGIKA ANGGOTA (KELOMPOK PENUGASAN)
-                // Loop menggunakan properti 'kelompok' dari relasi di Model Perencanaan
                 foreach ($perencanaan->kelompok as $anggotaPlan) {
-
-                    // Upsert berdasarkan id_penugasan DAN id_mitra
                     KelompokPenugasan::updateOrCreate(
                         [
                             'id_penugasan' => $penugasan->id,
@@ -146,9 +257,7 @@ class PenugasanController extends Controller
                     $countMembers++;
                 }
             }
-
             DB::commit();
-
             return response()->json([
                 'status' => 'success',
                 'message' => "Berhasil meneruskan data.\n{$countHeader} Kegiatan diproses.\n{$countMembers} Anggota berhasil disinkronisasi."
@@ -160,7 +269,7 @@ class PenugasanController extends Controller
     }
 
     /**
-     * 4. GET SINGLE PENUGASAN
+     * 5. GET DETAIL PENUGASAN
      */
     public function show($id)
     {
@@ -168,13 +277,11 @@ class PenugasanController extends Controller
         if (!$data) {
             return response()->json(['message' => 'Data tidak ditemukan'], 404);
         }
-
         return response()->json(['status' => 'success', 'data' => $data]);
     }
 
     /**
-     * 5. UPDATE PENUGASAN (STATUS & DATA LAIN)
-     * Digunakan untuk mengubah status (menunggu/disetujui) atau mengedit data header.
+     * 6. UPDATE PENUGASAN
      */
     public function update(Request $request, $id)
     {
@@ -183,7 +290,6 @@ class PenugasanController extends Controller
             return response()->json(['message' => 'Data tidak ditemukan'], 404);
         }
 
-        // Validasi input
         $validator = Validator::make($request->all(), [
             'status_penugasan' => 'nullable|in:menunggu,disetujui',
             'id_subkegiatan'   => 'nullable|exists:subkegiatan,id',
@@ -195,26 +301,20 @@ class PenugasanController extends Controller
         }
 
         try {
-            // Update data (hanya field yang dikirim saja)
-            $penugasan->update($request->only([
-                'status_penugasan', 
-                'id_subkegiatan', 
-                'id_pengawas'
-            ]));
+            $penugasan->update($request->only(['status_penugasan', 'id_subkegiatan', 'id_pengawas']));
 
             return response()->json([
                 'status' => 'success',
                 'message' => 'Penugasan berhasil diperbarui.',
-                'data' => $this->formatItem($penugasan) // Return data terbaru dengan format lengkap
+                'data' => $this->formatItem($penugasan)
             ]);
-
         } catch (\Exception $e) {
             return response()->json(['message' => 'Gagal update: ' . $e->getMessage()], 500);
         }
     }
 
     /**
-     * 6. GET ANGGOTA BY PENUGASAN ID
+     * 7. GET ANGGOTA
      */
     public function getAnggota($id)
     {
@@ -223,7 +323,6 @@ class PenugasanController extends Controller
                 ->join('mitra as m', 'kp.id_mitra', '=', 'm.id')
                 ->join('penugasan as p', 'kp.id_penugasan', '=', 'p.id')
                 ->leftJoin('jabatan_mitra as jm', 'kp.kode_jabatan', '=', 'jm.kode_jabatan')
-                // Join ke tabel honorarium untuk ambil tarif
                 ->leftJoin('honorarium as h', function ($join) {
                     $join->on('h.id_subkegiatan', '=', 'p.id_subkegiatan')
                         ->on('h.kode_jabatan', '=', 'kp.kode_jabatan');
@@ -252,12 +351,11 @@ class PenugasanController extends Controller
     }
 
     /**
-     * 7. GET BY MITRA AND PERIODE
+     * 8. GET FOR CETAK SPK (FILTERED)
      */
     public function getByMitraAndPeriode($id_mitra, $periode)
     {
         try {
-            // Periode format: "2025-12"
             $parts = explode('-', $periode);
             if (count($parts) !== 2) {
                 return response()->json(['message' => 'Format periode salah'], 400);
@@ -265,25 +363,23 @@ class PenugasanController extends Controller
             $year = $parts[0];
             $month = $parts[1];
 
-            // Query Kompleks
             $tasks = DB::table('kelompok_penugasan as kp')
                 ->join('penugasan as p', 'kp.id_penugasan', '=', 'p.id')
                 ->join('subkegiatan as s', 'p.id_subkegiatan', '=', 's.id')
                 ->join('kegiatan as k', 's.id_kegiatan', '=', 'k.id')
                 ->leftJoin('jabatan_mitra as jm', 'kp.kode_jabatan', '=', 'jm.kode_jabatan')
-
-                // Join ke Honorarium
                 ->leftJoin('honorarium as h', function ($join) {
                     $join->on('h.id_subkegiatan', '=', 's.id')
                         ->on('h.kode_jabatan', '=', 'kp.kode_jabatan');
                 })
-
-                // Join Satuan Kegiatan lewat Honorarium
                 ->leftJoin('satuan_kegiatan as sat', 'h.id_satuan', '=', 'sat.id')
-
+                
+                // FILTERING
                 ->where('kp.id_mitra', $id_mitra)
                 ->whereYear('s.tanggal_mulai', $year)
                 ->whereMonth('s.tanggal_mulai', $month)
+                ->where('p.status_penugasan', 'disetujui') 
+
                 ->select([
                     's.nama_sub_kegiatan',
                     's.tanggal_mulai',
@@ -291,6 +387,7 @@ class PenugasanController extends Controller
                     'kp.volume_tugas as target_volume',
                     'sat.nama_satuan',
                     'jm.nama_jabatan',
+                    'p.status_penugasan',
                     DB::raw("IFNULL(h.tarif, 0) as harga_satuan"),
                     DB::raw("(kp.volume_tugas * IFNULL(h.tarif, 0)) as total_honor"),
                     DB::raw("COALESCE(h.beban_anggaran) as beban_anggaran")
@@ -308,7 +405,7 @@ class PenugasanController extends Controller
     }
 
     /**
-     * 8. DELETE PENUGASAN
+     * 9. DELETE PENUGASAN
      */
     public function destroy($id)
     {
@@ -321,15 +418,11 @@ class PenugasanController extends Controller
         return response()->json(['status' => 'success', 'message' => 'Penugasan berhasil dihapus.']);
     }
 
-    // =========================================================================
     // HELPER FUNCTIONS
-    // =========================================================================
-
     private function formatSingle($id)
     {
         $item = Penugasan::with(['subkegiatan.kegiatan', 'pengawas'])->find($id);
         if (!$item) return null;
-
         return $this->formatItem($item);
     }
 
@@ -337,29 +430,18 @@ class PenugasanController extends Controller
     {
         return [
             'id_penugasan'         => $item->id,
-            
-            // --- TAMBAHAN: STATUS PENUGASAN ---
             'status_penugasan'     => $item->status_penugasan ?? 'menunggu', 
-            
             'penugasan_created_at' => $item->created_at,
-
-            // Data Subkegiatan
             'id_subkegiatan'       => $item->subkegiatan ? $item->subkegiatan->id : null,
             'nama_sub_kegiatan'    => $item->subkegiatan ? $item->subkegiatan->nama_sub_kegiatan : '-',
-
-            // Format Tanggal Bersih YYYY-MM-DD
             'tanggal_mulai'        => $item->subkegiatan && $item->subkegiatan->tanggal_mulai
                 ? Carbon::parse($item->subkegiatan->tanggal_mulai)->format('Y-m-d')
                 : null,
             'tanggal_selesai'      => $item->subkegiatan && $item->subkegiatan->tanggal_selesai
                 ? Carbon::parse($item->subkegiatan->tanggal_selesai)->format('Y-m-d')
                 : null,
-
-            // Data Kegiatan (Induk)
             'id_kegiatan'          => $item->subkegiatan && $item->subkegiatan->kegiatan ? $item->subkegiatan->kegiatan->id : null,
             'nama_kegiatan'        => $item->subkegiatan && $item->subkegiatan->kegiatan ? $item->subkegiatan->kegiatan->nama_kegiatan : '-',
-
-            // Data Pengawas
             'id_pengawas'          => $item->pengawas ? $item->pengawas->id : null,
             'nama_pengawas'        => $item->pengawas ? $item->pengawas->username : '-',
             'email_pengawas'       => $item->pengawas ? $item->pengawas->email : null,

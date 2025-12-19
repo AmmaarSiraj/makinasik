@@ -6,10 +6,15 @@ use App\Models\Perencanaan;
 use App\Models\KelompokPerencanaan;
 use App\Models\Honorarium;
 use App\Models\AturanPeriode;
+use App\Models\Mitra;
+use App\Models\Subkegiatan;
+use App\Models\TahunAktif;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Carbon\Carbon;
+use Maatwebsite\Excel\Facades\Excel; 
 
 class PerencanaanController extends Controller
 {
@@ -28,7 +33,6 @@ class PerencanaanController extends Controller
 
     public function store(Request $request)
     {
-        // Validasi input standar (kelengkapan data)
         $validator = Validator::make($request->all(), [
             'id_subkegiatan' => 'required|exists:subkegiatan,id',
             'id_pengawas'    => 'required|exists:user,id',
@@ -42,24 +46,18 @@ class PerencanaanController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // Cek duplikasi subkegiatan
         $exists = Perencanaan::where('id_subkegiatan', $request->id_subkegiatan)->first();
         if ($exists) {
             return response()->json(['message' => 'Perencanaan untuk subkegiatan ini sudah ada'], 409);
         }
 
-        // Mulai Transaksi Database
         DB::beginTransaction();
         try {
-            // 1. Buat Header Perencanaan
             $perencanaan = Perencanaan::create([
                 'id_subkegiatan' => $request->id_subkegiatan,
                 'id_pengawas'    => $request->id_pengawas
             ]);
 
-            // 2. Masukkan Anggota
-            // CATATAN: Tidak ada pengecekan batas honor di sini.
-            // Data tetap masuk meski total honor mitra melebihi batas (over limit).
             if ($request->has('anggota') && is_array($request->anggota)) {
                 foreach ($request->anggota as $anggota) {
                     KelompokPerencanaan::create([
@@ -82,6 +80,132 @@ class PerencanaanController extends Controller
             DB::rollBack();
             return response()->json(['error' => 'Gagal membuat perencanaan: ' . $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * FITUR IMPORT (Sama seperti Penugasan)
+     */
+    public function previewImport(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt,xlsx,xls',
+            'id_subkegiatan' => 'required|exists:subkegiatan,id'
+        ]);
+
+        $idSubkegiatan = $request->id_subkegiatan;
+        $subkegiatan = Subkegiatan::findOrFail($idSubkegiatan);
+        $tahunKegiatan = date('Y', strtotime($subkegiatan->tanggal_mulai));
+
+        // 1. Ambil Referensi Jabatan & Honor
+        $allowedJabatan = DB::table('honorarium as h')
+            ->join('jabatan_mitra as j', 'h.kode_jabatan', '=', 'j.kode_jabatan')
+            ->where('h.id_subkegiatan', $idSubkegiatan)
+            ->select('j.nama_jabatan', 'j.kode_jabatan', 'h.tarif')
+            ->get()
+            ->mapWithKeys(function ($item) {
+                return [Str::lower(trim($item->nama_jabatan)) => [
+                    'kode' => $item->kode_jabatan,
+                    'tarif' => $item->tarif,
+                    'nama_resmi' => $item->nama_jabatan
+                ]];
+            });
+
+        // 2. Cek Data Existing di Perencanaan
+        $existingPerencanaan = Perencanaan::where('id_subkegiatan', $idSubkegiatan)->first();
+        $existingMitraIds = [];
+        if ($existingPerencanaan) {
+            $existingMitraIds = KelompokPerencanaan::where('id_perencanaan', $existingPerencanaan->id)
+                ->pluck('id_mitra')
+                ->toArray();
+        }
+
+        // 3. Baca File dengan Library Excel
+        try {
+            $data = Excel::toArray([], $request->file('file'));
+            $rows = $data[0] ?? [];
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Gagal membaca file: ' . $e->getMessage()], 400);
+        }
+
+        if (empty($rows)) {
+            return response()->json(['message' => 'File kosong.'], 400);
+        }
+
+        // Hapus Header
+        $headerRow = array_shift($rows);
+        
+        $validData = [];
+        $warnings = [];
+
+        foreach ($rows as $index => $row) {
+            if (count($row) < 3 || (empty($row[0]) && empty($row[1]))) continue;
+
+            $sobatId = trim((string)$row[0]); 
+            $namaLengkap = trim((string)$row[1]);
+            $posisiText = Str::lower(trim((string)$row[2]));
+
+            // A. Cari Mitra
+            $mitra = Mitra::where('sobat_id', $sobatId)->first();
+            
+            if (!$mitra) {
+                $warnings[] = "Baris " . ($index + 2) . ": Mitra ID '$sobatId' ($namaLengkap) tidak ditemukan.";
+                continue;
+            }
+
+            // B. Validasi Aktif
+            $isAktif = TahunAktif::where('user_id', $mitra->id)
+                ->where('tahun', $tahunKegiatan)
+                ->where('status', 'aktif')
+                ->exists();
+
+            if (!$isAktif) {
+                $warnings[] = "Baris " . ($index + 2) . ": Mitra '$namaLengkap' TIDAK AKTIF di tahun $tahunKegiatan.";
+                continue;
+            }
+
+            // C. Validasi Jabatan
+            $matchedJabatan = null;
+            if (isset($allowedJabatan[$posisiText])) {
+                $matchedJabatan = $allowedJabatan[$posisiText];
+            } else {
+                foreach ($allowedJabatan as $key => $val) {
+                    if (str_contains($posisiText, $key) || str_contains($key, $posisiText)) {
+                         $matchedJabatan = $val;
+                         break;
+                    }
+                }
+                
+                if (!$matchedJabatan) {
+                    $warnings[] = "Baris " . ($index + 2) . ": Posisi '$row[2]' tidak terdaftar di honorarium.";
+                    continue;
+                }
+            }
+
+            // D. Validasi Duplikasi
+            if (in_array($mitra->id, $existingMitraIds)) {
+                $warnings[] = "Baris " . ($index + 2) . ": Mitra '$namaLengkap' sudah ada di perencanaan ini.";
+                continue;
+            }
+
+            $validData[] = [
+                'id_mitra' => $mitra->id,
+                'sobat_id' => $mitra->sobat_id,
+                'nama_lengkap' => $mitra->nama_lengkap,
+                'kode_jabatan' => $matchedJabatan['kode'],
+                'nama_jabatan' => $matchedJabatan['nama_resmi'],
+                'volume_tugas' => 1,
+                'harga_satuan' => $matchedJabatan['tarif']
+            ];
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'subkegiatan' => $subkegiatan,
+            'valid_data' => $validData,
+            'warnings' => $warnings,
+            'total_processed' => count($rows),
+            'total_valid' => count($validData)
+        ]);
     }
 
     public function show($id)
@@ -173,7 +297,6 @@ class PerencanaanController extends Controller
             return response()->json(['message' => 'Terjadi kesalahan: ' . $e->getMessage()], 500);
         }
     }
-    
 
     public function destroy($id)
     {
@@ -186,26 +309,15 @@ class PerencanaanController extends Controller
         return response()->json(['status' => 'success', 'message' => 'Perencanaan berhasil dihapus.']);
     }
 
-    // =========================================================================
-    // HELPER & REKAP LOGIC
-    // =========================================================================
-
-    /**
-     * Mengambil Batas Honor Bulanan yang berlaku pada Tahun tertentu.
-     * Contoh: Input Tahun 2025 -> Output 2.500.000 (Limit per bulan)
-     */
     private function getBatasHonorBulanan($year)
     {
         $aturan = AturanPeriode::where('periode', (string)$year)->first();
-        // Default 0 jika tidak disetting, atau bisa diset angka lain sesuai kebijakan
         return $aturan ? (float)$aturan->batas_honor : 0;
     }
 
     public function getRekapBulanan(Request $request)
     {
         $year = $request->query('year', date('Y'));
-
-        // Ambil batas honor bulanan untuk tahun yang dipilih
         $limitBulanan = $this->getBatasHonorBulanan($year);
 
         $data = DB::table('kelompok_perencanaan as kp')
@@ -225,7 +337,6 @@ class PerencanaanController extends Controller
             ->get();
 
         $monthlyStats = $data->groupBy('bulan')->map(function ($rows, $bulan) use ($limitBulanan) {
-            // Hitung total honor per mitra di bulan ini
             $mitraStats = $rows->groupBy('id_mitra')->map(function ($mitraRows) {
                 return $mitraRows->sum(function ($item) {
                     return $item->volume_tugas * $item->tarif;
@@ -233,8 +344,6 @@ class PerencanaanController extends Controller
             });
 
             $totalHonorSemuaMitra = $mitraStats->sum();
-
-            // Cek apakah ada SATU PUN mitra yang total honornya di bulan ini > limit bulanan
             $isOverLimit = $mitraStats->contains(function ($totalHonorMitra) use ($limitBulanan) {
                 return $totalHonorMitra > $limitBulanan;
             });
@@ -243,7 +352,7 @@ class PerencanaanController extends Controller
                 'bulan_angka' => $bulan,
                 'bulan_nama'  => Carbon::create()->month($bulan)->locale('id')->monthName,
                 'total_honor' => $totalHonorSemuaMitra,
-                'status'      => $isOverLimit ? 'Lebih' : 'Aman', // Lebih jika ada mitra > 2.5jt
+                'status'      => $isOverLimit ? 'Lebih' : 'Aman', 
                 'mitra_count' => $mitraStats->count()
             ];
         })->values();
@@ -319,7 +428,7 @@ class PerencanaanController extends Controller
             ->whereMonth('s.tanggal_mulai', $month)
             ->select([
                 'kp.id as id_kelompok',
-                'kp.kode_jabatan', // [DITAMBAHKAN] Agar frontend tahu kodenya saat save
+                'kp.kode_jabatan', 
                 'k.nama_kegiatan',
                 's.nama_sub_kegiatan',
                 'j.nama_jabatan',
