@@ -1,3 +1,4 @@
+// src/pages/EditPenugasan.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { useNavigate, useParams, Link } from 'react-router-dom';
@@ -112,35 +113,60 @@ const EditPenugasan = () => {
         setCurrentMembers(formattedMembers);
         setSelectedMitras(formattedMembers);
 
+        // --- LOGIKA HITUNG BATAS HONOR & PENDAPATAN ---
         if (subKegiatanData && subKegiatanData.tanggal_mulai) {
-            const tahunKegiatan = new Date(subKegiatanData.tanggal_mulai).getFullYear().toString();
+            const tgl = new Date(subKegiatanData.tanggal_mulai);
             
+            // 1. Tentukan Tahun (untuk Cari Limit)
+            const tahunKegiatan = tgl.getFullYear().toString();
+            
+            // 2. Tentukan Bulan YYYY-MM (untuk Cari Pendapatan)
+            const bulanKegiatan = `${tgl.getFullYear()}-${String(tgl.getMonth() + 1).padStart(2, '0')}`;
+
+            // 3. Ambil Limit dari Aturan Periode (Tahun)
             const aturan = resAturan.data.data.find(r => 
               String(r.tahun) === tahunKegiatan || String(r.periode) === tahunKegiatan
             );
             setBatasHonorPeriode(aturan ? Number(aturan.batas_honor) : 0);
 
+            // 4. Hitung Pendapatan Mitra (Hanya Bulan yang Sama)
             const incomeMap = {};
-            const allKelompok = resKelompok.data.data;
+            const allKelompokData = resKelompok.data.data;
 
-            allKelompok.forEach(k => {
+            allKelompokData.forEach(k => {
+                // SKIP Penugasan ini (karena sedang diedit nilainya)
                 if (String(k.id_penugasan) === String(id)) return;
 
-                const penugasan = resAllPenugasan.data.data.find(p => p.id_penugasan === k.id_penugasan);
-                if (!penugasan) return;
+                // Cari parent Penugasan -> SubKegiatan untuk cek tanggal
+                const parentPenugasan = resAllPenugasan.data.data.find(p => p.id_penugasan === k.id_penugasan);
+                if (!parentPenugasan) return;
 
-                const sub = subKegiatanList.find(s => s.id === penugasan.id_subkegiatan);
+                const sub = subKegiatanList.find(s => s.id === parentPenugasan.id_subkegiatan);
                 if (!sub || !sub.tanggal_mulai) return;
 
-                const subYear = new Date(sub.tanggal_mulai).getFullYear().toString();
-                if (subYear !== tahunKegiatan) return;
+                // Cek apakah BULANNYA sama
+                const subDate = new Date(sub.tanggal_mulai);
+                const subMonth = `${subDate.getFullYear()}-${String(subDate.getMonth() + 1).padStart(2, '0')}`;
+                
+                if (subMonth !== bulanKegiatan) return; // Skip jika beda bulan
 
-                const honor = honorList.find(h => h.id_subkegiatan === sub.id && normalizeKodeJabatan(h.kode_jabatan) === normalizeKodeJabatan(k.kode_jabatan));
-                const tarif = honor ? Number(honor.tarif) : 0;
-                const vol = k.volume_tugas ? Number(k.volume_tugas) : 0;
+                // Jika bulan sama, hitung honornya
+                // Coba cari tarif spesifik di honorarium (jika ada)
+                const honor = honorList.find(h => 
+                    h.id_subkegiatan === sub.id && 
+                    normalizeKodeJabatan(h.kode_jabatan) === normalizeKodeJabatan(k.kode_jabatan)
+                );
+                
+                let nominal = 0;
+                if (honor) {
+                    nominal = Number(honor.tarif) * (Number(k.volume_tugas) || 0);
+                } else {
+                    // Fallback ke total_honor jika ada di data kelompok
+                    nominal = Number(k.total_honor) || 0;
+                }
 
                 const mId = String(k.id_mitra);
-                incomeMap[mId] = (incomeMap[mId] || 0) + (tarif * vol);
+                incomeMap[mId] = (incomeMap[mId] || 0) + nominal;
             });
 
             setMitraIncomeMap(incomeMap);
@@ -240,7 +266,7 @@ const EditPenugasan = () => {
       if (overLimitUser) {
         return Swal.fire(
           'Gagal Menyimpan',
-          `Mitra <b>${overLimitUser.nama_lengkap}</b> melebihi batas honor tahunan ini. Silakan kurangi volume/honor atau hapus dari daftar.`,
+          `Mitra <b>${overLimitUser.nama_lengkap}</b> melebihi batas honor bulanan. Silakan kurangi volume/honor atau hapus dari daftar.`,
           'error'
         );
       }
@@ -435,7 +461,7 @@ const EditPenugasan = () => {
                             <div className="mt-2">
                               <div className="flex justify-between text-[10px] mb-1 text-gray-500">
                                 <span>Rp {currentIncome.toLocaleString('id-ID')}</span>
-                                <span>Limit Thn: Rp {limit.toLocaleString('id-ID')}</span>
+                                <span>Limit Bln: Rp {limit.toLocaleString('id-ID')}</span>
                               </div>
                               <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
                                 <div className={`h-1.5 rounded-full ${percent > 90 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${Math.min(percent, 100)}%` }}></div>
@@ -550,13 +576,13 @@ const EditPenugasan = () => {
                         <div className="mt-3 border-t border-gray-100 pt-2">
                           <div className="flex justify-between text-[10px] text-gray-500 mb-1">
                             <span>Total Proyeksi: {formatRupiah(totalProjected)}</span>
-                            <span>Batas Thn: {formatRupiah(limit)}</span>
+                            <span>Batas Bln: {formatRupiah(limit)}</span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden flex">
                             <div
                               className={`h-full ${percentCurrent > 90 ? 'bg-yellow-500' : 'bg-green-500'}`}
                               style={{ width: `${Math.min(percentCurrent, 100)}%` }}
-                              title={`Pendapatan Saat Ini: ${formatRupiah(currentIncome)}`}
+                              title={`Pendapatan Lain Bulan Ini: ${formatRupiah(currentIncome)}`}
                             ></div>
                             <div
                               className={`h-full ${isOverLimit ? 'bg-red-500' : 'bg-blue-400'}`}
@@ -569,7 +595,7 @@ const EditPenugasan = () => {
 
                           {isOverLimit && (
                             <div className="mt-2 text-[10px] text-red-600 font-bold flex items-center gap-1 animate-pulse justify-end">
-                              <FaExclamationCircle /> Akumulasi pendapatan melebihi batas tahunan!
+                              <FaExclamationCircle /> Akumulasi pendapatan melebihi batas bulanan!
                             </div>
                           )}
 

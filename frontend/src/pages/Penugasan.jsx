@@ -1,3 +1,4 @@
+// src/pages/Penugasan.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -17,7 +18,10 @@ import {
   FaFilter,
   FaCheckCircle,
   FaUndoAlt,
-  FaTimes
+  FaTimes,
+  FaLayerGroup,
+  FaCalendarAlt,
+  FaBriefcase
 } from 'react-icons/fa';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
@@ -36,7 +40,6 @@ const Penugasan = () => {
   const [membersCache, setMembersCache] = useState({});
   const [loadingMembers, setLoadingMembers] = useState(false);
 
-  // --- PERBAIKAN 1: State diganti dari boolean menjadi string (menyimpan nama grup) ---
   const [processingGroup, setProcessingGroup] = useState(null);
   
   const [showImportModal, setShowImportModal] = useState(false);
@@ -48,6 +51,7 @@ const Penugasan = () => {
   const [importFile, setImportFile] = useState(null);
   const [isPreviewing, setIsPreviewing] = useState(false);
 
+  // --- HELPERS ---
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleDateString('id-ID', { 
@@ -57,6 +61,7 @@ const Penugasan = () => {
     });
   };
 
+  // --- API CALLS ---
   const fetchPenugasan = async () => {
     setIsLoading(true);
     try {
@@ -107,6 +112,7 @@ const Penugasan = () => {
     }
   }, [showImportModal]);
 
+  // --- HANDLERS ---
   const handleKegiatanChange = async (e) => {
     const kId = e.target.value;
     setSelectedKegiatanId(kId);
@@ -263,7 +269,6 @@ const Penugasan = () => {
 
   const handleStatusChange = async (e, id, currentStatus) => {
     e.stopPropagation();
-    
     const newStatus = currentStatus === 'disetujui' ? 'menunggu' : 'disetujui';
 
     try {
@@ -284,7 +289,6 @@ const Penugasan = () => {
     }
   };
 
-  // --- PERBAIKAN 2: Menerima parameter groupName ---
   const handleGroupStatusChange = async (subItems, groupName) => {
     const allApproved = subItems.every(item => item.status_penugasan === 'disetujui');
     const targetStatus = allApproved ? 'menunggu' : 'disetujui';
@@ -300,7 +304,7 @@ const Penugasan = () => {
     });
 
     if (result.isConfirmed) {
-        setProcessingGroup(groupName); // Set grup spesifik yang sedang diproses
+        setProcessingGroup(groupName); 
         try {
             const token = getToken();
             const config = { headers: { Authorization: `Bearer ${token}` } };
@@ -323,7 +327,7 @@ const Penugasan = () => {
             console.error(err);
             Swal.fire('Error', 'Terjadi kesalahan saat memproses grup.', 'error');
         } finally {
-            setProcessingGroup(null); // Reset
+            setProcessingGroup(null); 
         }
     }
   };
@@ -361,61 +365,78 @@ const Penugasan = () => {
 
   const handleDownloadTemplate = () => {
     const rows = [
-      { 
-        sobat_id: "337322040034", 
-        nama_lengkap: "Trian Yunita Hestiarini", 
-        posisi: "Petugas Pendataan Lapangan (PPL Survei)" 
-      },
-      { 
-        sobat_id: "337322040036", 
-        nama_lengkap: "TRIYANI WIDYASTUTI", 
-        posisi: "Petugas Pendataan Lapangan (PPL Survei)" 
-      }
+      { sobat_id: "337322040034", nama_lengkap: "Trian Yunita Hestiarini", posisi: "Petugas Pendataan Lapangan (PPL Survei)" },
+      { sobat_id: "337322040036", nama_lengkap: "TRIYANI WIDYASTUTI", posisi: "Petugas Pendataan Lapangan (PPL Survei)" }
     ];
-
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Template");
-
     XLSX.writeFile(workbook, "template_import_penugasan.xlsx");
   };
 
-  if (isLoading) return <div className="text-center py-10 text-gray-500">Memuat data penugasan...</div>;
+  if (isLoading) return (
+    <div className="flex flex-col items-center justify-center min-h-[50vh]">
+        <div className="w-8 h-8 border-4 border-blue-200 border-t-[#1A2A80] rounded-full animate-spin mb-4"></div>
+        <p className="text-gray-500 font-medium">Memuat data penugasan...</p>
+    </div>
+  );
 
   return (
-    <div className="w-full">
-      <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-        <div className="text-gray-500 text-sm">
-          Kelola tim dan alokasi mitra untuk setiap kegiatan.
+    <div className="w-full mx-auto max-w-6xl space-y-8 pt-8 px-4 sm:px-6 pb-20">
+      
+      {/* === HEADER SECTION === */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+        <div>
+           <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 flex items-center gap-3">
+              <FaClipboardList className="text-[#1A2A80]" /> Manajemen Penugasan
+           </h1>
+           <p className="text-gray-600 mt-2 text-sm leading-relaxed max-w-2xl">
+              Kelola tim kerja, alokasi mitra, dan monitoring status penugasan untuk setiap survei dan sensus.
+           </p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={handleDownloadTemplate} className="flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 transition shadow-sm">
-            <FaDownload /> Template Excel
-          </button>
-          <button onClick={() => setShowImportModal(true)} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm">
-            <FaFileUpload /> Import Penugasan
-          </button>
-          <Link to="/penugasan/tambah" className="flex items-center gap-2 bg-[#1A2A80] hover:bg-blue-900 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm">
-            <FaPlus /> Buat Manual
-          </Link>
+
+        <div className="flex flex-wrap gap-2">
+           <button 
+             onClick={handleDownloadTemplate} 
+             className="group inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-600 hover:text-[#1A2A80] hover:border-blue-200 hover:bg-blue-50 transition-all shadow-sm text-sm font-bold"
+           >
+              <FaDownload className="text-gray-400 group-hover:text-[#1A2A80]" /> Template
+           </button>
+           
+           <button 
+             onClick={() => setShowImportModal(true)} 
+             className="inline-flex items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl shadow-md hover:shadow-lg transition-all text-sm font-bold"
+           >
+              <FaFileUpload /> Import
+           </button>
+           
+           <Link 
+             to="/penugasan/tambah" 
+             className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1A2A80] hover:bg-blue-900 text-white rounded-xl shadow-md hover:shadow-lg transition-all text-sm font-bold"
+           >
+              <FaPlus /> Buat Baru
+           </Link>
         </div>
       </div>
 
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
+      {/* === FILTER & SEARCH CARD === */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row gap-4 items-center justify-between">
          <div className="relative w-full md:w-1/2">
-            <FaSearch className="absolute left-3 top-3 text-gray-400" />
+            <FaSearch className="absolute left-4 top-3.5 text-gray-400" />
             <input
               type="text"
-              placeholder="Cari Survei/Sensus, Kegiatan, atau pengawas..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#1A2A80] outline-none text-sm transition bg-gray-50 focus:bg-white"
+              placeholder="Cari Survei, Kegiatan, atau Pengawas..."
+              className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#1A2A80] focus:border-transparent outline-none text-sm transition bg-gray-50 focus:bg-white"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
          </div>
-         <div className="flex items-center gap-3 w-full md:w-auto">
-            <div className="flex items-center gap-2 text-gray-500 text-sm font-bold"><FaFilter /> Tahun:</div>
+         <div className="flex items-center gap-3 w-full md:w-auto bg-gray-50 p-1.5 rounded-xl border border-gray-200">
+            <div className="flex items-center gap-2 text-gray-500 text-xs font-bold px-3 uppercase tracking-wider">
+               <FaFilter /> Tahun
+            </div>
             <select
-               className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#1A2A80] outline-none text-sm bg-white cursor-pointer"
+               className="px-4 py-2 border-0 rounded-lg focus:ring-0 outline-none text-sm bg-white shadow-sm cursor-pointer min-w-[100px] font-medium text-gray-700 hover:bg-gray-50 transition"
                value={filterYear}
                onChange={(e) => setFilterYear(e.target.value)}
             >
@@ -425,159 +446,184 @@ const Penugasan = () => {
          </div>
       </div>
 
+      {/* === DATA CONTENT === */}
       <div className="space-y-6">
         {Object.keys(groupedPenugasan).length === 0 ? (
-          <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300 text-gray-400 italic">
-            {searchTerm || filterYear ? 'Tidak ditemukan data yang sesuai filter.' : 'Belum ada data penugasan. Silakan import atau buat baru.'}
+          <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-gray-300">
+            <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-300">
+                <FaClipboardList size={24} />
+            </div>
+            <p className="text-gray-500 font-medium">
+               {searchTerm || filterYear ? 'Tidak ditemukan data yang sesuai filter.' : 'Belum ada data penugasan.'}
+            </p>
           </div>
         ) : (
           Object.entries(groupedPenugasan).map(([kegiatanName, subItems]) => {
-            
             const allApproved = subItems.length > 0 && subItems.every(i => i.status_penugasan === 'disetujui');
-            
-            // --- PERBAIKAN 3: Cek apakah grup ini yang sedang diproses ---
             const isThisGroupProcessing = processingGroup === kegiatanName;
 
             return (
-              <div key={kegiatanName} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <div key={kegiatanName} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow duration-300">
                 
-                <div className="bg-gray-50/50 px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center gap-3">
-                   <div className="flex items-center gap-3 flex-1">
-                      <span className="text-[#1A2A80]"><FaClipboardList size={18} /></span>
-                      <h2 className="text-lg font-bold text-gray-800">{kegiatanName}</h2>
-                      <span className="text-xs font-medium bg-white text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">
-                          {subItems.length} Tim
-                      </span>
+                {/* --- Group Header --- */}
+                <div className="bg-gray-50/50 px-6 py-5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                   <div className="flex items-center gap-4">
+                      <div className="p-2.5 bg-white border border-gray-200 rounded-lg text-[#1A2A80] shadow-sm">
+                          <FaBriefcase />
+                      </div>
+                      <div>
+                          <h2 className="text-base font-bold text-gray-900">{kegiatanName}</h2>
+                          <div className="flex items-center gap-2 mt-1">
+                              <span className="text-xs text-gray-500 font-medium bg-white px-2 py-0.5 rounded border border-gray-200">
+                                  {subItems.length} Tim Terbentuk
+                              </span>
+                          </div>
+                      </div>
                    </div>
 
                    <button 
-                      // Pass nama kegiatan ke fungsi
                       onClick={() => handleGroupStatusChange(subItems, kegiatanName)}
-                      // Disable hanya jika grup ini sedang diproses (atau ada grup lain jika Anda ingin strict, tapi umumnya per grup saja cukup)
                       disabled={isThisGroupProcessing || processingGroup !== null}
-                      className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition shadow-sm 
+                      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm border
                         ${allApproved 
-                          ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-200' 
-                          : 'bg-green-100 text-green-700 hover:bg-green-200 border border-green-200'}
+                          ? 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100' 
+                          : 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'}
                         disabled:opacity-50 disabled:cursor-not-allowed
                       `}
                    >
                       {isThisGroupProcessing ? 'Memproses...' : (
-                        allApproved ? (
-                          <><FaUndoAlt /> Batalkan Semua</>
-                        ) : (
-                          <><FaCheckCircle /> Setujui Semua</>
-                        )
+                        allApproved ? <><FaUndoAlt /> Batalkan Semua</> : <><FaCheckCircle /> Setujui Semua</>
                       )}
                    </button>
                 </div>
 
-                <div className="divide-y divide-gray-100">
+                {/* --- List Items --- */}
+                <div className="divide-y divide-gray-50">
                   {subItems.map((task) => {
                     const isOpen = expandedTaskId === task.id_penugasan;
                     const members = membersCache[task.id_penugasan] || [];
                     const membersCount = members.length;
-                    
                     const isApproved = task.status_penugasan === 'disetujui';
 
                     return (
-                      <div key={task.id_penugasan} className="group">
+                      <div key={task.id_penugasan} className="group/item transition-colors bg-white hover:bg-blue-50/20">
                         
+                        {/* --- Clickable Row --- */}
                         <div 
                           onClick={() => toggleRow(task.id_penugasan)} 
-                          className={`px-6 py-4 cursor-pointer transition-colors flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${isOpen ? 'bg-blue-50/40' : 'hover:bg-gray-50'}`}
+                          className="px-6 py-5 cursor-pointer flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
                         >
                           <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-1">
-                              <div className={`p-1 rounded-full transition-transform duration-200 ${isOpen ? 'rotate-180 text-[#1A2A80] bg-blue-100' : 'text-gray-400'}`}>
+                            <div className="flex items-center gap-3 mb-2">
+                              <div className={`p-1.5 rounded-full transition-transform duration-300 border border-gray-200 bg-white ${isOpen ? 'rotate-180 text-[#1A2A80] border-blue-200 shadow-sm' : 'text-gray-400'}`}>
                                   <FaChevronDown size={10} />
                               </div>
-                              <h3 className={`font-bold text-sm ${isOpen ? 'text-[#1A2A80]' : 'text-gray-700'}`}>
+                              <h3 className={`font-bold text-sm transition-colors ${isOpen ? 'text-[#1A2A80]' : 'text-gray-800'}`}>
                                   {task.nama_sub_kegiatan}
                               </h3>
                               
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border uppercase
+                              <span className={`text-[10px] px-2.5 py-0.5 rounded-md font-bold border uppercase tracking-wide
                                 ${isApproved 
-                                  ? 'bg-green-50 text-green-600 border-green-100' 
+                                  ? 'bg-green-50 text-green-700 border-green-100' 
                                   : 'bg-gray-100 text-gray-500 border-gray-200'}
                               `}>
                                 {task.status_penugasan || 'Menunggu'}
                               </span>
                             </div>
                             
-                            <div className="pl-7 flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-500">
-                              <span className="flex items-center gap-1">
-                                📅 {formatDate(task.tanggal_mulai)} - {formatDate(task.tanggal_selesai)}
+                            <div className="pl-9 flex flex-wrap gap-x-6 gap-y-2 text-xs text-gray-500">
+                              <span className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded border border-gray-100">
+                                <FaCalendarAlt className="text-gray-400" /> 
+                                {formatDate(task.tanggal_mulai)} - {formatDate(task.tanggal_selesai)}
                               </span>
-                              <span className="flex items-center gap-1">
-                                👤 Pengawas: <span className="font-medium text-gray-700">{task.nama_pengawas}</span>
+                              <span className="flex items-center gap-1.5 px-2 py-1">
+                                <span className="text-gray-400">Pengawas:</span>
+                                <span className="font-bold text-gray-700">{task.nama_pengawas}</span>
                               </span>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-4 min-w-fit">
-                              <div className="text-xs font-medium text-gray-400 group-hover:text-[#1A2A80] transition-colors flex items-center gap-2">
-                                  <FaUsers /> {membersCount} Anggota
+                          {/* --- Actions --- */}
+                          <div className="flex items-center gap-6 min-w-fit pl-9 sm:pl-0">
+                              <div className="text-xs font-bold text-gray-400 group-hover/item:text-[#1A2A80] transition-colors flex items-center gap-2">
+                                  <FaUsers className="text-lg" /> {membersCount} Anggota
                               </div>
 
-                              <div className="flex items-center gap-1 border-l pl-4 border-gray-200">
-                                  
+                              <div className="flex items-center gap-2 border-l pl-4 border-gray-200">
                                   <button 
                                     onClick={(e) => handleStatusChange(e, task.id_penugasan, task.status_penugasan)}
-                                    className={`p-2 rounded-full transition ${isApproved ? 'text-amber-500 hover:bg-amber-100' : 'text-green-600 hover:bg-green-100'}`}
-                                    title={isApproved ? "Batalkan Persetujuan" : "Setujui Penugasan"}
+                                    className={`p-2 rounded-lg transition-all shadow-sm border ${isApproved 
+                                        ? 'bg-white text-amber-500 border-gray-200 hover:bg-amber-50 hover:border-amber-200' 
+                                        : 'bg-white text-green-600 border-gray-200 hover:bg-green-50 hover:border-green-200'}`}
+                                    title={isApproved ? "Batalkan" : "Setujui"}
                                   >
                                     {isApproved ? <FaUndoAlt size={14} /> : <FaCheckCircle size={14} />}
                                   </button>
 
-                                  <button onClick={(e) => handleEdit(e, task.id_penugasan)} className="p-2 text-indigo-500 hover:bg-indigo-100 rounded-full transition" title="Edit Penugasan">
+                                  <button 
+                                    onClick={(e) => handleEdit(e, task.id_penugasan)} 
+                                    className="p-2 bg-white text-indigo-500 border border-gray-200 hover:border-indigo-200 hover:bg-indigo-50 rounded-lg transition-all shadow-sm" 
+                                    title="Edit"
+                                  >
                                       <FaEdit size={14} />
                                   </button>
-                                  <button onClick={(e) => handleDelete(e, task.id_penugasan)} className="p-2 text-red-500 hover:bg-red-100 rounded-full transition" title="Hapus Penugasan">
+                                  
+                                  <button 
+                                    onClick={(e) => handleDelete(e, task.id_penugasan)} 
+                                    className="p-2 bg-white text-red-500 border border-gray-200 hover:border-red-200 hover:bg-red-50 rounded-lg transition-all shadow-sm" 
+                                    title="Hapus"
+                                  >
                                       <FaTrash size={14} />
                                   </button>
                               </div>
                           </div>
                         </div>
                         
+                        {/* --- Expanded Details (Members) --- */}
                         {isOpen && (
-                          <div className="bg-gray-50/30 px-6 py-5 border-t border-gray-100 text-sm animate-fade-in-down pl-6 sm:pl-14">
-                             <div className="flex justify-between items-center mb-4">
-                                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Daftar Anggota Tim:</h4>
+                          <div className="bg-gray-50 border-t border-gray-100 px-6 py-6 pl-6 sm:pl-16 transition-all duration-300 ease-in-out">
+                             <div className="flex justify-between items-center mb-5">
+                                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                                      <FaLayerGroup /> Daftar Anggota Tim
+                                  </h4>
                                   <Link 
                                       to={`/penugasan/detail/${task.id_penugasan}`} 
-                                      className="text-[#1A2A80] font-bold text-xs hover:underline flex items-center gap-1 bg-white px-3 py-1.5 rounded border border-gray-200 shadow-sm hover:bg-blue-50 transition"
+                                      className="group/link text-[#1A2A80] font-bold text-xs hover:underline flex items-center gap-2 bg-white px-4 py-2 rounded-lg border border-gray-200 shadow-sm hover:border-blue-200 transition"
                                   >
-                                      Kelola Tim & Print SPK <FaArrowRight size={10} />
+                                      Detail & Cetak SPK 
+                                      <FaArrowRight size={10} className="group-hover/link:translate-x-1 transition-transform" />
                                   </Link>
                              </div>
 
                              {loadingMembers ? (
-                               <p className="text-gray-400 italic text-center py-4">Memuat data anggota...</p>
+                               <div className="text-center py-4 flex flex-col items-center">
+                                  <div className="w-6 h-6 border-2 border-gray-300 border-t-[#1A2A80] rounded-full animate-spin mb-2"></div>
+                                  <p className="text-gray-400 text-xs italic">Memuat anggota...</p>
+                               </div>
                              ) : (
                                members.length === 0 ? (
-                                 <div className="text-center py-6 bg-white rounded border border-dashed border-gray-200 text-gray-400 text-xs">
-                                   Belum ada anggota di tim ini.
+                                 <div className="text-center py-8 bg-white rounded-xl border border-dashed border-gray-200 text-gray-400 text-xs">
+                                   Belum ada anggota yang ditambahkan ke tim ini.
                                  </div>
                                ) : (
-                                 <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                 <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                    {members.map((m, idx) => (
-                                     <li key={m.id_mitra || idx} className="flex items-center gap-3 bg-white px-3 py-2.5 rounded-lg border border-gray-200 shadow-sm">
-                                       <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-xs font-bold">
+                                     <li key={m.id_mitra || idx} className="flex items-center gap-4 bg-white px-4 py-3 rounded-xl border border-gray-200 shadow-sm hover:border-blue-200 transition-colors">
+                                       <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 flex items-center justify-center text-[#1A2A80] text-sm font-extrabold shadow-inner">
                                           {m.nama_lengkap ? m.nama_lengkap.charAt(0) : '?'}
                                        </div>
                                        <div className="overflow-hidden w-full">
-                                          <div className="flex justify-between items-center w-full">
-                                              <p className="text-gray-700 font-bold text-xs truncate">
+                                          <div className="flex justify-between items-start w-full gap-2">
+                                              <p className="text-gray-800 font-bold text-xs truncate" title={m.nama_lengkap}>
                                                   {m.nama_lengkap || m.nama_mitra || 'Nama Tidak Tersedia'}
                                               </p>
                                               {m.volume_tugas > 0 && (
-                                                  <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 rounded border border-blue-100">
+                                                  <span className="text-[10px] font-bold bg-blue-50 text-[#1A2A80] px-1.5 py-0.5 rounded border border-blue-100 whitespace-nowrap">
                                                       Vol: {m.volume_tugas}
                                                   </span>
                                               )}
                                           </div>
-                                          <p className="text-xs text-gray-400 truncate">
+                                          <p className="text-[11px] text-gray-400 truncate mt-0.5">
                                               {m.nama_jabatan || '-'}
                                           </p>
                                        </div>
@@ -598,23 +644,24 @@ const Penugasan = () => {
         )}
       </div>
 
+      {/* === IMPORT MODAL === */}
       {showImportModal && (
-        <div 
-            className="fixed inset-0 z-50 flex items-center justify-center p-4" 
-            style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
-        >
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-fade-in-down">
-                <div className="bg-[#1A2A80] p-4 flex justify-between items-center text-white">
-                    <h3 className="font-bold">Import Data Penugasan</h3>
-                    <button onClick={() => setShowImportModal(false)} className="hover:text-red-300"><FaTimes /></button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm transition-opacity">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-fade-in-up">
+                <div className="bg-[#1A2A80] px-6 py-4 flex justify-between items-center">
+                    <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                        <FaFileUpload className="text-blue-200" /> Import Data
+                    </h3>
+                    <button onClick={() => setShowImportModal(false)} className="text-white/70 hover:text-white transition-colors">
+                        <FaTimes size={18} />
+                    </button>
                 </div>
 
-                <div className="p-6 space-y-4">
-                    
+                <div className="p-6 space-y-5">
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Pilih Survei/Sensus (Induk)</label>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Pilih Survei/Sensus (Induk)</label>
                         <select 
-                            className="w-full border rounded p-2 text-sm"
+                            className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#1A2A80] focus:border-transparent outline-none transition"
                             value={selectedKegiatanId}
                             onChange={handleKegiatanChange}
                         >
@@ -626,9 +673,9 @@ const Penugasan = () => {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Pilih Kegiatan</label>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Pilih Kegiatan (Sub)</label>
                         <select 
-                            className="w-full border rounded p-2 text-sm"
+                            className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#1A2A80] focus:border-transparent outline-none transition disabled:bg-gray-100 disabled:text-gray-400"
                             value={selectedSubId}
                             onChange={(e) => setSelectedSubId(e.target.value)}
                             disabled={!selectedKegiatanId}
@@ -640,34 +687,46 @@ const Penugasan = () => {
                         </select>
                     </div>
 
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:bg-gray-50 transition relative">
+                    <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:bg-blue-50 hover:border-blue-300 transition-colors relative group">
                         <input 
                             type="file" 
                             accept=".csv, .xlsx, .xls"
                             onChange={(e) => setImportFile(e.target.files[0])}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                         />
-                        <div className="space-y-2 pointer-events-none">
-                            <FaFileUpload className="mx-auto text-gray-400 text-3xl" />
+                        <div className="space-y-3 pointer-events-none">
+                            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto group-hover:bg-blue-100 transition-colors">
+                                <FaFileUpload className="text-gray-400 text-xl group-hover:text-[#1A2A80]" />
+                            </div>
                             {importFile ? (
-                                <p className="text-sm font-bold text-green-600">{importFile.name}</p>
+                                <div>
+                                    <p className="text-sm font-bold text-[#1A2A80]">{importFile.name}</p>
+                                    <p className="text-xs text-green-600 mt-1">File siap diunggah</p>
+                                </div>
                             ) : (
-                                <p className="text-sm text-gray-500">Klik atau tarik file Excel/CSV ke sini</p>
+                                <div>
+                                    <p className="text-sm font-medium text-gray-600">Klik atau tarik file Excel/CSV</p>
+                                    <p className="text-xs text-gray-400 mt-1">Format: .xlsx, .xls, .csv</p>
+                                </div>
                             )}
                         </div>
                     </div>
-
                 </div>
 
-                <div className="p-4 bg-gray-50 flex justify-end gap-2 border-t">
-                    <button onClick={() => setShowImportModal(false)} className="px-4 py-2 rounded text-gray-600 hover:bg-gray-200 text-sm">Batal</button>
+                <div className="p-5 bg-gray-50 flex justify-end gap-3 border-t border-gray-100">
+                    <button 
+                        onClick={() => setShowImportModal(false)} 
+                        className="px-5 py-2.5 rounded-xl text-gray-600 hover:bg-gray-200 text-sm font-bold transition-colors"
+                    >
+                        Batal
+                    </button>
                     <button 
                         onClick={handleProcessImport} 
                         disabled={isPreviewing || !selectedSubId || !importFile}
-                        className="px-4 py-2 rounded bg-[#1A2A80] text-white hover:bg-blue-900 text-sm font-bold disabled:opacity-50 flex items-center gap-2"
+                        className="px-5 py-2.5 rounded-xl bg-[#1A2A80] text-white hover:bg-blue-900 text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-md transition-all"
                     >
-                        {isPreviewing && <span className="animate-spin">↻</span>}
-                        Proses & Lanjut
+                        {isPreviewing && <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></span>}
+                        {isPreviewing ? 'Memproses...' : 'Proses Import'}
                     </button>
                 </div>
             </div>

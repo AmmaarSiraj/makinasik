@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+// src/pages/DetailPenugasan.jsx
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Swal from 'sweetalert2';
@@ -6,7 +7,7 @@ import PopupTambahAnggota from '../components/admin/PopupTambahAnggota';
 import { 
   FaArrowLeft, FaTrash, FaPlus, FaUserTie, FaChartPie, 
   FaClipboardList, FaExclamationTriangle, FaMoneyBillWave,
-  FaBoxOpen, FaChartBar, FaTasks, FaEdit
+  FaBoxOpen, FaChartBar, FaTasks, FaEdit, FaExclamationCircle
 } from 'react-icons/fa';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
@@ -14,7 +15,6 @@ const getToken = () => localStorage.getItem('token');
 
 // --- KOMPONEN DIAGRAM LINGKARAN (PIE CHART) ---
 const SimplePieChart = ({ percentage, colorHex }) => {
-  // Batasi visual antara 0% - 100%
   const visualPercent = Math.min(Math.max(percentage, 0), 100);
   
   return (
@@ -36,10 +36,18 @@ const DetailPenugasan = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   
+  // Data Utama
   const [penugasan, setPenugasan] = useState(null);
   const [anggota, setAnggota] = useState([]);
   const [listHonorarium, setListHonorarium] = useState([]); 
   
+  // Data Global (Untuk Perhitungan Bar)
+  const [rawHonorarium, setRawHonorarium] = useState([]);
+  const [allAturan, setAllAturan] = useState([]);
+  const [allKelompok, setAllKelompok] = useState([]);
+  const [allPenugasan, setAllPenugasan] = useState([]);
+  const [allSubKegiatan, setAllSubKegiatan] = useState([]);
+
   const [isLoading, setIsLoading] = useState(true);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
 
@@ -47,7 +55,7 @@ const DetailPenugasan = () => {
   const [editingMember, setEditingMember] = useState(null);
   const [editForm, setEditForm] = useState({ kode_jabatan: '', volume_tugas: 1 });
 
-  // 1. FETCH DATA DETAIL
+  // 1. FETCH DATA DETAIL & GLOBAL
   const fetchDetailData = async () => {
     if (!id) return;
     setIsLoading(true);
@@ -55,32 +63,44 @@ const DetailPenugasan = () => {
       const token = getToken();
       const config = { headers: { Authorization: `Bearer ${token}` } };
 
-      const [penugasanRes, anggotaRes, honorRes] = await Promise.all([
+      // Kita ambil data global juga disini untuk kebutuhan perhitungan bar
+      const [
+          penugasanRes, 
+          anggotaRes, 
+          honorRes,
+          aturanRes,
+          kelompokRes,
+          allPenugasanRes,
+          allSubRes
+        ] = await Promise.all([
         axios.get(`${API_URL}/api/penugasan/${id}`, config),
         axios.get(`${API_URL}/api/penugasan/${id}/anggota`, config),
-        axios.get(`${API_URL}/api/honorarium`, config)
+        axios.get(`${API_URL}/api/honorarium`, config),
+        axios.get(`${API_URL}/api/aturan-periode`, config),
+        axios.get(`${API_URL}/api/kelompok-penugasan`, config),
+        axios.get(`${API_URL}/api/penugasan`, config),
+        axios.get(`${API_URL}/api/subkegiatan`, config)
       ]);
 
-      // PERBAIKAN 1: Ambil properti .data lagi karena backend membungkusnya
-      // Backend: { status: 'success', data: { ... } }
       const detailPenugasan = penugasanRes.data.data; 
       setPenugasan(detailPenugasan);
-
-      // Anggota dikembalikan array langsung oleh controller (lihat getAnggota di Controller)
       setAnggota(anggotaRes.data || []);
       
-      // PERBAIKAN 2: Honorarium juga dibungkus dalam .data (biasanya)
-      // Pastikan mengakses array honorarium yang benar sebelum di-filter
       const allHonor = honorRes.data.data || []; 
+      setRawHonorarium(allHonor); // Simpan raw untuk lookup
       
-      // Gunakan detailPenugasan yang baru diambil untuk filter
       const currentSubId = detailPenugasan.id_subkegiatan;
       const filteredHonor = allHonor.filter(h => String(h.id_subkegiatan) === String(currentSubId));
-      
       setListHonorarium(filteredHonor);
 
+      // Set Data Global
+      setAllAturan(aturanRes.data.data || []);
+      setAllKelompok(kelompokRes.data.data || []);
+      setAllPenugasan(allPenugasanRes.data.data || []);
+      setAllSubKegiatan(allSubRes.data.data || []);
+
     } catch (err) { 
-      console.error("Detail Error:", err); // Debugging lebih jelas
+      console.error("Detail Error:", err);
       Swal.fire('Error', 'Gagal memuat data detail.', 'error');
     } finally {
       setIsLoading(false);
@@ -141,13 +161,88 @@ const DetailPenugasan = () => {
         });
         
         setEditingMember(null);
-        fetchDetailData(); // Refresh data
+        fetchDetailData(); 
     } catch (err) {
         Swal.fire('Gagal Update', err.response?.data?.error || 'Terjadi kesalahan.', 'error');
     }
   };
 
-  // 4. HANDLER DELETE
+  // --- 4. LOGIKA HITUNG PENDAPATAN (Limit TAHUNAN, Pendapatan BULANAN) ---
+  const calculateFinalStats = useMemo(() => {
+    if (!editingMember || !penugasan || !penugasan.tanggal_mulai) {
+        return { otherIncome: 0, currentInputIncome: 0, total: 0, limit: 0, isOver: false };
+    }
+
+    const tglMulai = new Date(penugasan.tanggal_mulai);
+    
+    // A. Ambil LIMIT berdasarkan TAHUN (Sesuai database: "2025")
+    const targetYear = tglMulai.getFullYear().toString(); 
+    const aturan = allAturan.find(a => String(a.periode) === String(targetYear));
+    const limit = aturan ? Number(aturan.batas_honor) : 0;
+
+    // B. Tentukan BULAN Target untuk Perhitungan Honor (Format: 2025-12)
+    const targetMonth = `${tglMulai.getFullYear()}-${String(tglMulai.getMonth() + 1).padStart(2, '0')}`;
+
+    if (limit <= 0) return { otherIncome: 0, currentInputIncome: 0, total: 0, limit: 0, isOver: false };
+
+    // C. Hitung Pendapatan Lain (Bar Hijau) - HARUS BULAN YANG SAMA
+    let otherIncome = 0;
+    const targetId = String(editingMember.id_kelompok || editingMember.id);
+    const targetMitraId = String(editingMember.id_mitra);
+
+    allKelompok.forEach(tugas => {
+        // 1. Filter Mitra
+        if (String(tugas.id_mitra) !== targetMitraId) return;
+
+        // 2. EXCLUDE: Jika ini adalah tugas yang sedang diedit, SKIP.
+        const dbId = String(tugas.id || tugas.id_kelompok);
+        if (dbId === targetId) return; 
+
+        // 3. Cek Tanggal Tugas via Parent
+        const parentPenugasan = allPenugasan.find(p => String(p.id_penugasan) === String(tugas.id_penugasan));
+        if (parentPenugasan) {
+            const parentSub = allSubKegiatan.find(s => String(s.id) === String(parentPenugasan.id_subkegiatan));
+            
+            if (parentSub && parentSub.tanggal_mulai) {
+                const d = new Date(parentSub.tanggal_mulai);
+                const tugasMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+                // 4. Filter: Hanya hitung jika BULANNYA SAMA (misal sama-sama Desember 2025)
+                if (tugasMonth === targetMonth) {
+                    let honorItem = 0;
+                    
+                    const hInfo = rawHonorarium.find(rh => 
+                        String(rh.id_subkegiatan) === String(parentSub.id) && 
+                        String(rh.kode_jabatan) === String(tugas.kode_jabatan)
+                    );
+
+                    if (hInfo) {
+                        honorItem = Number(hInfo.tarif) * (Number(tugas.volume_tugas) || 0);
+                    } else {
+                        honorItem = Number(tugas.total_honor) || 0;
+                    }
+                    otherIncome += honorItem;
+                }
+            }
+        }
+    });
+
+    // D. Hitung Pendapatan Inputan Saat Ini (Bar Biru/Merah)
+    const currentHonorInfo = listHonorarium.find(h => String(h.kode_jabatan) === String(editForm.kode_jabatan));
+    const tarifBaru = currentHonorInfo ? Number(currentHonorInfo.tarif) : 0;
+    const volBaru = Number(editForm.volume_tugas) || 0;
+    const currentInputIncome = tarifBaru * volBaru;
+
+    // E. Total & Validasi
+    const totalProjected = otherIncome + currentInputIncome;
+    const isOver = totalProjected > limit;
+
+    return { otherIncome, currentInputIncome, total: totalProjected, limit, isOver };
+
+  }, [editingMember, editForm, allAturan, allKelompok, allPenugasan, allSubKegiatan, rawHonorarium, listHonorarium, penugasan]);
+
+
+  // 5. HANDLER DELETE
   const handleRemoveAnggota = async (id_kelompok, nama_mitra) => {
     const result = await Swal.fire({
       title: 'Keluarkan Anggota?',
@@ -298,15 +393,12 @@ const DetailPenugasan = () => {
                         const stats = getJobStats(job.kode_jabatan, job.basis_volume);
                         const isOver = stats.assigned > stats.target;
                         
-                        // Warna Chart: Merah (Over), Hijau (Pas), Biru (Proses)
                         let chartColor = '#3b82f6'; // Blue
                         if (stats.percentage >= 100 && !isOver) chartColor = '#22c55e'; // Green
                         if (isOver) chartColor = '#ef4444'; // Red
 
                         return (
                             <div key={job.id_honorarium} className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex items-center gap-5 relative overflow-hidden group hover:border-blue-300 transition-colors">
-                                
-                                {/* Info Kiri */}
                                 <div className="flex-1 space-y-3">
                                     <div>
                                         <h4 className="font-bold text-gray-800 text-sm leading-tight">{job.nama_jabatan}</h4>
@@ -327,8 +419,6 @@ const DetailPenugasan = () => {
                                         </div>
                                     </div>
                                 </div>
-
-                                {/* Chart Kanan */}
                                 <div className="flex flex-col items-center justify-center">
                                     <SimplePieChart percentage={stats.percentage} colorHex={chartColor} />
                                     {isOver && (
@@ -382,8 +472,6 @@ const DetailPenugasan = () => {
                 ) : (
                   anggota.map((item) => (
                     <tr key={item.id_kelompok} className="hover:bg-blue-50/30 transition-colors group">
-                      
-                      {/* Kolom Nama */}
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center text-[#1A2A80] font-bold text-xs border border-blue-100">
@@ -395,8 +483,6 @@ const DetailPenugasan = () => {
                           </div>
                         </div>
                       </td>
-
-                      {/* Kolom Jabatan */}
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex flex-col">
                             <span className="font-bold text-gray-700">{item.nama_jabatan}</span>
@@ -405,16 +491,12 @@ const DetailPenugasan = () => {
                             </span>
                         </div>
                       </td>
-
-                      {/* Kolom Volume */}
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                          <div className="inline-flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-3 py-1 rounded-lg text-gray-700 font-bold">
                             {item.volume_tugas || 0} 
                             <FaBoxOpen className="text-gray-400 text-xs"/>
                          </div>
                       </td>
-
-                      {/* Kolom Honor */}
                       <td className="px-6 py-4 whitespace-nowrap text-right">
                          <div className="text-green-600 font-bold">
                            {formatRupiah(item.total_honor)}
@@ -425,8 +507,6 @@ const DetailPenugasan = () => {
                             </div>
                          )}
                       </td>
-
-                      {/* Kolom Aksi */}
                       <td className="px-6 py-4 whitespace-nowrap text-right">
                         <div className="flex items-center justify-end gap-2">
                             <button 
@@ -502,10 +582,49 @@ const DetailPenugasan = () => {
                             </span>
                         </div>
                     </div>
+
+                    {/* --- PROGRESS BAR (Disuntikkan di sini) --- */}
+                    {calculateFinalStats.limit > 0 && (
+                        <div className={`mt-4 pt-4 border-t border-gray-100 ${calculateFinalStats.isOver ? 'bg-red-50 -mx-6 px-6 pb-4 border-t-red-200' : ''}`}>
+                             <div className="flex justify-between items-end mb-2">
+                                <span className="text-xs font-bold text-gray-500 uppercase">Limit Honor Bulan Ini</span>
+                                <span className="text-[10px] text-gray-400">
+                                    {formatRupiah(calculateFinalStats.total)} / {formatRupiah(calculateFinalStats.limit)}
+                                </span>
+                             </div>
+
+                             <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden flex mb-2">
+                                {/* Bar Hijau: Pendapatan Lain BULAN INI (Locked) */}
+                                <div 
+                                    className="bg-green-500 h-full transition-all duration-300" 
+                                    style={{ width: `${Math.min((calculateFinalStats.otherIncome / calculateFinalStats.limit) * 100, 100)}%` }}
+                                    title="Pendapatan dari proyek lain bulan ini"
+                                ></div>
+                                {/* Bar Biru/Merah: Pendapatan Inputan (Dynamic) */}
+                                <div 
+                                    className={`h-full transition-all duration-300 ${calculateFinalStats.isOver ? 'bg-red-500' : 'bg-blue-400'}`} 
+                                    style={{ width: `${Math.min((calculateFinalStats.currentInputIncome / calculateFinalStats.limit) * 100, 100 - Math.min((calculateFinalStats.otherIncome / calculateFinalStats.limit) * 100, 100))}%` }}
+                                    title="Pendapatan dari tugas ini"
+                                ></div>
+                             </div>
+
+                             {calculateFinalStats.isOver && (
+                                <div className="text-[10px] text-red-600 font-bold flex items-center gap-1 animate-pulse">
+                                  <FaExclamationCircle /> Melebihi Limit!
+                                </div>
+                             )}
+                        </div>
+                    )}
                     
                     <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-100">
                         <button type="button" onClick={() => setEditingMember(null)} className="px-4 py-2 text-gray-600 text-sm font-bold hover:bg-gray-100 rounded-lg transition">Batal</button>
-                        <button type="submit" className="px-6 py-2 bg-[#1A2A80] text-white text-sm font-bold rounded-lg hover:bg-blue-900 transition shadow-md">Simpan</button>
+                        <button 
+                            type="submit" 
+                            disabled={calculateFinalStats.isOver}
+                            className={`px-6 py-2 text-white text-sm font-bold rounded-lg transition shadow-md ${calculateFinalStats.isOver ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#1A2A80] hover:bg-blue-900'}`}
+                        >
+                            Simpan
+                        </button>
                     </div>
                 </form>
             </div>

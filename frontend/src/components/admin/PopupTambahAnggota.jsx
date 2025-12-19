@@ -1,3 +1,4 @@
+// src/components/admin/PopupTambahAnggota.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import Swal from 'sweetalert2'; 
@@ -16,22 +17,30 @@ import {
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 const getToken = () => localStorage.getItem('token');
 
-// Tambahkan props targetYear dan idSubKegiatan
+// Helper Format Rupiah
+const formatRupiah = (num) => {
+  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(num || 0);
+};
+
 const PopupTambahAnggota = ({ 
   isOpen, 
   onClose, 
   id_penugasan, 
   existingAnggotaIds, 
   onAnggotaAdded,
-  targetYear,     // Props baru
-  idSubKegiatan   // Props baru
+  targetYear,     
+  idSubKegiatan   
 }) => {
+  // Data State
   const [allMitra, setAllMitra] = useState([]);
   const [availableJobs, setAvailableJobs] = useState([]); 
   const [currentTeamData, setCurrentTeamData] = useState([]); 
   
-  // State targetYear lokal dihapus karena sudah dapat dari props
-  
+  // State untuk Validasi Honor
+  const [mitraIncomeMap, setMitraIncomeMap] = useState({}); // Map ID Mitra -> Pendapatan Bulan Ini
+  const [monthlyLimit, setMonthlyLimit] = useState(0);      // Limit Bulanan (dari Aturan Tahun)
+
+  // Form State
   const [selectedJob, setSelectedJob] = useState(''); 
   const [volume, setVolume] = useState(1); 
   const [searchTerm, setSearchTerm] = useState('');
@@ -40,7 +49,6 @@ const PopupTambahAnggota = ({
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Pastikan isOpen, id_penugasan, targetYear, dan idSubKegiatan tersedia
     if (isOpen && id_penugasan && targetYear && idSubKegiatan) {
       const initData = async () => {
         setLoading(true);
@@ -49,48 +57,112 @@ const PopupTambahAnggota = ({
           const token = getToken();
           const headers = { Authorization: `Bearer ${token}` };
 
-          // KITA HAPUS request ke /api/penugasan/{id} karena data sudah dikirim via props
-          // Kita hanya perlu request anggota tim (untuk cek kuota) dan mitra & honor
-
-          const [resAnggotaTim, resMitra, resHonor] = await Promise.all([
+          // 1. Fetch Data Lengkap (Mitra, Honor, dan Data Global untuk Validasi)
+          const [
+            resAnggotaTim, 
+            resMitra, 
+            resHonor,
+            resAturan,
+            resKelompok,
+            resAllPenugasan,
+            resSubKegiatan
+          ] = await Promise.all([
             axios.get(`${API_URL}/api/penugasan/${id_penugasan}/anggota`, { headers }),
             axios.get(`${API_URL}/api/mitra/aktif?tahun=${targetYear}`, { headers }),
-            axios.get(`${API_URL}/api/honorarium`, { headers })
+            axios.get(`${API_URL}/api/honorarium`, { headers }),
+            // Data Global untuk Validasi Limit
+            axios.get(`${API_URL}/api/aturan-periode`, { headers }),
+            axios.get(`${API_URL}/api/kelompok-penugasan`, { headers }),
+            axios.get(`${API_URL}/api/penugasan`, { headers }),
+            axios.get(`${API_URL}/api/subkegiatan`, { headers })
           ]);
 
-          // Set Data Tim Saat Ini
+          // --- A. Setup Data Dasar ---
           setCurrentTeamData(resAnggotaTim.data || []);
 
-          // Set Data Mitra (langsung pakai targetYear dari props)
           let rawMitra = resMitra.data.data;
           if (rawMitra && !Array.isArray(rawMitra) && Array.isArray(rawMitra.data)) {
               rawMitra = rawMitra.data;
           }
-          const mitraArray = Array.isArray(rawMitra) ? rawMitra : [];
-          setAllMitra(mitraArray);
+          setAllMitra(Array.isArray(rawMitra) ? rawMitra : []);
 
-          // Set Data Pekerjaan (langsung filter pakai idSubKegiatan dari props)
           const honorList = resHonor.data.data || [];
           const validHonors = honorList.filter(h => String(h.id_subkegiatan) === String(idSubKegiatan));
           
           const jobs = validHonors.map(h => ({
             kode: h.kode_jabatan,
             nama: h.jabatan ? h.jabatan.nama_jabatan : h.kode_jabatan, 
-            tarif: h.tarif,
+            tarif: Number(h.tarif) || 0,
             satuan: h.nama_satuan || 'Kegiatan',
             basis_volume: Number(h.basis_volume) || 0 
           }));
 
           setAvailableJobs(jobs);
-
           if (jobs.length > 0) {
             setSelectedJob(jobs[0].kode);
           }
           setVolume(1);
 
+          // --- B. Logika Hitung Limit & Income Map (Sama seperti EditPenugasan) ---
+          
+          // 1. Tentukan Limit (Berdasarkan Tahun)
+          const aturanList = resAturan.data.data || [];
+          const aturan = aturanList.find(a => String(a.periode) === String(targetYear));
+          const limit = aturan ? Number(aturan.batas_honor) : 0;
+          setMonthlyLimit(limit);
+
+          // 2. Tentukan Bulan Target (YYYY-MM) dari SubKegiatan ini
+          const subList = resSubKegiatan.data.data || [];
+          const currentSub = subList.find(s => String(s.id) === String(idSubKegiatan));
+          
+          if (limit > 0 && currentSub && currentSub.tanggal_mulai) {
+             const tglMulai = new Date(currentSub.tanggal_mulai);
+             const targetMonth = `${tglMulai.getFullYear()}-${String(tglMulai.getMonth() + 1).padStart(2, '0')}`; // "2025-12"
+
+             const incomeMap = {};
+             const allKelompok = resKelompok.data.data || [];
+             const allPenugasan = resAllPenugasan.data.data || [];
+
+             // Loop semua riwayat tugas untuk menghitung akumulasi per mitra
+             allKelompok.forEach(tugas => {
+                // Cari info tanggal lewat parent penugasan
+                const parentPenugasan = allPenugasan.find(p => String(p.id_penugasan) === String(tugas.id_penugasan));
+                if (parentPenugasan) {
+                    const parentSub = subList.find(s => String(s.id) === String(parentPenugasan.id_subkegiatan));
+                    if (parentSub && parentSub.tanggal_mulai) {
+                        const d = new Date(parentSub.tanggal_mulai);
+                        const tugasMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+                        // Jika bulannya sama, tambahkan ke incomeMap mitra tersebut
+                        if (tugasMonth === targetMonth) {
+                            let honorItem = 0;
+                            // Cari tarif di master honorarium (global)
+                            const hInfo = honorList.find(rh => 
+                                String(rh.id_subkegiatan) === String(parentSub.id) && 
+                                String(rh.kode_jabatan) === String(tugas.kode_jabatan)
+                            );
+
+                            if (hInfo) {
+                                honorItem = Number(hInfo.tarif) * (Number(tugas.volume_tugas) || 0);
+                            } else {
+                                honorItem = Number(tugas.total_honor) || 0;
+                            }
+
+                            const mId = String(tugas.id_mitra);
+                            incomeMap[mId] = (incomeMap[mId] || 0) + honorItem;
+                        }
+                    }
+                }
+             });
+             
+             setMitraIncomeMap(incomeMap);
+          } else {
+             setMitraIncomeMap({});
+          }
+
         } catch (err) {
           console.error(err);
-          setError('Gagal memuat data. Pastikan koneksi aman.');
+          setError('Gagal memuat data.');
         } finally {
           setLoading(false);
         }
@@ -98,11 +170,9 @@ const PopupTambahAnggota = ({
 
       initData();
     }
-  }, [isOpen, id_penugasan, targetYear, idSubKegiatan]); // Dependency array diupdate
+  }, [isOpen, id_penugasan, targetYear, idSubKegiatan]); 
 
-  // ... (Sisa kode logic quotaInfo, availableMitra, handleAddAnggota, dan render return TETAP SAMA) ...
-  
-  // Pastikan logic quotaInfo dan return di bawah ini tidak berubah
+  // --- Logic Kuota Pekerjaan ---
   const quotaInfo = useMemo(() => {
     if (!selectedJob) return { sisa: 0, total: 0, terpakai: 0 };
 
@@ -122,13 +192,11 @@ const PopupTambahAnggota = ({
     };
   }, [selectedJob, availableJobs, currentTeamData]);
 
+  // --- Filter Mitra ---
   const availableMitra = useMemo(() => {
     if (!Array.isArray(allMitra)) return [];
 
-    const excludedIds = new Set(
-        (existingAnggotaIds || []).map(id => String(id))
-    );
-
+    const excludedIds = new Set((existingAnggotaIds || []).map(id => String(id)));
     const term = searchTerm.toLowerCase();
 
     return allMitra.filter(mitra => {
@@ -141,8 +209,8 @@ const PopupTambahAnggota = ({
     });
   }, [allMitra, existingAnggotaIds, searchTerm]);
 
+  // --- Handler Tambah ---
   const handleAddAnggota = async (id_mitra) => {
-      // ... (Kode handleAddAnggota tetap sama persis) ...
       if (!selectedJob) {
         Swal.fire('Peringatan', 'Harap pilih posisi/jabatan terlebih dahulu!', 'warning');
         return;
@@ -155,6 +223,22 @@ const PopupTambahAnggota = ({
               title: 'Kuota Tidak Cukup',
               text: `Sisa kuota: ${quotaInfo.sisa}. Anda input: ${finalVolume}.`,
               icon: 'warning'
+          });
+          return;
+      }
+
+      // Validasi Limit Honor Sebelum Submit
+      const mitraIncome = mitraIncomeMap[String(id_mitra)] || 0;
+      const jobInfo = availableJobs.find(j => j.kode === selectedJob);
+      const newIncome = (jobInfo ? jobInfo.tarif : 0) * finalVolume;
+      
+      if (monthlyLimit > 0 && (mitraIncome + newIncome) > monthlyLimit) {
+          Swal.fire({
+              title: 'Melebihi Batas Honor',
+              html: `Total pendapatan mitra ini akan melebihi batas bulanan.<br/>
+                     Limit: <b>${formatRupiah(monthlyLimit)}</b><br/>
+                     Saat Ini + Baru: <b>${formatRupiah(mitraIncome + newIncome)}</b>`,
+              icon: 'error'
           });
           return;
       }
@@ -291,16 +375,11 @@ const PopupTambahAnggota = ({
                         Unit
                     </div>
                 </div>
-                {quotaInfo.sisa === 0 && quotaInfo.total > 0 && (
-                    <p className="text-[10px] text-red-500 mt-1 italic">* Kuota untuk jabatan ini sudah penuh.</p>
-                )}
             </div>
-
         </div>
 
-        {/* Bagian Search & List Mitra */}
+        {/* Bagian Search */}
         <div className="px-5 py-3 border-b border-t border-gray-100 bg-gray-50/50">
-          
           {targetYear && (
             <div className="mb-2">
                 <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-[10px] px-2 py-1 rounded border border-blue-200 font-bold shadow-sm">
@@ -308,7 +387,6 @@ const PopupTambahAnggota = ({
                 </span>
             </div>
           )}
-
           <div className="relative">
             <span className="absolute left-4 top-3 text-gray-400">
                 <FaSearch />
@@ -323,6 +401,7 @@ const PopupTambahAnggota = ({
           </div>
         </div>
 
+        {/* List Mitra */}
         <div className="overflow-y-auto flex-grow p-4 bg-gray-50 space-y-3">
           {loading && <p className="text-center py-8 text-gray-500 italic">Memuat data...</p>}
           {error && <p className="text-center py-8 text-red-500 text-sm">{error}</p>}
@@ -332,44 +411,85 @@ const PopupTambahAnggota = ({
                 {availableMitra.length === 0 ? (
                     <div className="text-center py-10 text-gray-400 flex flex-col items-center">
                         <FaSearch size={30} className="mb-2 opacity-20" />
-                        <p className="text-sm">
-                           {searchTerm 
-                             ? "Tidak ada mitra yang cocok." 
-                             : `Tidak ada mitra tersedia untuk tahun ${targetYear}.`}
-                        </p>
+                        <p className="text-sm">Tidak ada mitra tersedia.</p>
                     </div>
                 ) : (
-                    availableMitra.map(mitra => (
-                        <div 
-                            key={mitra.id} 
-                            className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center hover:border-blue-300 transition-colors group"
-                        >
-                            <div className="flex items-center gap-3 overflow-hidden">
-                                <div className="w-10 h-10 rounded-full bg-blue-50 flex-shrink-0 flex items-center justify-center text-[#1A2A80] font-bold text-sm border border-blue-100">
-                                    {mitra.nama_lengkap.charAt(0)}
-                                </div>
-                                <div className="min-w-0">
-                                    <p className="font-bold text-gray-800 text-sm truncate group-hover:text-[#1A2A80] transition-colors">
-                                        {mitra.nama_lengkap}
-                                    </p>
-                                    <p className="text-xs text-gray-500 font-mono flex items-center gap-1">
-                                        <FaIdCard className="text-gray-300" /> {mitra.nik}
-                                    </p>
-                                </div>
-                            </div>
-                            
-                            <button
-                                onClick={() => handleAddAnggota(mitra.id)}
-                                disabled={!selectedJob || (quotaInfo.sisa === 0 && quotaInfo.total > 0)}
-                                className={`text-xs font-bold py-2 px-4 rounded-lg shadow-sm flex items-center gap-2 flex-shrink-0 transition 
-                                  ${selectedJob && (quotaInfo.sisa > 0 || quotaInfo.total === 0)
-                                    ? 'bg-[#1A2A80] hover:bg-blue-900 text-white hover:shadow' 
-                                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                    availableMitra.map(mitra => {
+                        // HITUNG PROGRES BAR PER MITRA
+                        const currentIncome = mitraIncomeMap[String(mitra.id)] || 0;
+                        const jobInfo = availableJobs.find(j => j.kode === selectedJob);
+                        const potentialIncome = (jobInfo ? jobInfo.tarif : 0) * (volume || 0);
+                        
+                        const totalProjected = currentIncome + potentialIncome;
+                        const isOver = monthlyLimit > 0 && totalProjected > monthlyLimit;
+                        
+                        // Persentase untuk visual
+                        const pctCurrent = monthlyLimit > 0 ? (currentIncome / monthlyLimit) * 100 : 0;
+                        const pctNew = monthlyLimit > 0 ? (potentialIncome / monthlyLimit) * 100 : 0;
+
+                        return (
+                            <div 
+                                key={mitra.id} 
+                                className={`bg-white p-3 rounded-xl shadow-sm border transition-colors group ${isOver ? 'border-red-300 bg-red-50' : 'border-gray-100 hover:border-blue-300'}`}
                             >
-                                <FaUserPlus /> Tambah
-                            </button>
-                        </div>
-                    ))
+                                <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-3 overflow-hidden">
+                                        <div className="w-10 h-10 rounded-full bg-blue-50 flex-shrink-0 flex items-center justify-center text-[#1A2A80] font-bold text-sm border border-blue-100">
+                                            {mitra.nama_lengkap.charAt(0)}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="font-bold text-gray-800 text-sm truncate">
+                                                {mitra.nama_lengkap}
+                                            </p>
+                                            <p className="text-xs text-gray-500 font-mono flex items-center gap-1">
+                                                <FaIdCard className="text-gray-300" /> {mitra.nik}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    
+                                    <button
+                                        onClick={() => handleAddAnggota(mitra.id)}
+                                        disabled={!selectedJob || (quotaInfo.sisa === 0 && quotaInfo.total > 0) || isOver}
+                                        className={`text-xs font-bold py-2 px-4 rounded-lg shadow-sm flex items-center gap-2 flex-shrink-0 transition 
+                                          ${selectedJob && !isOver && (quotaInfo.sisa > 0 || quotaInfo.total === 0)
+                                            ? 'bg-[#1A2A80] hover:bg-blue-900 text-white hover:shadow' 
+                                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                                    >
+                                        <FaUserPlus /> Tambah
+                                    </button>
+                                </div>
+
+                                {/* Progress Bar Pendapatan */}
+                                {monthlyLimit > 0 && (
+                                    <div className="mt-3 pt-2 border-t border-gray-100/50">
+                                        <div className="flex justify-between text-[10px] text-gray-500 mb-1">
+                                            <span>
+                                                Honor Bln Ini: <b>{formatRupiah(totalProjected)}</b>
+                                            </span>
+                                            <span>Limit: {formatRupiah(monthlyLimit)}</span>
+                                        </div>
+                                        <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden flex">
+                                            {/* Bar Hijau (Existing) */}
+                                            <div 
+                                                className="bg-green-500 h-full" 
+                                                style={{ width: `${Math.min(pctCurrent, 100)}%` }} 
+                                            />
+                                            {/* Bar Biru/Merah (New) */}
+                                            <div 
+                                                className={`h-full ${isOver ? 'bg-red-500' : 'bg-blue-400'}`} 
+                                                style={{ width: `${Math.min(pctNew, 100 - Math.min(pctCurrent, 100))}%` }} 
+                                            />
+                                        </div>
+                                        {isOver && (
+                                            <div className="text-[9px] text-red-600 font-bold mt-1 text-right">
+                                                Melebihi Limit Bulanan!
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })
                 )}
             </>
           )}

@@ -75,6 +75,7 @@ function AppRoutes() {
             <Route path="/lengkapi-profil" element={<LengkapiProfile />} />
             <Route path="/kegiatan/:id" element={<DetailKegiatanUser />} />
             <Route path="/penugasan" element={<PenugasanUser />} />
+            <Route path="/penugasan/detail/:id" element={<DetailPenugasanUser />} />
             <Route path="/daftar-mitra" element={<MitraUser />} />
             <Route path="/transaksi-mitra" element={<TransaksiMitraUser />} />
             <Route path="/transaksi-mitra/:id" element={<DetailMitraUser />} />
