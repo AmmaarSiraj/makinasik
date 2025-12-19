@@ -7,7 +7,6 @@ import {
   FaClipboardList, 
   FaCalendarAlt, 
   FaCheckCircle,
-  FaArrowRight,
   FaBriefcase
 } from 'react-icons/fa';
 
@@ -109,8 +108,6 @@ const PartDaftarKegiatan = () => {
     }
 
     if (!mitraData) {
-      // alert("Anda harus melengkapi profil Mitra terlebih dahulu.");
-      // Gunakan confirm agar lebih user friendly
       if(confirm("Anda harus terdaftar sebagai Mitra untuk mengambil tugas. Lengkapi profil sekarang?")) {
           navigate('/lengkapi-profile');
       }
@@ -156,9 +153,8 @@ const PartDaftarKegiatan = () => {
     return <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100 animate-pulse">SEDANG BERJALAN</span>;
   };
 
-  // Limit Display
+  // Limit Display (Hanya 5 teratas)
   const displayedList = kegiatanList.slice(0, 5);
-  const hasMore = kegiatanList.length > 5;
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-12 space-y-4">
@@ -295,19 +291,6 @@ const PartDaftarKegiatan = () => {
             </div>
           );
         })
-      )}
-
-      {/* Footer Link */}
-      {hasMore && (
-        <div className="pt-4 text-center">
-            <button 
-                onClick={() => navigate('/manajemen-kegiatan')}
-                className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors group"
-            >
-                Lihat Selengkapnya
-                <FaArrowRight className="group-hover:translate-x-1 transition-transform" />
-            </button>
-        </div>
       )}
 
     </div>

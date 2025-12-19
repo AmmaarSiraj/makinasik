@@ -290,8 +290,11 @@ const PopupTambahAnggota = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm transition-opacity">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden border border-gray-200 animate-fade-in-up">
+    // FIX: 
+    // 1. z-index tinggi (z-[9999]) agar muncul di atas header layout user.
+    // 2. items-start + pt-24 agar tidak tertutup header, ada jarak dari atas.
+    <div className="fixed inset-0 bg-black/60 flex justify-center items-start pt-24 z-[9999] p-4 backdrop-blur-sm transition-opacity">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden border border-gray-200 animate-fade-in-up">
         
         {/* Header Component */}
         <div className="flex justify-between items-center p-5 bg-[#1A2A80] text-white">

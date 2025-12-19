@@ -1,8 +1,9 @@
+// src/pages/Perencanaan.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Swal from 'sweetalert2'; 
-import * as XLSX from 'xlsx'; // Import library xlsx
+import * as XLSX from 'xlsx'; 
 import { 
   FaDownload, 
   FaFileUpload, 
@@ -15,10 +16,12 @@ import {
   FaTrash,
   FaSearch, 
   FaFilter,
-  FaMoneyBillWave,
   FaExclamationCircle,
   FaPaperPlane,
-  FaTimes
+  FaTimes,
+  FaBriefcase,
+  FaCalendarAlt,
+  FaChartPie
 } from 'react-icons/fa';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
@@ -198,7 +201,6 @@ const Perencanaan = () => {
     setIsPreviewing(true);
     try {
         const token = getToken();
-        // Menggunakan endpoint preview-import yang sudah diperbaiki di controller
         const res = await axios.post(`${API_URL}/api/perencanaan/preview-import`, formData, {
             headers: { 
                 'Content-Type': 'multipart/form-data',
@@ -451,105 +453,131 @@ const Perencanaan = () => {
     }
   };
 
-  // --- PERUBAHAN DI SINI: Menggunakan XLSX ---
   const handleDownloadTemplate = () => {
-    // Data dummy untuk template
     const rows = [
-      { 
-        sobat_id: "337322040034", 
-        nama_lengkap: "Trian Yunita Hestiarini", 
-        posisi: "Petugas Pendataan Lapangan (PPL Survei)" 
-      },
-      { 
-        sobat_id: "337322040036", 
-        nama_lengkap: "TRIYANI WIDYASTUTI", 
-        posisi: "Petugas Pemeriksaan Lapangan (PML Survei)" 
-      }
+      { sobat_id: "337322040034", nama_lengkap: "Contoh Nama Mitra", posisi: "Petugas Pendataan Lapangan (PPL Survei)" },
+      { sobat_id: "337322040036", nama_lengkap: "Contoh Mitra Dua", posisi: "Petugas Pemeriksaan Lapangan (PML Survei)" }
     ];
-
-    // Membuat worksheet dan workbook
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Template");
-
-    // Download file .xlsx
     XLSX.writeFile(workbook, "template_import_perencanaan.xlsx");
   };
-  // ------------------------------------------
 
-  if (isLoading) return <div className="text-center py-10 text-gray-500">Memuat data Perencanaan...</div>;
+  // --- LOADING STATE ---
+  if (isLoading) return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <div className="w-10 h-10 border-4 border-blue-100 border-t-[#1A2A80] rounded-full animate-spin mb-4"></div>
+        <p className="text-gray-500 font-medium">Memuat data perencanaan...</p>
+    </div>
+  );
 
   return (
-    <div className="w-full">
-      {/* --- HEADER ACTIONS --- */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-        <div className="text-gray-500 text-sm">
-          Kelola tim dan alokasi mitra untuk setiap kegiatan.
-        </div>
-        <div className="flex gap-2">
-          {/* Tombol telah diupdate labelnya */}
-          <button onClick={handleDownloadTemplate} className="flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 transition shadow-sm">
-            <FaDownload /> Template Excel
-          </button>
-          {/* TOMBOL IMPORT MEMBUKA MODAL */}
-          <button onClick={() => setShowImportModal(true)} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm">
-            <FaFileUpload /> Import Excel
-          </button>
-          <Link to="/perencanaan/tambah" className="flex items-center gap-2 bg-[#1A2A80] hover:bg-blue-900 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm">
-            <FaPlus /> Buat Manual
-          </Link>
-        </div>
-      </div>
+    // Container disesuaikan dengan Layout (max-w-7xl)
+    <div className="w-full mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      
+      {/* === HEADER SECTION === */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-6">
+            <div>
+               <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 flex items-center gap-3">
+                  <div className="p-2 bg-blue-50 rounded-lg text-[#1A2A80]">
+                    <FaChartPie size={24} />
+                  </div>
+                  Perencanaan Tim
+               </h1>
+               <p className="text-gray-500 mt-2 ml-1">
+                  Kelola alokasi mitra, estimasi honor, dan validasi beban kerja.
+               </p>
+            </div>
 
-      {/* --- FILTER SECTION --- */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
-         <div className="relative w-full md:w-1/2">
-            <FaSearch className="absolute left-3 top-3 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Cari Survei/Sensus, Kegiatan, atau pengawas..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#1A2A80] outline-none text-sm transition bg-gray-50 focus:bg-white"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-         </div>
-         <div className="flex items-center gap-3 w-full md:w-auto">
-            <div className="flex items-center gap-2 text-gray-500 text-sm font-bold"><FaFilter /> Tahun:</div>
-            <select
-               className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#1A2A80] outline-none text-sm bg-white cursor-pointer"
-               value={filterYear}
-               onChange={(e) => setFilterYear(e.target.value)}
-            >
-               <option value="">Semua</option>
-               {availableYears.map(year => <option key={year} value={year}>{year}</option>)}
-            </select>
-         </div>
+            {/* Action Buttons */}
+            <div className="flex flex-wrap gap-3">
+               <button 
+                 onClick={handleDownloadTemplate} 
+                 className="group inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-gray-600 hover:text-[#1A2A80] hover:border-blue-200 hover:bg-blue-50 transition-all shadow-sm text-sm font-bold"
+               >
+                  <FaDownload className="text-gray-400 group-hover:text-[#1A2A80]" /> 
+                  <span className="hidden sm:inline">Template</span>
+               </button>
+               
+               <button 
+                 onClick={() => setShowImportModal(true)} 
+                 className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-100 hover:bg-emerald-100 rounded-xl transition-all text-sm font-bold"
+               >
+                  <FaFileUpload /> Import
+               </button>
+               
+               <Link 
+                 to="/perencanaan/tambah" 
+                 className="inline-flex items-center gap-2 px-5 py-2 bg-[#1A2A80] hover:bg-blue-900 text-white rounded-xl shadow-md hover:shadow-lg transition-all text-sm font-bold"
+               >
+                  <FaPlus /> Buat Manual
+               </Link>
+            </div>
+          </div>
+
+          <hr className="border-gray-100 mb-6" />
+
+          {/* === FILTER & SEARCH BAR === */}
+          <div className="flex flex-col md:flex-row gap-4">
+             <div className="relative flex-grow">
+                <FaSearch className="absolute left-4 top-3.5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Cari Survei/Sensus, Kegiatan, atau Pengawas..."
+                  className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-[#1A2A80] outline-none transition text-sm text-gray-800 placeholder-gray-400"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+             </div>
+             
+             <div className="relative min-w-[150px]">
+                <FaFilter className="absolute left-4 top-3.5 text-gray-400" />
+                <select
+                   className="w-full pl-11 pr-8 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-[#1A2A80] outline-none transition text-sm text-gray-800 cursor-pointer appearance-none"
+                   value={filterYear}
+                   onChange={(e) => setFilterYear(e.target.value)}
+                >
+                   <option value="">Semua Tahun</option>
+                   {availableYears.map(year => <option key={year} value={year}>{year}</option>)}
+                </select>
+                <FaChevronDown className="absolute right-4 top-4 text-gray-400 text-xs pointer-events-none" />
+             </div>
+          </div>
       </div>
 
       {/* --- LIST Perencanaan --- */}
       <div className="space-y-6">
         {Object.keys(groupedPerencanaan).length === 0 ? (
-          <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300 text-gray-400 italic">
-            {searchTerm || filterYear ? 'Tidak ditemukan data yang sesuai filter.' : 'Belum ada data Perencanaan. Silakan import atau buat baru.'}
+          <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-gray-300">
+            <FaClipboardList className="mx-auto text-4xl text-gray-200 mb-3" />
+            <p className="text-gray-500 font-medium">
+               {searchTerm || filterYear ? 'Tidak ditemukan data yang sesuai filter.' : 'Belum ada data perencanaan. Silakan import atau buat baru.'}
+            </p>
           </div>
         ) : (
           Object.entries(groupedPerencanaan).map(([kegiatanName, subItems]) => (
-            <div key={kegiatanName} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div key={kegiatanName} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow duration-300">
               
               {/* HEADER GRUP */}
-              <div className="bg-gray-50/50 px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div className="bg-gray-50/50 px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                  <div className="flex items-center gap-3">
-                    <span className="text-[#1A2A80]"><FaClipboardList size={18} /></span>
-                    <h2 className="text-lg font-bold text-gray-800">{kegiatanName}</h2>
-                    <span className="text-xs font-medium bg-white text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">
-                        {subItems.length} Tim
-                    </span>
+                    <div className="p-2 bg-white border border-gray-200 rounded-lg text-[#1A2A80] shadow-sm">
+                        <FaBriefcase size={16} />
+                    </div>
+                    <div>
+                        <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide">{kegiatanName}</h2>
+                        <span className="text-xs text-gray-500 font-medium">
+                            {subItems.length} Tim Terbentuk
+                        </span>
+                    </div>
                  </div>
 
                  {/* TOMBOL TERUSKAN SATU GRUP */}
                  <button 
                     onClick={(e) => handleForwardToPenugasan(e, subItems.map(i => i.id_perencanaan), `Semua Tim ${kegiatanName}`)}
-                    className="flex items-center gap-2 text-xs font-bold bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg border border-indigo-100 hover:bg-indigo-100 transition shadow-sm"
+                    className="flex items-center gap-2 text-xs font-bold bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl border border-indigo-100 hover:bg-indigo-100 transition shadow-sm"
                     title="Teruskan semua kegiatan ini ke Penugasan"
                  >
                     <FaPaperPlane /> Teruskan Semua
@@ -557,7 +585,7 @@ const Perencanaan = () => {
               </div>
 
               {/* LIST SUB KEGIATAN */}
-              <div className="divide-y divide-gray-100">
+              <div className="divide-y divide-gray-50">
                 {subItems.map((task) => {
                   const isOpen = expandedTaskId === task.id_perencanaan;
                   const members = membersCache[task.id_perencanaan] || [];
@@ -578,75 +606,93 @@ const Perencanaan = () => {
                   const monthlyLimit = limitMap[taskYear] || 0;
 
                   return (
-                    <div key={task.id_perencanaan} className="group">
+                    <div key={task.id_perencanaan} className={`group/item transition-colors ${isOpen ? 'bg-blue-50/10' : 'bg-white hover:bg-gray-50'}`}>
                       
                       {/* Baris Utama */}
                       <div 
                         onClick={() => toggleRow(task.id_perencanaan)} 
-                        className={`px-6 py-4 cursor-pointer transition-colors flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${isOpen ? 'bg-blue-50/40' : 'hover:bg-gray-50'}`}
+                        className="px-6 py-5 cursor-pointer flex flex-col md:flex-row md:items-center md:justify-between gap-4"
                       >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-1">
-                            <div className={`p-1 rounded-full transition-transform duration-200 ${isOpen ? 'rotate-180 text-[#1A2A80] bg-blue-100' : 'text-gray-400'}`}>
+                        {/* Kiri: Info Utama */}
+                        <div className="flex-1 flex items-start gap-4">
+                            <div className={`mt-1 p-1.5 rounded-full transition-transform duration-300 border bg-white ${isOpen ? 'rotate-180 text-[#1A2A80] border-blue-200 shadow-sm' : 'text-gray-400 border-gray-200'}`}>
                                 <FaChevronDown size={10} />
                             </div>
-                            <h3 className={`font-bold text-sm ${isOpen ? 'text-[#1A2A80]' : 'text-gray-700'}`}>
-                                {task.nama_sub_kegiatan}
-                            </h3>
-                          </div>
-                          
-                          <div className="pl-7 flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-500">
-                            <span className="flex items-center gap-1">
-                              📅 {formatDate(task.tanggal_mulai)} - {formatDate(task.tanggal_selesai)}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              👤 Pengawas: <span className="font-medium text-gray-700">{task.nama_pengawas}</span>
-                            </span>
-                          </div>
+
+                            <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <h3 className={`font-bold text-sm transition-colors ${isOpen ? 'text-[#1A2A80]' : 'text-gray-800'}`}>
+                                        {task.nama_sub_kegiatan}
+                                    </h3>
+                                </div>
+                                
+                                <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-gray-500 mt-2">
+                                    <span className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded border border-gray-100">
+                                      <FaCalendarAlt className="text-gray-400" /> {formatDate(task.tanggal_mulai)} - {formatDate(task.tanggal_selesai)}
+                                    </span>
+                                    <span className="flex items-center gap-1.5 px-2 py-1">
+                                      <span className="text-gray-400">Pengawas:</span>
+                                      <span className="font-bold text-gray-700">{task.nama_pengawas}</span>
+                                    </span>
+                                    <span className="flex items-center gap-1.5 px-2 py-1">
+                                      <FaUsers className="text-gray-400" />
+                                      <span className="font-bold text-gray-700">{membersCount} Anggota</span>
+                                    </span>
+                                </div>
+                            </div>
                         </div>
 
-                        <div className="flex items-center gap-4 min-w-fit">
-                            <div className="text-xs font-medium text-gray-400 group-hover:text-[#1A2A80] transition-colors flex items-center gap-2">
-                                <FaUsers /> {membersCount} Anggota
-                            </div>
-                            <div className="flex items-center gap-1 border-l pl-4 border-gray-200">
-                                
-                                {/* TOMBOL TERUSKAN PER ITEM */}
-                                <button 
-                                    onClick={(e) => handleForwardToPenugasan(e, [task.id_perencanaan], task.nama_sub_kegiatan)}
-                                    className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-full transition" 
-                                    title="Teruskan ke Penugasan"
-                                >
-                                    <FaPaperPlane size={14} />
-                                </button>
+                        {/* Kanan: Actions */}
+                        <div className="flex items-center gap-2 md:border-l md:pl-6 border-gray-100 self-end md:self-center">
+                            
+                            {/* TOMBOL TERUSKAN PER ITEM */}
+                            <button 
+                                onClick={(e) => handleForwardToPenugasan(e, [task.id_perencanaan], task.nama_sub_kegiatan)}
+                                className="p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-lg transition shadow-sm" 
+                                title="Teruskan ke Penugasan"
+                            >
+                                <FaPaperPlane size={14} />
+                            </button>
 
-                                <button onClick={(e) => handleEdit(e, task.id_perencanaan)} className="p-2 text-blue-500 hover:bg-blue-100 rounded-full transition"><FaEdit size={14} /></button>
-                                <button onClick={(e) => handleDelete(e, task.id_perencanaan)} className="p-2 text-red-500 hover:bg-red-100 rounded-full transition"><FaTrash size={14} /></button>
-                            </div>
+                            <button 
+                                onClick={(e) => handleEdit(e, task.id_perencanaan)} 
+                                className="p-2 bg-white text-blue-500 border border-gray-200 hover:border-blue-200 hover:bg-blue-50 rounded-lg transition-all shadow-sm"
+                            >
+                                <FaEdit size={14} />
+                            </button>
+                            
+                            <button 
+                                onClick={(e) => handleDelete(e, task.id_perencanaan)} 
+                                className="p-2 bg-white text-red-500 border border-gray-200 hover:border-red-200 hover:bg-red-50 rounded-lg transition-all shadow-sm"
+                            >
+                                <FaTrash size={14} />
+                            </button>
                         </div>
                       </div>
                       
                       {/* Konten Detail */}
                       {isOpen && (
-                        <div className="bg-gray-50/30 px-6 py-5 border-t border-gray-100 text-sm animate-fade-in-down pl-6 sm:pl-14">
+                        <div className="bg-gray-50/50 border-t border-gray-100 px-6 py-6 pl-6 sm:pl-16 transition-all duration-300 ease-in-out">
                            
                            {/* PROGRESS BAR 1: VOLUME TUGAS */}
-                           <div className="mb-6 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                                <div className="flex justify-between items-end mb-2">
+                           <div className="mb-6 bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                                <div className="flex justify-between items-end mb-3">
                                     <div>
-                                        <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Progres Penugasan</h4>
-                                        <p className="text-[10px] text-gray-400">Total volume tugas anggota vs Target Subkegiatan.</p>
+                                        <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-1 flex items-center gap-2">
+                                            <FaChartPie className="text-[#1A2A80]" /> Progres Volume
+                                        </h4>
+                                        <p className="text-[10px] text-gray-400">Total volume tugas vs Target Subkegiatan.</p>
                                     </div>
                                     <div className="text-right">
-                                        <span className={`text-sm font-bold ${percentageVolume > 100 ? 'text-red-500' : 'text-[#1A2A80]'}`}>
+                                        <span className={`text-base font-extrabold ${percentageVolume > 100 ? 'text-red-500' : 'text-[#1A2A80]'}`}>
                                             {realisasi} / {target}
                                         </span>
-                                        <span className="text-xs text-gray-500 ml-1">({percentageVolume}%)</span>
+                                        <span className="text-xs text-gray-500 ml-1 font-medium">({percentageVolume}%)</span>
                                     </div>
                                 </div>
-                                <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                                <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden border border-gray-100">
                                     <div 
-                                        className={`h-2.5 rounded-full transition-all duration-500 ${barColorVolume}`} 
+                                        className={`h-full rounded-full transition-all duration-700 ease-out shadow-sm ${barColorVolume}`} 
                                         style={{ width: `${Math.min(percentageVolume, 100)}%` }}
                                     ></div>
                                 </div>
@@ -656,18 +702,21 @@ const Perencanaan = () => {
                                 <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Daftar Anggota Tim:</h4>
                                 <Link 
                                     to={`/perencanaan/detail/${task.id_perencanaan}`} 
-                                    className="text-[#1A2A80] font-bold text-xs hover:underline flex items-center gap-1 bg-white px-3 py-1.5 rounded border border-gray-200 shadow-sm hover:bg-blue-50 transition"
+                                    className="text-[#1A2A80] font-bold text-xs hover:text-blue-700 flex items-center gap-2 bg-white px-4 py-2 rounded-lg border border-gray-200 shadow-sm hover:border-blue-200 transition"
                                 >
                                     Kelola Tim & Print SPK <FaArrowRight size={10} />
                                 </Link>
                            </div>
 
                            {loadingMembers ? (
-                             <p className="text-gray-400 italic text-center py-4">Memuat data anggota...</p>
+                             <div className="text-center py-4 flex flex-col items-center">
+                                <div className="w-6 h-6 border-2 border-gray-300 border-t-[#1A2A80] rounded-full animate-spin mb-2"></div>
+                                <p className="text-gray-400 text-xs italic">Memuat data anggota...</p>
+                             </div>
                            ) : (
                              members.length === 0 ? (
-                               <div className="text-center py-6 bg-white rounded border border-dashed border-gray-200 text-gray-400 text-xs">
-                                 Belum ada anggota di tim ini.
+                               <div className="text-center py-8 bg-white rounded-xl border border-dashed border-gray-200 text-gray-400 text-xs">
+                                 Belum ada anggota yang ditambahkan ke tim ini.
                                </div>
                              ) : (
                                <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -679,56 +728,56 @@ const Perencanaan = () => {
                                     const isOverIncome = monthlyLimit > 0 && totalMonthlyIncome > monthlyLimit;
                                     
                                     return (
-                                      <li key={m.id_mitra || idx} className="bg-white px-3 py-3 rounded-lg border border-gray-200 shadow-sm">
-                                        <div className="flex items-start gap-3 mb-2">
-                                            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-xs font-bold mt-1">
+                                      <li key={m.id_mitra || idx} className="bg-white px-4 py-4 rounded-xl border border-gray-200 shadow-sm hover:border-blue-200 transition-colors">
+                                        <div className="flex items-center gap-3 mb-3">
+                                            <div className="w-9 h-9 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-[#1A2A80] text-xs font-extrabold shadow-inner">
                                                 {m.nama_lengkap ? m.nama_lengkap.charAt(0) : '?'}
                                             </div>
                                             <div className="overflow-hidden w-full">
                                                 <div className="flex justify-between items-center w-full">
-                                                    <p className="text-gray-700 font-bold text-xs truncate">
+                                                    <p className="text-gray-800 font-bold text-xs truncate" title={m.nama_lengkap}>
                                                         {m.nama_lengkap || m.nama_mitra}
                                                     </p>
                                                     {m.volume_tugas > 0 && (
-                                                        <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 rounded border border-blue-100">
-                                                            Jumlah Tugas: {m.volume_tugas}
+                                                        <span className="text-[10px] font-bold bg-blue-50 text-[#1A2A80] px-1.5 py-0.5 rounded border border-blue-100">
+                                                            Vol: {m.volume_tugas}
                                                         </span>
                                                     )}
                                                 </div>
-                                                <p className="text-xs text-gray-400 truncate">{m.nama_jabatan || '-'}</p>
+                                                <p className="text-[11px] text-gray-400 truncate mt-0.5">{m.nama_jabatan || '-'}</p>
                                             </div>
                                         </div>
 
                                         {/* PROGRESS BAR 2: PENDAPATAN MITRA */}
-                                        <div className="mt-2 border-t border-gray-100 pt-2">
-                                            <div className="flex justify-between items-end text-[10px] mb-1">
-                                                <span className="text-gray-500 font-medium">Pendapatan Bulan Ini:</span>
+                                        <div className="mt-3 border-t border-gray-100 pt-3">
+                                            <div className="flex justify-between items-end text-[10px] mb-1.5">
+                                                <span className="text-gray-500 font-medium">Pendapatan (Bulan Ini)</span>
                                                 <span className={`font-bold ${isOverIncome ? 'text-red-600' : 'text-gray-700'}`}>
                                                     {formatRupiah(totalMonthlyIncome)}
                                                 </span>
                                             </div>
                                             
                                             {monthlyLimit > 0 ? (
-                                                <div className="relative w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                                                <div className="relative w-full h-1.5 bg-gray-100 rounded-full overflow-hidden border border-gray-100">
                                                     <div 
-                                                        className={`absolute top-0 left-0 h-full rounded-full transition-all duration-500 ${isOverIncome ? 'bg-red-500' : 'bg-green-500'}`}
+                                                        className={`absolute top-0 left-0 h-full rounded-full transition-all duration-500 ${isOverIncome ? 'bg-red-500' : 'bg-emerald-500'}`}
                                                         style={{ width: `${Math.min(percentageIncome, 100)}%` }}
                                                     ></div>
                                                 </div>
                                             ) : (
-                                                <div className="text-[10px] text-gray-300 italic">Batas honor belum diset</div>
+                                                <div className="text-[10px] text-gray-300 italic bg-gray-50 px-2 py-1 rounded text-center">Batas honor belum diset</div>
                                             )}
 
                                             {monthlyLimit > 0 && (
                                                 <div className="flex justify-between text-[9px] text-gray-400 mt-1">
                                                     <span>0</span>
-                                                    <span>Limit: {formatRupiah(monthlyLimit)}</span>
+                                                    <span className="font-medium">Max: {formatRupiah(monthlyLimit)}</span>
                                                 </div>
                                             )}
 
                                             {isOverIncome && (
-                                                <div className="mt-1 flex items-center gap-1 text-[9px] text-red-500 font-bold">
-                                                    <FaExclamationCircle /> Melebihi Batas!
+                                                <div className="mt-2 flex items-center gap-1.5 text-[10px] text-red-600 bg-red-50 px-2 py-1 rounded border border-red-100 font-bold">
+                                                    <FaExclamationCircle /> Melebihi Batas Honor!
                                                 </div>
                                             )}
                                         </div>
@@ -751,22 +800,23 @@ const Perencanaan = () => {
 
       {/* --- MODAL IMPORT POPUP --- */}
       {showImportModal && (
-        <div 
-            className="fixed inset-0 z-50 flex items-center justify-center p-4" 
-            style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }} 
-        >
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-fade-in-down">
-                <div className="bg-[#1A2A80] p-4 flex justify-between items-center text-white">
-                    <h3 className="font-bold">Import Data Perencanaan</h3>
-                    <button onClick={() => setShowImportModal(false)} className="hover:text-red-300"><FaTimes /></button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm transition-opacity">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-fade-in-up">
+                <div className="bg-[#1A2A80] px-6 py-4 flex justify-between items-center text-white">
+                    <h3 className="font-bold text-lg flex items-center gap-2">
+                        <FaFileUpload className="text-blue-200" /> Import Perencanaan
+                    </h3>
+                    <button onClick={() => setShowImportModal(false)} className="text-white/70 hover:text-white transition-colors">
+                        <FaTimes size={18} />
+                    </button>
                 </div>
 
-                <div className="p-6 space-y-4">
+                <div className="p-6 space-y-5">
                     
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Pilih Survei/Sensus (Induk)</label>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Pilih Survei/Sensus (Induk)</label>
                         <select 
-                            className="w-full border rounded p-2 text-sm"
+                            className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#1A2A80] focus:border-transparent outline-none transition"
                             value={selectedKegiatanId}
                             onChange={handleKegiatanChange}
                         >
@@ -778,9 +828,9 @@ const Perencanaan = () => {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Pilih Kegiatan</label>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Pilih Kegiatan (Sub)</label>
                         <select 
-                            className="w-full border rounded p-2 text-sm"
+                            className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#1A2A80] focus:border-transparent outline-none transition disabled:bg-gray-100 disabled:text-gray-400"
                             value={selectedSubId}
                             onChange={(e) => setSelectedSubId(e.target.value)}
                             disabled={!selectedKegiatanId}
@@ -792,33 +842,46 @@ const Perencanaan = () => {
                         </select>
                     </div>
 
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:bg-gray-50 transition relative">
+                    <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:bg-blue-50 hover:border-blue-300 transition-colors relative group">
                         <input 
                             type="file" 
                             accept=".csv, .xlsx, .xls"
                             onChange={(e) => setImportFile(e.target.files[0])}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                         />
-                        <div className="space-y-2 pointer-events-none">
-                            <FaFileUpload className="mx-auto text-gray-400 text-3xl" />
+                        <div className="space-y-3 pointer-events-none">
+                            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto group-hover:bg-blue-100 transition-colors">
+                                <FaFileUpload className="text-gray-400 text-xl group-hover:text-[#1A2A80]" />
+                            </div>
                             {importFile ? (
-                                <p className="text-sm font-bold text-green-600">{importFile.name}</p>
+                                <div>
+                                    <p className="text-sm font-bold text-[#1A2A80]">{importFile.name}</p>
+                                    <p className="text-xs text-green-600 mt-1">File siap diunggah</p>
+                                </div>
                             ) : (
-                                <p className="text-sm text-gray-500">Klik atau tarik file Excel/CSV ke sini</p>
+                                <div>
+                                    <p className="text-sm font-medium text-gray-600">Klik atau tarik file Excel/CSV</p>
+                                    <p className="text-xs text-gray-400 mt-1">Format: .xlsx, .xls, .csv</p>
+                                </div>
                             )}
                         </div>
                     </div>
 
                 </div>
 
-                <div className="p-4 bg-gray-50 flex justify-end gap-2 border-t">
-                    <button onClick={() => setShowImportModal(false)} className="px-4 py-2 rounded text-gray-600 hover:bg-gray-200 text-sm">Batal</button>
+                <div className="p-5 bg-gray-50 flex justify-end gap-3 border-t border-gray-100">
+                    <button 
+                        onClick={() => setShowImportModal(false)} 
+                        className="px-5 py-2.5 rounded-xl text-gray-600 hover:bg-gray-200 text-sm font-bold transition-colors"
+                    >
+                        Batal
+                    </button>
                     <button 
                         onClick={handleProcessImport} 
                         disabled={isPreviewing || !selectedSubId || !importFile}
-                        className="px-4 py-2 rounded bg-[#1A2A80] text-white hover:bg-blue-900 text-sm font-bold disabled:opacity-50 flex items-center gap-2"
+                        className="px-5 py-2.5 rounded-xl bg-[#1A2A80] text-white hover:bg-blue-900 text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-md transition-all"
                     >
-                        {isPreviewing && <span className="animate-spin">↻</span>}
+                        {isPreviewing && <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></span>}
                         Proses & Lanjut
                     </button>
                 </div>

@@ -8,8 +8,9 @@ import {
   FaPhone, 
   FaIdCard,
   FaCalendarAlt,
-  FaFilter,
-  FaUser 
+  FaChevronDown,
+  FaUser,
+  FaAddressCard
 } from 'react-icons/fa';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
@@ -26,8 +27,7 @@ const Mitra = () => {
   // Opsi Tahun (Mundur 2 tahun, Maju 1 tahun)
   const yearOptions = [currentYear - 2, currentYear - 1, currentYear, currentYear + 1];
 
-  // --- HELPER EKSTRAKSI DATA (FIX) ---
-  // Mencegah error .filter is not a function jika response berupa object
+  // --- HELPER EKSTRAKSI DATA ---
   const getList = (response) => {
     if (response?.data) {
         if (Array.isArray(response.data)) return response.data;
@@ -43,32 +43,25 @@ const Mitra = () => {
       try {
         const token = localStorage.getItem('token');
         const config = { headers: { Authorization: `Bearer ${token}` } };
-        
         const response = await axios.get(`${API_URL}/api/mitra`, config);
-        
-        // PERBAIKAN: Gunakan getList
         setMitraList(getList(response));
-
       } catch (err) {
         console.error("Gagal memuat data mitra:", err);
-        setMitraList([]); // Fallback array kosong agar tidak error
+        setMitraList([]); 
       } finally {
         setLoading(false);
       }
     };
-
     fetchMitra();
   }, []);
 
-  // Filter Logika Gabungan (Pencarian + Tahun Aktif)
+  // Filter Logika Gabungan
   const filteredMitra = useMemo(() => {
-    // Pastikan mitraList adalah array sebelum di-filter
     if (!Array.isArray(mitraList)) return [];
     if (!selectedYear) return [];
 
     return mitraList.filter(item => {
       // 1. Cek Tahun Aktif
-      // Pastikan field riwayat_tahun ada dan berbentuk string
       const historyYears = item.riwayat_tahun ? String(item.riwayat_tahun).split(',').map(y => y.trim()) : [];
       const isActiveInYear = historyYears.includes(String(selectedYear));
 
@@ -101,74 +94,81 @@ const Mitra = () => {
   };
 
   return (
-    <div className="w-full pt-8 px-8 pb-20 animate-fade-in-up">
+    // Container aligned with Design System (max-w-7xl)
+    <div className="w-full mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-6 pb-20">
       
-      {/* HEADER PAGE */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-        <div>
-            <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-            <FaUserTie className="text-[#1A2A80]" /> Direktori Mitra
-            </h1>
-            <p className="text-sm text-gray-500 mt-1">Daftar mitra statistik yang aktif pada tahun terpilih.</p>
-        </div>
-      </div>
-
-      {/* FILTER BAR */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
-         
-         {/* Input Pencarian */}
-         <div className="relative w-full md:w-2/3">
-            <FaSearch className="absolute left-3 top-3 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Cari nama mitra, NIK, atau alamat..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#1A2A80] outline-none text-sm transition bg-gray-50 focus:bg-white"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-         </div>
-
-         {/* Dropdown Tahun */}
-         <div className="flex items-center gap-3 w-full md:w-auto min-w-[200px]">
-            <div className="flex items-center gap-2 text-gray-500 text-sm font-bold whitespace-nowrap">
-                <FaFilter className="text-[#1A2A80]" /> Tahun Aktif:
+      {/* HEADER & FILTER SECTION */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-6">
+            <div>
+               <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 flex items-center gap-3">
+                  <div className="p-2 bg-blue-50 rounded-lg text-[#1A2A80]">
+                    <FaAddressCard size={24} />
+                  </div>
+                  Direktori Mitra
+               </h1>
+               <p className="text-gray-500 mt-2 ml-1">
+                  Daftar lengkap mitra statistik yang aktif pada tahun terpilih.
+               </p>
             </div>
-            <div className="relative w-full">
-                <FaCalendarAlt className="absolute left-3 top-3 text-gray-400 z-10" />
+          </div>
+
+          <hr className="border-gray-100 mb-6" />
+
+          {/* Filter Inputs */}
+          <div className="flex flex-col md:flex-row gap-4">
+             {/* Year Dropdown */}
+             <div className="relative min-w-[180px]">
+                <FaCalendarAlt className="absolute left-4 top-3.5 text-gray-400" />
                 <select
-                   className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#1A2A80] outline-none text-sm bg-gray-50 focus:bg-white cursor-pointer font-bold text-gray-700"
+                   className="w-full pl-11 pr-8 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-[#1A2A80] outline-none transition text-sm text-gray-800 cursor-pointer appearance-none font-bold"
                    value={selectedYear}
                    onChange={(e) => setSelectedYear(e.target.value)}
                 >
                    {yearOptions.map(year => (
-                       <option key={year} value={year}>{year}</option>
+                       <option key={year} value={year}>Tahun Aktif: {year}</option>
                    ))}
                 </select>
-            </div>
-         </div>
+                <FaChevronDown className="absolute right-4 top-4 text-gray-400 text-xs pointer-events-none" />
+             </div>
 
+             {/* Search Input */}
+             <div className="relative flex-grow">
+                <FaSearch className="absolute left-4 top-3.5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Cari nama mitra, NIK, atau alamat..."
+                  className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-[#1A2A80] outline-none transition text-sm text-gray-800 placeholder-gray-400"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+             </div>
+          </div>
       </div>
 
-      {/* TABEL DATA */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        {/* Header Tabel */}
-        <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-            <h3 className="font-bold text-gray-700 flex items-center gap-2 text-sm">
-                <FaUserTie className="text-[#1A2A80]" /> Mitra Aktif Tahun {selectedYear} ({filteredMitra.length})
+      {/* DATA TABLE */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        {/* Table Header Stats */}
+        <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center gap-4">
+            <h3 className="font-bold text-gray-800 flex items-center gap-2 uppercase text-sm tracking-wide">
+                <FaUserTie className="text-[#1A2A80]" /> Hasil Pencarian
             </h3>
+            <span className="text-xs font-bold bg-white border border-gray-200 px-3 py-1 rounded-full text-gray-500 shadow-sm">
+                Total: {filteredMitra.length}
+            </span>
         </div>
 
-        {/* Content Tabel */}
+        {/* Table Content */}
         <div className="overflow-x-auto">
             <table className="min-w-full text-sm text-left">
-                <thead className="bg-white text-gray-500 uppercase text-xs font-bold border-b border-gray-200">
+                <thead className="bg-white text-gray-500 border-b border-gray-100 uppercase text-xs font-bold tracking-wider">
                     <tr>
-                        <th className="px-6 py-4 w-1/3">Nama Lengkap</th>
+                        <th className="px-6 py-4 w-1/3">Profil Mitra</th>
                         <th className="px-6 py-4 w-1/3">Identitas (NIK/ID)</th>
                         <th className="px-6 py-4 w-1/3">Kontak & Alamat</th>
                     </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-50">
                     {loading ? (
                         <tr>
                             <td colSpan="3" className="text-center py-12 text-gray-400 italic">
@@ -180,51 +180,58 @@ const Mitra = () => {
                         </tr>
                     ) : filteredMitra.length === 0 ? (
                         <tr>
-                            <td colSpan="3" className="text-center py-12 text-gray-400 italic bg-gray-50/30">
-                                {searchTerm 
-                                    ? `Tidak ditemukan mitra dengan kata kunci "${searchTerm}" di tahun ${selectedYear}.` 
-                                    : `Tidak ada mitra yang aktif pada tahun ${selectedYear}.`
-                                }
+                            <td colSpan="3" className="text-center py-16">
+                                <div className="flex flex-col items-center justify-center text-gray-300">
+                                    <FaUserTie size={30} className="mb-2 opacity-30" />
+                                    <p className="text-sm font-medium text-gray-500">
+                                        {searchTerm 
+                                            ? `Tidak ditemukan mitra "${searchTerm}" di tahun ${selectedYear}.` 
+                                            : `Tidak ada mitra aktif pada tahun ${selectedYear}.`
+                                        }
+                                    </p>
+                                </div>
                             </td>
                         </tr>
                     ) : (
                         filteredMitra.map((item, idx) => (
                             <tr key={item.id || idx} className="hover:bg-blue-50/30 transition-colors group">
-                                <td className="px-6 py-4 align-top">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-[#1A2A80] border border-indigo-100 group-hover:bg-[#1A2A80] group-hover:text-white transition-colors">
-                                            <FaUser size={18} />
+                                <td className="px-6 py-5 align-top">
+                                    <div className="flex items-start gap-4">
+                                        <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-50 text-[#1A2A80] border border-blue-100 flex items-center justify-center text-sm shadow-sm group-hover:bg-[#1A2A80] group-hover:text-white transition-colors">
+                                            <FaUser />
                                         </div>
                                         <div>
-                                            <p className="font-bold text-gray-800">{item.nama_lengkap}</p>
-                                            <p className="text-xs text-gray-500">{formatGender(item.jenis_kelamin)}</p>
+                                            <p className="font-bold text-gray-900 text-sm mb-0.5">{item.nama_lengkap}</p>
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-600 border border-gray-200 uppercase tracking-wide">
+                                                {formatGender(item.jenis_kelamin)}
+                                            </span>
                                         </div>
                                     </div>
                                 </td>
-                                <td className="px-6 py-4 align-top">
-                                    <div className="flex flex-col gap-1.5">
+                                <td className="px-6 py-5 align-top">
+                                    <div className="space-y-2">
                                         <div className="flex items-center gap-2 text-gray-600">
                                             <FaIdCard className="text-gray-400" />
-                                            <span className="font-mono text-xs font-medium bg-gray-100 px-2 py-0.5 rounded border border-gray-200">
+                                            <span className="font-mono text-xs font-bold text-gray-700 bg-gray-50 px-2 py-1 rounded border border-gray-200">
                                                 {maskNIK(item.nik)}
                                             </span>
                                         </div>
                                         {item.sobat_id && (
-                                            <div className="text-xs text-[#1A2A80] font-bold pl-6">
+                                            <div className="text-xs font-bold pl-6 text-[#1A2A80]">
                                                 ID SOBAT: {item.sobat_id}
                                             </div>
                                         )}
                                     </div>
                                 </td>
-                                <td className="px-6 py-4 align-top">
-                                    <div className="space-y-1.5">
-                                        <p className="flex items-center gap-2 text-gray-600">
-                                            <FaPhone className="text-green-600 text-xs" />
-                                            <span className="font-medium">{item.nomor_hp || '-'}</span>
+                                <td className="px-6 py-5 align-top">
+                                    <div className="space-y-2">
+                                        <p className="flex items-center gap-2 text-gray-700 text-xs font-medium">
+                                            <FaPhone className="text-green-600" />
+                                            {item.nomor_hp || '-'}
                                         </p>
-                                        <p className="flex items-start gap-2 text-gray-500 text-xs mt-1">
+                                        <p className="flex items-start gap-2 text-gray-500 text-xs leading-relaxed">
                                             <FaMapMarkerAlt className="text-red-500 mt-0.5 flex-shrink-0" />
-                                            <span className="line-clamp-2 max-w-xs leading-snug">{item.alamat || '-'}</span>
+                                            <span className="line-clamp-2">{item.alamat || '-'}</span>
                                         </p>
                                     </div>
                                 </td>

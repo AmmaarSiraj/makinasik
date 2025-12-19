@@ -1,18 +1,20 @@
+// src/pages/TambahPerencanaan.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import { useNavigate, useLocation } from 'react-router-dom'; // Tambahkan useLocation
+import { useNavigate, useLocation } from 'react-router-dom'; 
 import Swal from 'sweetalert2';
 import {
   FaArrowRight, FaArrowLeft, FaCheck, FaClipboardList,
   FaIdCard, FaSearch, FaTimes, FaUsers, FaMoneyBillWave,
-  FaExclamationCircle, FaChartBar, FaBoxOpen, FaFilter, FaCalendarDay
+  FaExclamationCircle, FaChartBar, FaBoxOpen, FaFilter, FaCalendarDay,
+  FaLayerGroup, FaCheckCircle
 } from 'react-icons/fa';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 const TambahPerencanaan = () => {
   const navigate = useNavigate();
-  const location = useLocation(); // Hook untuk menangkap data import
+  const location = useLocation(); 
 
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -247,7 +249,7 @@ const TambahPerencanaan = () => {
       Swal.fire('Perhatian', 'Silakan pilih Kegiatan dan Sub Kegiatan terlebih dahulu.', 'warning');
       return;
     }
-    // Cek Duplikasi Perencanaan di SubKegiatan yang sama (jika ingin membatasi 1 planning per sub)
+    // Cek Duplikasi Perencanaan di SubKegiatan yang sama
     const exist = listPerencanaan.find(p => String(p.id_subkegiatan) === String(selectedSubId));
     if (exist) {
         Swal.fire({
@@ -295,7 +297,7 @@ const TambahPerencanaan = () => {
     const user = JSON.parse(localStorage.getItem('user'));
     const headers = { Authorization: `Bearer ${token}` };
 
-    const rawIdPengawas = user?.id; // AMBIL OTOMATIS DARI LOGIN
+    const rawIdPengawas = user?.id; 
     const idPengawas = parseInt(rawIdPengawas); 
 
     if (isNaN(idPengawas) || idPengawas < 1) { 
@@ -363,21 +365,47 @@ const TambahPerencanaan = () => {
     return matchSearch && notSelected && notAlreadyAssigned && isActiveInYear;
   });
 
-  if (loading) return <div className="text-center py-20 text-gray-500">Memuat formulir...</div>;
+  // --- LOADING STATE FIX ---
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <div className="w-10 h-10 border-4 border-blue-100 border-t-[#1A2A80] rounded-full animate-spin mb-4"></div>
+        <p className="text-gray-500 font-medium">Memuat formulir...</p>
+    </div>
+  );
 
   return (
-    <div className="max-w-6xl mx-auto pb-20">
+    // Container aligned with Design System (max-w-7xl)
+    <div className="w-full mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-6 pb-20">
 
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-800">Wizard Perencanaan Mitra</h1>
-        <div className="flex items-center gap-2 text-sm text-gray-500 mt-2">
-          <span className={`px-3 py-1 rounded-full ${step === 1 ? 'bg-[#1A2A80] text-white font-bold' : 'bg-gray-200'}`}>1. Pilih Kegiatan</span>
-          <span className="text-gray-300">-----</span>
-          <span className={`px-3 py-1 rounded-full ${step === 2 ? 'bg-[#1A2A80] text-white font-bold' : 'bg-gray-200'}`}>2. Mitra & Alokasi</span>
+      {/* HEADER SECTION (CARD) */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+               <h1 className="text-2xl font-extrabold text-gray-900 flex items-center gap-3">
+                  <div className="bg-blue-50 text-[#1A2A80] p-2.5 rounded-lg">
+                      <FaLayerGroup size={20} />
+                  </div>
+                  Wizard Perencanaan Mitra
+               </h1>
+               <p className="text-sm text-gray-500 mt-2 ml-1">
+                  Buat perencanaan tim baru dalam 2 langkah mudah.
+               </p>
+            </div>
+            
+            {/* Step Indicator */}
+            <div className="flex items-center gap-2 text-sm bg-gray-50 p-2 rounded-xl border border-gray-200">
+               <span className={`px-4 py-2 rounded-lg transition-all ${step === 1 ? 'bg-[#1A2A80] text-white font-bold shadow-md' : 'text-gray-400 hover:text-gray-600'}`}>
+                  1. Pilih Kegiatan
+               </span>
+               <span className="text-gray-300">/</span>
+               <span className={`px-4 py-2 rounded-lg transition-all ${step === 2 ? 'bg-[#1A2A80] text-white font-bold shadow-md' : 'text-gray-400 hover:text-gray-600'}`}>
+                  2. Mitra & Alokasi
+               </span>
+            </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden min-h-[400px] flex flex-col">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden min-h-[400px] flex flex-col">
 
         {step === 1 && (
           <div className="p-8 animate-fade-in-up flex-1 flex flex-col">
@@ -385,11 +413,11 @@ const TambahPerencanaan = () => {
               <FaClipboardList className="text-[#1A2A80]" /> Tentukan Sasaran Kegiatan
             </h2>
 
-            <div className="space-y-6">
+            <div className="space-y-6 max-w-3xl">
               <div>
-                <label className="block text-sm font-bold text-gray-600 mb-2">Pilih Kegiatan Utama</label>
+                <label className="block text-sm font-bold text-gray-600 mb-2 uppercase tracking-wide">Pilih Kegiatan Utama</label>
                 <select
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1A2A80] outline-none"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#1A2A80] outline-none transition bg-gray-50 focus:bg-white"
                   value={selectedKegiatanId}
                   onChange={(e) => { setSelectedKegiatanId(e.target.value); setSelectedSubId(''); }}
                 >
@@ -401,9 +429,9 @@ const TambahPerencanaan = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-gray-600 mb-2">Pilih Sub Kegiatan</label>
+                <label className="block text-sm font-bold text-gray-600 mb-2 uppercase tracking-wide">Pilih Sub Kegiatan</label>
                 <select
-                  className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1A2A80] outline-none ${!selectedKegiatanId ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
+                  className={`w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#1A2A80] outline-none transition ${!selectedKegiatanId ? 'bg-gray-100 cursor-not-allowed text-gray-400' : 'bg-gray-50 focus:bg-white'}`}
                   value={selectedSubId}
                   onChange={(e) => setSelectedSubId(e.target.value)}
                   disabled={!selectedKegiatanId}
@@ -419,8 +447,8 @@ const TambahPerencanaan = () => {
               </div>
             </div>
 
-            <div className="mt-auto pt-8 flex justify-end">
-              <button onClick={handleNextStep} className="px-8 py-3 bg-[#1A2A80] text-white rounded-xl font-bold hover:bg-blue-900 transition shadow-lg flex items-center gap-2">
+            <div className="mt-auto pt-10 flex justify-end">
+              <button onClick={handleNextStep} className="px-8 py-3 bg-[#1A2A80] text-white rounded-xl font-bold hover:bg-blue-900 transition shadow-md hover:shadow-lg flex items-center gap-2">
                 Lanjut <FaArrowRight />
               </button>
             </div>
@@ -430,52 +458,58 @@ const TambahPerencanaan = () => {
         {step === 2 && (
           <div className="p-8 animate-fade-in-up flex-1 flex flex-col">
 
-            <div className="flex justify-between items-center mb-6">
+            {/* HEADER STEP 2 */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 border-b border-gray-100 pb-6">
               <div className='text-sm text-gray-600'>
                 Perencanaan untuk: <span className="font-bold text-[#1A2A80] text-lg block">{allSubKegiatan.find(s => String(s.id) === String(selectedSubId))?.nama_sub_kegiatan}</span>
                 {selectedSubId && (
-                    <span className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                    <span className="text-xs text-gray-500 flex items-center gap-1 mt-1 font-medium bg-gray-50 w-fit px-2 py-1 rounded">
                         <FaCalendarDay /> Periode: {new Date(allSubKegiatan.find(s => String(s.id) === String(selectedSubId))?.tanggal_mulai).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
                     </span>
                 )}
               </div>
-              <button onClick={() => setStep(1)} className="text-xs text-blue-600 underline hover:text-blue-800">Ganti Kegiatan</button>
+              <button onClick={() => setStep(1)} className="text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-lg transition">
+                 <FaArrowLeft className="inline mr-1"/> Ganti Kegiatan
+              </button>
             </div>
 
             {/* INFO KUOTA */}
-            <div className="mb-8 p-5 bg-gray-50 border border-gray-200 rounded-xl">
+            <div className="mb-8 p-6 bg-gray-50 border border-gray-100 rounded-2xl">
               <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
                 <FaChartBar /> Informasi Kuota & Honorarium
               </h3>
               {availableJabatan.length === 0 ? (
-                <p className="text-sm text-red-500 italic">Belum ada data honorarium (Jabatan) untuk sub kegiatan ini.</p>
+                <p className="text-sm text-gray-400 italic text-center py-4 border border-dashed border-gray-200 rounded-xl bg-white">
+                    Belum ada data honorarium (Jabatan) untuk sub kegiatan ini.
+                </p>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {availableJabatan.map(h => {
                     const { used, max } = getVolumeStats(h.kode_jabatan, h.basis_volume);
                     const percent = max > 0 ? (used / max) * 100 : 0;
-                    let color = 'bg-green-500';
-                    if (percent > 80) color = 'bg-yellow-500';
-                    if (percent >= 100) color = 'bg-red-500';
+                    
+                    let barColor = 'bg-blue-500';
+                    if (percent >= 100) barColor = 'bg-green-500';
+                    if (percent > 100) barColor = 'bg-red-500';
 
                     return (
-                      <div key={h.id_honorarium} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                      <div key={h.id_honorarium} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:border-blue-200 transition-colors">
                         <div className="flex justify-between items-start mb-2">
                           <div>
                             <p className="font-bold text-sm text-gray-800">{h.nama_jabatan}</p>
-                            <p className="text-xs text-gray-500 font-mono">{h.kode_jabatan}</p>
+                            <span className="text-[10px] text-gray-500 font-mono bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">{h.kode_jabatan}</span>
                           </div>
                           <div className="text-right">
-                            <p className="text-xs font-bold text-green-600">{formatRupiah(h.tarif)}</p>
+                            <p className="text-sm font-extrabold text-[#1A2A80]">{formatRupiah(h.tarif)}</p>
                             <p className="text-[10px] text-gray-400">per {h.nama_satuan}</p>
                           </div>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden mb-1">
-                          <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{ width: `${Math.min(percent, 100)}%` }}></div>
+                        <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden mb-2">
+                          <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${Math.min(percent, 100)}%` }}></div>
                         </div>
-                        <div className="flex justify-between text-[10px] font-bold text-gray-500">
-                          <span>Terpakai: {used}</span>
-                          <span>Kuota: {max}</span>
+                        <div className="flex justify-between text-[10px] font-medium text-gray-500">
+                          <span>Terpakai: <strong>{used}</strong></span>
+                          <span>Kuota: <strong>{max}</strong></span>
                         </div>
                       </div>
                     )
@@ -484,205 +518,223 @@ const TambahPerencanaan = () => {
               )}
             </div>
 
-            <div className="flex flex-col md:flex-row gap-8 h-full">
+            <div className="flex flex-col lg:flex-row gap-8 h-full">
 
               {/* KIRI: PENCARIAN */}
-              <div className="md:w-1/3">
-                <h3 className="text-sm font-bold text-gray-700 mb-3 uppercase flex items-center gap-2">
-                  <FaSearch /> Tambah Mitra
-                </h3>
-                {targetYear && (
-                  <div className="mb-2">
-                    <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-[10px] px-2 py-1 rounded border border-blue-200 font-bold">
-                      <FaFilter size={10} /> Menampilkan Mitra Aktif Tahun {targetYear}
-                    </span>
-                  </div>
-                )}
-                <div className="relative">
-                  <input
-                    type="text"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1A2A80] outline-none"
-                    placeholder="Cari nama / NIK..."
-                    value={mitraSearch}
-                    onChange={(e) => { setMitraSearch(e.target.value); setShowMitraDropdown(true); }}
-                    onFocus={() => setShowMitraDropdown(true)}
-                  />
-                  {showMitraDropdown && mitraSearch && (
-                    <div className="absolute z-10 w-full bg-white border border-gray-200 rounded-lg shadow-xl mt-1 max-h-80 overflow-y-auto">
-                      {filteredMitra.length === 0 ? (
-                        <div className="p-3 text-sm text-gray-500">
-                          Tidak ditemukan / Tidak aktif di tahun {targetYear}.
-                        </div>
-                      ) : (
-                        filteredMitra.map(m => {
-                          const currentIncome = mitraIncomeMap[String(m.id)] || 0;
-                          const limit = batasHonorPeriode;
-                          const isFull = limit > 0 && currentIncome >= limit;
-                          const percent = limit > 0 ? (currentIncome / limit) * 100 : 0;
-
-                          return (
-                            <div
-                              key={m.id}
-                              onClick={() => handleAddMitra(m)}
-                              className={`px-4 py-3 border-b last:border-none transition cursor-pointer hover:bg-blue-50`}
-                            >
-                              <div className="flex justify-between items-start">
-                                <div>
-                                  <p className="text-sm font-bold text-gray-800">{m.nama_lengkap}</p>
-                                  <p className="text-xs text-gray-500">{m.nik}</p>
-                                </div>
-                                {isFull && <span className="text-[10px] font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded">LIMIT</span>}
-                              </div>
-
-                              {limit > 0 && (
-                                <div className="mt-2">
-                                  <div className="flex justify-between text-[10px] mb-1 text-gray-500">
-                                    <span>Rp {currentIncome.toLocaleString('id-ID')}</span>
-                                    <span>Limit Bln: Rp {limit.toLocaleString('id-ID')}</span>
-                                  </div>
-                                  <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
-                                    <div className={`h-1.5 rounded-full ${percent > 90 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${Math.min(percent, 100)}%` }}></div>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })
-                      )}
+              <div className="lg:w-1/3">
+                <div className="bg-white border border-gray-200 rounded-2xl p-5 h-full shadow-sm">
+                    <h3 className="text-sm font-bold text-gray-700 mb-4 uppercase flex items-center gap-2">
+                    <FaSearch className="text-[#1A2A80]"/> Tambah Mitra
+                    </h3>
+                    {targetYear && (
+                    <div className="mb-4">
+                        <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 text-[10px] px-3 py-1.5 rounded-lg border border-blue-100 font-bold">
+                        <FaFilter size={10} /> Menampilkan Mitra Aktif Tahun {targetYear}
+                        </span>
                     </div>
-                  )}
+                    )}
+                    <div className="relative">
+                    <input
+                        type="text"
+                        className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-[#1A2A80] outline-none transition text-sm text-gray-800 placeholder-gray-400"
+                        placeholder="Cari nama atau NIK..."
+                        value={mitraSearch}
+                        onChange={(e) => { setMitraSearch(e.target.value); setShowMitraDropdown(true); }}
+                        onFocus={() => setShowMitraDropdown(true)}
+                    />
+                    <FaSearch className="absolute left-3.5 top-3.5 text-gray-400" />
+                    
+                    {showMitraDropdown && mitraSearch && (
+                        <div className="absolute z-10 w-full bg-white border border-gray-200 rounded-xl shadow-xl mt-2 max-h-80 overflow-y-auto custom-scrollbar">
+                        {filteredMitra.length === 0 ? (
+                            <div className="p-4 text-xs text-gray-500 text-center italic">
+                            Tidak ditemukan / Tidak aktif di tahun {targetYear}.
+                            </div>
+                        ) : (
+                            filteredMitra.map(m => {
+                            const currentIncome = mitraIncomeMap[String(m.id)] || 0;
+                            const limit = batasHonorPeriode;
+                            const isFull = limit > 0 && currentIncome >= limit;
+                            const percent = limit > 0 ? (currentIncome / limit) * 100 : 0;
+
+                            return (
+                                <div
+                                key={m.id}
+                                onClick={() => handleAddMitra(m)}
+                                className={`px-4 py-3 border-b border-gray-50 last:border-none transition cursor-pointer hover:bg-blue-50`}
+                                >
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                    <p className="text-sm font-bold text-gray-800">{m.nama_lengkap}</p>
+                                    <p className="text-xs text-gray-500 font-mono">{m.nik}</p>
+                                    </div>
+                                    {isFull ? (
+                                        <span className="text-[9px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-100">LIMIT</span>
+                                    ) : (
+                                        <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100"><FaCheckCircle /></span>
+                                    )}
+                                </div>
+
+                                {limit > 0 && (
+                                    <div className="mt-2 pt-2 border-t border-gray-50">
+                                    <div className="flex justify-between text-[9px] mb-1 text-gray-400 font-bold uppercase">
+                                        <span>Honor Bulan Ini</span>
+                                        <span>{Math.round(percent)}%</span>
+                                    </div>
+                                    <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                                        <div className={`h-1.5 rounded-full ${percent > 90 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${Math.min(percent, 100)}%` }}></div>
+                                    </div>
+                                    <div className="flex justify-between mt-1 text-[9px] text-gray-400">
+                                        <span>Rp {currentIncome.toLocaleString('id-ID')}</span>
+                                        <span>Max: Rp {limit.toLocaleString('id-ID')}</span>
+                                    </div>
+                                    </div>
+                                )}
+                                </div>
+                            );
+                            })
+                        )}
+                        </div>
+                    )}
+                    </div>
                 </div>
               </div>
 
               {/* KANAN: DAFTAR SELEKSI */}
-              <div className="md:w-2/3 bg-gray-50 rounded-xl border border-gray-200 p-5 flex flex-col">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-sm font-bold text-gray-700 uppercase flex items-center gap-2">
-                    <FaUsers /> Daftar Seleksi ({selectedMitras.length})
-                  </h3>
-                </div>
-
-                <div className="flex-1 overflow-y-auto max-h-[500px] space-y-3 pr-1">
-                  {selectedMitras.length === 0 ? (
-                    <div className="text-center py-10 text-gray-400 italic border-2 border-dashed border-gray-200 rounded-lg">
-                      Belum ada mitra yang ditambahkan.
+              <div className="lg:w-2/3"> 
+                <div className="bg-gray-50 rounded-2xl border border-gray-200 p-5 flex flex-col h-full shadow-inner">
+                    <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-sm font-bold text-gray-700 uppercase flex items-center gap-2">
+                        <FaUsers /> Daftar Seleksi ({selectedMitras.length})
+                    </h3>
                     </div>
-                  ) : (
-                    selectedMitras.map((mitra, idx) => {
-                      const honorInfo = availableJabatan.find(h => h.kode_jabatan === mitra.assignedJabatan);
-                      const tarif = honorInfo ? Number(honorInfo.tarif) : 0;
-                      const vol = Number(mitra.assignedVolume) || 0;
-                      const totalHonorBaru = tarif * vol;
 
-                      const currentIncome = mitraIncomeMap[String(mitra.id)] || 0;
-                      const totalProjected = currentIncome + totalHonorBaru;
-                      const limit = batasHonorPeriode;
-
-                      const percentCurrent = limit > 0 ? (currentIncome / limit) * 100 : 0;
-                      const percentNew = limit > 0 ? (totalHonorBaru / limit) * 100 : 0;
-                      const isOverLimit = limit > 0 && totalProjected > limit;
-
-                      return (
-                        <div key={mitra.id} className={`bg-white p-4 rounded-lg border shadow-sm relative group transition ${isOverLimit ? 'border-red-300 ring-1 ring-red-100' : 'border-gray-200 hover:border-blue-300'}`}>
-
-                          <div className="flex justify-between items-start gap-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-[#1A2A80] text-white flex items-center justify-center text-xs font-bold">
-                                {idx + 1}
-                              </div>
-                              <div>
-                                <p className="text-sm font-bold text-gray-800">{mitra.nama_lengkap}</p>
-                                <p className="text-xs text-gray-500 font-mono flex items-center gap-1">
-                                  <FaIdCard className="text-gray-300" /> {mitra.nik}
-                                </p>
-                              </div>
-                            </div>
-                            <button onClick={() => handleRemoveMitra(mitra.id)} className="text-gray-300 hover:text-red-500 p-1" title="Hapus"><FaTimes /></button>
-                          </div>
-
-                          <div className="mt-4 grid grid-cols-12 gap-3 items-end bg-gray-50 p-3 rounded-lg">
-                            <div className="col-span-5">
-                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Jabatan</label>
-                              <select
-                                className={`w-full text-xs border rounded px-2 py-1.5 outline-none ${isOverLimit ? 'border-red-500 text-red-700 bg-red-50' : 'border-gray-300 focus:ring-[#1A2A80]'}`}
-                                value={mitra.assignedJabatan}
-                                onChange={(e) => handleUpdateMitraData(mitra.id, 'assignedJabatan', e.target.value)}
-                              >
-                                <option value="">-- Pilih --</option>
-                                {availableJabatan.map(h => (
-                                  <option key={h.kode_jabatan} value={h.kode_jabatan}>{h.nama_jabatan || 'Nama Jabatan Tidak Ditemukan'}</option>
-                                ))}
-                              </select>
-                            </div>
-
-                            <div className="col-span-3">
-                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Jumlah Tugas</label>
-                              <div className="flex items-center">
-                                <input
-                                  type="number"
-                                  min="1"
-                                  className="w-full text-xs border border-gray-300 rounded-l px-2 py-1.5 outline-none text-center font-bold text-gray-700 focus:ring-1 focus:ring-[#1A2A80]"
-                                  value={mitra.assignedVolume}
-                                  onChange={(e) => handleUpdateMitraData(mitra.id, 'assignedVolume', parseInt(e.target.value) || 0)}
-                                />
-                                <span className="bg-gray-200 text-gray-500 text-[10px] px-2 py-1.5 rounded-r border border-l-0 border-gray-300 font-medium">
-                                  {honorInfo
-                                    ? (honorInfo.satuan_alias || honorInfo.nama_satuan)
-                                    : <FaBoxOpen />
-                                  }
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="col-span-4 text-right">
-                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Total Honor</label>
-                              <div className={`text-sm font-bold flex items-center justify-end gap-1 ${isOverLimit ? 'text-red-600' : 'text-green-600'}`}>
-                                <FaMoneyBillWave size={12} /> {formatRupiah(totalHonorBaru)}
-                              </div>
-                              {honorInfo && <span className="text-[10px] text-gray-400">(@ {formatRupiah(tarif)})</span>}
-                            </div>
-                          </div>
-
-                          {limit > 0 && (
-                            <div className="mt-3 border-t border-gray-100 pt-2">
-                              <div className="flex justify-between text-[10px] text-gray-500 mb-1">
-                                <span>Total Proyeksi: {formatRupiah(totalProjected)}</span>
-                                <span>Batas Bln: {formatRupiah(limit)}</span>
-                              </div>
-                              <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden flex">
-                                <div
-                                  className={`h-full ${percentCurrent > 90 ? 'bg-yellow-500' : 'bg-green-500'}`}
-                                  style={{ width: `${Math.min(percentCurrent, 100)}%` }}
-                                  title="Pendapatan Saat Ini"
-                                ></div>
-                                <div
-                                  className={`h-full ${isOverLimit ? 'bg-red-500' : 'bg-blue-400'}`}
-                                  style={{ width: `${Math.min(percentNew, 100 - Math.min(percentCurrent, 100))}%` }}
-                                  title="Tambahan Honor Ini"
-                                ></div>
-                              </div>
-                            </div>
-                          )}
-
-                          {isOverLimit && (
-                            <div className="mt-2 text-[10px] text-red-600 font-bold flex items-center gap-1 animate-pulse justify-end">
-                              <FaExclamationCircle /> Melebihi batas bulanan!
-                            </div>
-                          )}
-
+                    <div className="flex-1 overflow-y-auto max-h-[500px] space-y-3 pr-1 custom-scrollbar">
+                    {selectedMitras.length === 0 ? (
+                        <div className="text-center py-16 bg-white rounded-xl border border-dashed border-gray-300">
+                        <FaUsers className="mx-auto text-4xl text-gray-200 mb-3" />
+                        <p className="text-sm text-gray-500 italic">Belum ada mitra yang ditambahkan.</p>
                         </div>
-                      );
-                    })
-                  )}
+                    ) : (
+                        selectedMitras.map((mitra, idx) => {
+                        const honorInfo = availableJabatan.find(h => h.kode_jabatan === mitra.assignedJabatan);
+                        const tarif = honorInfo ? Number(honorInfo.tarif) : 0;
+                        const vol = Number(mitra.assignedVolume) || 0;
+                        const totalHonorBaru = tarif * vol;
+
+                        const currentIncome = mitraIncomeMap[String(mitra.id)] || 0;
+                        const totalProjected = currentIncome + totalHonorBaru;
+                        const limit = batasHonorPeriode;
+
+                        const percentCurrent = limit > 0 ? (currentIncome / limit) * 100 : 0;
+                        const percentNew = limit > 0 ? (totalHonorBaru / limit) * 100 : 0;
+                        const isOverLimit = limit > 0 && totalProjected > limit;
+
+                        return (
+                            <div key={mitra.id} className={`bg-white p-5 rounded-2xl border shadow-sm relative group transition-all ${isOverLimit ? 'border-red-300 ring-1 ring-red-100' : 'border-gray-200 hover:border-blue-200'}`}>
+
+                            <div className="flex justify-between items-start gap-4 mb-4">
+                                <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-full bg-[#1A2A80] text-white flex items-center justify-center text-xs font-bold shadow-sm">
+                                    {idx + 1}
+                                </div>
+                                <div>
+                                    <p className="text-sm font-bold text-gray-800">{mitra.nama_lengkap}</p>
+                                    <p className="text-xs text-gray-500 font-mono flex items-center gap-1">
+                                    <FaIdCard className="text-gray-300" /> {mitra.nik}
+                                    </p>
+                                </div>
+                                </div>
+                                <button onClick={() => handleRemoveMitra(mitra.id)} className="text-gray-300 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 transition" title="Hapus"><FaTimes /></button>
+                            </div>
+
+                            <div className="grid grid-cols-12 gap-3 items-end bg-gray-50/50 p-4 rounded-xl border border-gray-100">
+                                <div className="col-span-5">
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5">Jabatan</label>
+                                <select
+                                    className={`w-full text-xs border rounded-lg px-3 py-2 outline-none transition bg-white ${isOverLimit ? 'border-red-500 text-red-700 bg-red-50' : 'border-gray-300 focus:ring-1 focus:ring-[#1A2A80]'}`}
+                                    value={mitra.assignedJabatan}
+                                    onChange={(e) => handleUpdateMitraData(mitra.id, 'assignedJabatan', e.target.value)}
+                                >
+                                    <option value="">-- Pilih --</option>
+                                    {availableJabatan.map(h => (
+                                    <option key={h.kode_jabatan} value={h.kode_jabatan}>{h.nama_jabatan || 'Nama Jabatan Tidak Ditemukan'}</option>
+                                    ))}
+                                </select>
+                                </div>
+
+                                <div className="col-span-3">
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5">Volume</label>
+                                <div className="flex items-center">
+                                    <input
+                                    type="number"
+                                    min="1"
+                                    className="w-full text-xs border border-gray-300 rounded-l-lg px-2 py-2 outline-none text-center font-bold text-gray-700 focus:ring-1 focus:ring-[#1A2A80]"
+                                    value={mitra.assignedVolume}
+                                    onChange={(e) => handleUpdateMitraData(mitra.id, 'assignedVolume', parseInt(e.target.value) || 0)}
+                                    />
+                                    <span className="bg-gray-100 text-gray-500 text-[10px] px-2 py-2 rounded-r-lg border border-l-0 border-gray-300 font-bold">
+                                    {honorInfo
+                                        ? (honorInfo.satuan_alias || honorInfo.nama_satuan)
+                                        : <FaBoxOpen />
+                                    }
+                                    </span>
+                                </div>
+                                </div>
+
+                                <div className="col-span-4 text-right">
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5">Estimasi</label>
+                                <div className={`text-sm font-extrabold flex items-center justify-end gap-1 ${isOverLimit ? 'text-red-600' : 'text-[#1A2A80]'}`}>
+                                    {formatRupiah(totalHonorBaru)}
+                                </div>
+                                {honorInfo && <span className="text-[9px] text-gray-400">(@ {formatRupiah(tarif)})</span>}
+                                </div>
+                            </div>
+
+                            {limit > 0 && (
+                                <div className={`mt-4 pt-3 border-t border-gray-100 ${isOverLimit ? 'bg-red-50/30 -mx-5 px-5 -mb-5 pb-5 rounded-b-2xl border-t-red-100' : ''}`}>
+                                <div className="flex justify-between text-[10px] text-gray-500 mb-1.5 uppercase font-bold tracking-wide">
+                                    <span>Limit Honor (Bulan Ini)</span>
+                                    <span>{formatRupiah(totalProjected)} / {formatRupiah(limit)}</span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden flex shadow-inner">
+                                    <div
+                                    className={`h-full ${percentCurrent > 90 ? 'bg-yellow-400' : 'bg-emerald-400'}`}
+                                    style={{ width: `${Math.min(percentCurrent, 100)}%` }}
+                                    title="Pendapatan Saat Ini"
+                                    ></div>
+                                    <div
+                                    className={`h-full ${isOverLimit ? 'bg-red-500' : 'bg-blue-400'}`}
+                                    style={{ width: `${Math.min(percentNew, 100 - Math.min(percentCurrent, 100))}%` }}
+                                    title="Tambahan Honor Ini"
+                                    ></div>
+                                </div>
+                                {isOverLimit ? (
+                                    <div className="mt-2 text-[10px] text-red-600 font-bold flex items-center gap-1 animate-pulse">
+                                        <FaExclamationCircle /> Melebihi Batas Honor Bulanan!
+                                    </div>
+                                ) : (
+                                    <div className="mt-2 text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                                        <FaCheckCircle /> Masih Aman
+                                    </div>
+                                )}
+                                </div>
+                            )}
+
+                            </div>
+                        );
+                        })
+                    )}
+                    </div>
                 </div>
               </div>
             </div>
 
             <div className="mt-auto pt-8 flex justify-between border-t border-gray-100">
-              <button onClick={() => setStep(1)} className="px-6 py-3 border border-gray-300 text-gray-600 rounded-xl font-bold hover:bg-gray-50 flex items-center gap-2">
+              <button onClick={() => setStep(1)} className="px-6 py-3 border border-gray-300 text-gray-600 rounded-xl font-bold hover:bg-gray-50 flex items-center gap-2 transition">
                 <FaArrowLeft /> Kembali
               </button>
-              <button onClick={handleSubmit} disabled={submitting || selectedMitras.length === 0} className="px-8 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 shadow-lg flex items-center gap-2 disabled:opacity-50">
+              <button onClick={handleSubmit} disabled={submitting || selectedMitras.length === 0} className="px-8 py-3 bg-[#1A2A80] text-white rounded-xl font-bold hover:bg-blue-900 shadow-lg hover:shadow-xl transition flex items-center gap-2 disabled:opacity-50">
                 {submitting ? 'Menyimpan...' : <><FaCheck /> Simpan Semua</>}
               </button>
             </div>

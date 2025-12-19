@@ -217,7 +217,7 @@ const PopupTambahAnggotaPerencanaan = ({
           return;
       }
 
-      // Validasi Limit (Hanya Warning, tidak memblokir)
+      // Validasi Limit (Hanya Warning untuk Perencanaan)
       const mitraIncome = mitraIncomeMap[String(id_mitra)] || 0;
       const jobInfo = availableJobs.find(j => j.kode === selectedJob);
       const newIncome = (jobInfo ? jobInfo.tarif : 0) * finalVolume;
@@ -274,8 +274,9 @@ const PopupTambahAnggotaPerencanaan = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm transition-opacity">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden border border-gray-200 animate-fade-in-up">
+    // FIX: z-[9999] agar muncul di atas header layout, items-start + pt-24 agar ada margin atas
+    <div className="fixed inset-0 bg-black/60 flex justify-center items-start pt-24 z-[9999] p-4 backdrop-blur-sm transition-opacity">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden border border-gray-200 animate-fade-in-up">
         
         {/* Header Biru */}
         <div className="flex justify-between items-center p-5 bg-[#1A2A80] text-white">
@@ -334,6 +335,7 @@ const PopupTambahAnggotaPerencanaan = ({
                         type="number" min="1"
                         max={quotaInfo.total > 0 ? quotaInfo.sisa : undefined}
                         value={volume}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => {
                             const val = e.target.value;
                             const intVal = parseInt(val);
@@ -341,6 +343,9 @@ const PopupTambahAnggotaPerencanaan = ({
                                 return; 
                             }
                             setVolume(val === '' ? '' : intVal);
+                        }}
+                        onBlur={() => {
+                            if (!volume || volume < 1) setVolume(1);
                         }}
                         className={`w-full px-4 py-2.5 border rounded-l-xl focus:ring-2 outline-none text-sm font-bold transition ${quotaInfo.sisa === 0 ? 'bg-gray-100 text-gray-400 border-gray-200' : 'bg-gray-50 focus:bg-white border-gray-300 focus:ring-[#1A2A80]'}`}
                         placeholder="1"
@@ -411,7 +416,7 @@ const PopupTambahAnggotaPerencanaan = ({
                                     
                                     <button
                                         onClick={() => handleAddAnggota(mitra.id)}
-                                        // PENTING: Tombol TIDAK DI-DISABLE walau isOver (sesuai permintaan)
+                                        // PENTING: Tombol TIDAK DI-DISABLE walau isOver (sesuai permintaan user sebelumnya)
                                         disabled={!selectedJob || (quotaInfo.sisa === 0 && quotaInfo.total > 0)}
                                         className={`text-xs font-bold py-2 px-4 rounded-lg shadow-sm flex items-center gap-2 flex-shrink-0 transition 
                                           ${selectedJob && (quotaInfo.sisa > 0 || quotaInfo.total === 0)

@@ -21,7 +21,8 @@ import {
   FaTimes,
   FaLayerGroup,
   FaCalendarAlt,
-  FaBriefcase
+  FaBriefcase,
+  FaFileExport
 } from 'react-icons/fa';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
@@ -365,8 +366,8 @@ const Penugasan = () => {
 
   const handleDownloadTemplate = () => {
     const rows = [
-      { sobat_id: "337322040034", nama_lengkap: "Trian Yunita Hestiarini", posisi: "Petugas Pendataan Lapangan (PPL Survei)" },
-      { sobat_id: "337322040036", nama_lengkap: "TRIYANI WIDYASTUTI", posisi: "Petugas Pendataan Lapangan (PPL Survei)" }
+      { sobat_id: "337322040034", nama_lengkap: "Contoh Nama Mitra", posisi: "Petugas Pendataan Lapangan (PPL Survei)" },
+      { sobat_id: "337322040036", nama_lengkap: "Contoh Mitra Dua", posisi: "Petugas Pemeriksa Lapangan (PML)" }
     ];
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
@@ -374,85 +375,95 @@ const Penugasan = () => {
     XLSX.writeFile(workbook, "template_import_penugasan.xlsx");
   };
 
+  // --- LOADING STATE ---
   if (isLoading) return (
-    <div className="flex flex-col items-center justify-center min-h-[50vh]">
-        <div className="w-8 h-8 border-4 border-blue-200 border-t-[#1A2A80] rounded-full animate-spin mb-4"></div>
+    <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <div className="w-10 h-10 border-4 border-blue-100 border-t-[#1A2A80] rounded-full animate-spin mb-4"></div>
         <p className="text-gray-500 font-medium">Memuat data penugasan...</p>
     </div>
   );
 
   return (
-    <div className="w-full mx-auto max-w-6xl space-y-8 pt-8 px-4 sm:px-6 pb-20">
+    // Container disesuaikan dengan Layout (max-w-7xl) agar serasi dengan Header & Footer
+    <div className="w-full mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       
       {/* === HEADER SECTION === */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-        <div>
-           <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 flex items-center gap-3">
-              <FaClipboardList className="text-[#1A2A80]" /> Manajemen Penugasan
-           </h1>
-           <p className="text-gray-600 mt-2 text-sm leading-relaxed max-w-2xl">
-              Kelola tim kerja, alokasi mitra, dan monitoring status penugasan untuk setiap survei dan sensus.
-           </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-           <button 
-             onClick={handleDownloadTemplate} 
-             className="group inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-600 hover:text-[#1A2A80] hover:border-blue-200 hover:bg-blue-50 transition-all shadow-sm text-sm font-bold"
-           >
-              <FaDownload className="text-gray-400 group-hover:text-[#1A2A80]" /> Template
-           </button>
-           
-           <button 
-             onClick={() => setShowImportModal(true)} 
-             className="inline-flex items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl shadow-md hover:shadow-lg transition-all text-sm font-bold"
-           >
-              <FaFileUpload /> Import
-           </button>
-           
-           <Link 
-             to="/penugasan/tambah" 
-             className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1A2A80] hover:bg-blue-900 text-white rounded-xl shadow-md hover:shadow-lg transition-all text-sm font-bold"
-           >
-              <FaPlus /> Buat Baru
-           </Link>
-        </div>
-      </div>
-
-      {/* === FILTER & SEARCH CARD === */}
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row gap-4 items-center justify-between">
-         <div className="relative w-full md:w-1/2">
-            <FaSearch className="absolute left-4 top-3.5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Cari Survei, Kegiatan, atau Pengawas..."
-              className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#1A2A80] focus:border-transparent outline-none text-sm transition bg-gray-50 focus:bg-white"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-         </div>
-         <div className="flex items-center gap-3 w-full md:w-auto bg-gray-50 p-1.5 rounded-xl border border-gray-200">
-            <div className="flex items-center gap-2 text-gray-500 text-xs font-bold px-3 uppercase tracking-wider">
-               <FaFilter /> Tahun
+      {/* Menggunakan Card Putih agar konsisten dengan ManajemenKegiatan */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-6">
+            <div>
+               <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 flex items-center gap-3">
+                  <div className="p-2 bg-blue-50 rounded-lg text-[#1A2A80]">
+                    <FaClipboardList size={24} />
+                  </div>
+                  Manajemen Penugasan
+               </h1>
+               <p className="text-gray-500 mt-2 ml-1">
+                  Kelola tim kerja, alokasi mitra, dan monitoring status penugasan.
+               </p>
             </div>
-            <select
-               className="px-4 py-2 border-0 rounded-lg focus:ring-0 outline-none text-sm bg-white shadow-sm cursor-pointer min-w-[100px] font-medium text-gray-700 hover:bg-gray-50 transition"
-               value={filterYear}
-               onChange={(e) => setFilterYear(e.target.value)}
-            >
-               <option value="">Semua</option>
-               {availableYears.map(year => <option key={year} value={year}>{year}</option>)}
-            </select>
-         </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-wrap gap-3">
+               <button 
+                 onClick={handleDownloadTemplate} 
+                 className="group inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-gray-600 hover:text-[#1A2A80] hover:border-blue-200 hover:bg-blue-50 transition-all shadow-sm text-sm font-bold"
+               >
+                  <FaDownload className="text-gray-400 group-hover:text-[#1A2A80]" /> 
+                  <span className="hidden sm:inline">Template</span>
+               </button>
+               
+               <button 
+                 onClick={() => setShowImportModal(true)} 
+                 className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-100 hover:bg-emerald-100 rounded-xl transition-all text-sm font-bold"
+               >
+                  <FaFileUpload /> Import
+               </button>
+               
+               <Link 
+                 to="/penugasan/tambah" 
+                 className="inline-flex items-center gap-2 px-5 py-2 bg-[#1A2A80] hover:bg-blue-900 text-white rounded-xl shadow-md hover:shadow-lg transition-all text-sm font-bold"
+               >
+                  <FaPlus /> Buat Baru
+               </Link>
+            </div>
+          </div>
+
+          <hr className="border-gray-100 mb-6" />
+
+          {/* === FILTER & SEARCH BAR === */}
+          <div className="flex flex-col md:flex-row gap-4">
+             <div className="relative flex-grow">
+                <FaSearch className="absolute left-4 top-3.5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Cari Survei, Sub-Kegiatan, atau Pengawas..."
+                  className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-[#1A2A80] outline-none transition text-sm text-gray-800 placeholder-gray-400"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+             </div>
+             
+             <div className="relative min-w-[150px]">
+                <FaFilter className="absolute left-4 top-3.5 text-gray-400" />
+                <select
+                   className="w-full pl-11 pr-8 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-[#1A2A80] outline-none transition text-sm text-gray-800 cursor-pointer appearance-none"
+                   value={filterYear}
+                   onChange={(e) => setFilterYear(e.target.value)}
+                >
+                   <option value="">Semua Tahun</option>
+                   {availableYears.map(year => <option key={year} value={year}>{year}</option>)}
+                </select>
+                <FaChevronDown className="absolute right-4 top-4 text-gray-400 text-xs pointer-events-none" />
+             </div>
+          </div>
       </div>
 
       {/* === DATA CONTENT === */}
       <div className="space-y-6">
         {Object.keys(groupedPenugasan).length === 0 ? (
           <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-gray-300">
-            <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-300">
-                <FaClipboardList size={24} />
-            </div>
+            <FaClipboardList className="mx-auto text-4xl text-gray-200 mb-3" />
             <p className="text-gray-500 font-medium">
                {searchTerm || filterYear ? 'Tidak ditemukan data yang sesuai filter.' : 'Belum ada data penugasan.'}
             </p>
@@ -462,29 +473,28 @@ const Penugasan = () => {
             const allApproved = subItems.length > 0 && subItems.every(i => i.status_penugasan === 'disetujui');
             const isThisGroupProcessing = processingGroup === kegiatanName;
 
+            // Card untuk setiap Grup Kegiatan Induk
             return (
               <div key={kegiatanName} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow duration-300">
                 
                 {/* --- Group Header --- */}
-                <div className="bg-gray-50/50 px-6 py-5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                   <div className="flex items-center gap-4">
-                      <div className="p-2.5 bg-white border border-gray-200 rounded-lg text-[#1A2A80] shadow-sm">
-                          <FaBriefcase />
+                <div className="bg-gray-50/50 px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                   <div className="flex items-center gap-3">
+                      <div className="p-2 bg-white border border-gray-200 rounded-lg text-[#1A2A80] shadow-sm">
+                          <FaBriefcase size={16} />
                       </div>
                       <div>
-                          <h2 className="text-base font-bold text-gray-900">{kegiatanName}</h2>
-                          <div className="flex items-center gap-2 mt-1">
-                              <span className="text-xs text-gray-500 font-medium bg-white px-2 py-0.5 rounded border border-gray-200">
-                                  {subItems.length} Tim Terbentuk
-                              </span>
-                          </div>
+                          <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide">{kegiatanName}</h2>
+                          <span className="text-xs text-gray-500 font-medium">
+                              {subItems.length} Tim Terbentuk
+                          </span>
                       </div>
                    </div>
 
                    <button 
                       onClick={() => handleGroupStatusChange(subItems, kegiatanName)}
                       disabled={isThisGroupProcessing || processingGroup !== null}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm border
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm border
                         ${allApproved 
                           ? 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100' 
                           : 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'}
@@ -497,7 +507,7 @@ const Penugasan = () => {
                    </button>
                 </div>
 
-                {/* --- List Items --- */}
+                {/* --- List Items (Accordion Style) --- */}
                 <div className="divide-y divide-gray-50">
                   {subItems.map((task) => {
                     const isOpen = expandedTaskId === task.id_penugasan;
@@ -506,91 +516,92 @@ const Penugasan = () => {
                     const isApproved = task.status_penugasan === 'disetujui';
 
                     return (
-                      <div key={task.id_penugasan} className="group/item transition-colors bg-white hover:bg-blue-50/20">
+                      <div key={task.id_penugasan} className={`group/item transition-colors ${isOpen ? 'bg-blue-50/10' : 'bg-white hover:bg-gray-50'}`}>
                         
                         {/* --- Clickable Row --- */}
                         <div 
                           onClick={() => toggleRow(task.id_penugasan)} 
-                          className="px-6 py-5 cursor-pointer flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+                          className="px-6 py-5 cursor-pointer flex flex-col md:flex-row md:items-center md:justify-between gap-4"
                         >
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              <div className={`p-1.5 rounded-full transition-transform duration-300 border border-gray-200 bg-white ${isOpen ? 'rotate-180 text-[#1A2A80] border-blue-200 shadow-sm' : 'text-gray-400'}`}>
-                                  <FaChevronDown size={10} />
-                              </div>
-                              <h3 className={`font-bold text-sm transition-colors ${isOpen ? 'text-[#1A2A80]' : 'text-gray-800'}`}>
-                                  {task.nama_sub_kegiatan}
-                              </h3>
-                              
-                              <span className={`text-[10px] px-2.5 py-0.5 rounded-md font-bold border uppercase tracking-wide
-                                ${isApproved 
-                                  ? 'bg-green-50 text-green-700 border-green-100' 
-                                  : 'bg-gray-100 text-gray-500 border-gray-200'}
-                              `}>
-                                {task.status_penugasan || 'Menunggu'}
-                              </span>
+                          {/* Kiri: Info Utama */}
+                          <div className="flex-1 flex items-start gap-4">
+                            <div className={`mt-1 p-1.5 rounded-full transition-transform duration-300 border bg-white ${isOpen ? 'rotate-180 text-[#1A2A80] border-blue-200 shadow-sm' : 'text-gray-400 border-gray-200'}`}>
+                                <FaChevronDown size={10} />
                             </div>
                             
-                            <div className="pl-9 flex flex-wrap gap-x-6 gap-y-2 text-xs text-gray-500">
-                              <span className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded border border-gray-100">
-                                <FaCalendarAlt className="text-gray-400" /> 
-                                {formatDate(task.tanggal_mulai)} - {formatDate(task.tanggal_selesai)}
-                              </span>
-                              <span className="flex items-center gap-1.5 px-2 py-1">
-                                <span className="text-gray-400">Pengawas:</span>
-                                <span className="font-bold text-gray-700">{task.nama_pengawas}</span>
-                              </span>
+                            <div className="flex-1">
+                                <div className="flex flex-wrap items-center gap-2 mb-1">
+                                    <h3 className={`font-bold text-sm transition-colors ${isOpen ? 'text-[#1A2A80]' : 'text-gray-800'}`}>
+                                        {task.nama_sub_kegiatan}
+                                    </h3>
+                                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold border uppercase tracking-wider
+                                        ${isApproved 
+                                        ? 'bg-green-50 text-green-700 border-green-100' 
+                                        : 'bg-gray-100 text-gray-500 border-gray-200'}
+                                    `}>
+                                        {task.status_penugasan || 'Menunggu'}
+                                    </span>
+                                </div>
+                                
+                                <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-gray-500 mt-2">
+                                    <span className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded border border-gray-100">
+                                        <FaCalendarAlt className="text-gray-400" /> 
+                                        {formatDate(task.tanggal_mulai)} - {formatDate(task.tanggal_selesai)}
+                                    </span>
+                                    <span className="flex items-center gap-1.5 px-2 py-1">
+                                        <span className="text-gray-400">Pengawas:</span>
+                                        <span className="font-bold text-gray-700">{task.nama_pengawas}</span>
+                                    </span>
+                                    <span className="flex items-center gap-1.5 px-2 py-1">
+                                        <FaUsers className="text-gray-400" />
+                                        <span className="font-bold text-gray-700">{membersCount} Anggota</span>
+                                    </span>
+                                </div>
                             </div>
                           </div>
 
-                          {/* --- Actions --- */}
-                          <div className="flex items-center gap-6 min-w-fit pl-9 sm:pl-0">
-                              <div className="text-xs font-bold text-gray-400 group-hover/item:text-[#1A2A80] transition-colors flex items-center gap-2">
-                                  <FaUsers className="text-lg" /> {membersCount} Anggota
-                              </div>
-
-                              <div className="flex items-center gap-2 border-l pl-4 border-gray-200">
-                                  <button 
+                          {/* Kanan: Actions */}
+                          <div className="flex items-center gap-2 md:border-l md:pl-6 border-gray-100 self-end md:self-center">
+                                <button 
                                     onClick={(e) => handleStatusChange(e, task.id_penugasan, task.status_penugasan)}
                                     className={`p-2 rounded-lg transition-all shadow-sm border ${isApproved 
-                                        ? 'bg-white text-amber-500 border-gray-200 hover:bg-amber-50 hover:border-amber-200' 
-                                        : 'bg-white text-green-600 border-gray-200 hover:bg-green-50 hover:border-green-200'}`}
-                                    title={isApproved ? "Batalkan" : "Setujui"}
-                                  >
+                                        ? 'bg-white text-amber-500 border-gray-200 hover:bg-amber-50' 
+                                        : 'bg-white text-green-600 border-gray-200 hover:bg-green-50'}`}
+                                    title={isApproved ? "Batalkan Persetujuan" : "Setujui Penugasan"}
+                                >
                                     {isApproved ? <FaUndoAlt size={14} /> : <FaCheckCircle size={14} />}
-                                  </button>
+                                </button>
 
-                                  <button 
+                                <button 
                                     onClick={(e) => handleEdit(e, task.id_penugasan)} 
                                     className="p-2 bg-white text-indigo-500 border border-gray-200 hover:border-indigo-200 hover:bg-indigo-50 rounded-lg transition-all shadow-sm" 
-                                    title="Edit"
-                                  >
-                                      <FaEdit size={14} />
-                                  </button>
-                                  
-                                  <button 
+                                    title="Edit Penugasan"
+                                >
+                                    <FaEdit size={14} />
+                                </button>
+                                
+                                <button 
                                     onClick={(e) => handleDelete(e, task.id_penugasan)} 
                                     className="p-2 bg-white text-red-500 border border-gray-200 hover:border-red-200 hover:bg-red-50 rounded-lg transition-all shadow-sm" 
-                                    title="Hapus"
-                                  >
-                                      <FaTrash size={14} />
-                                  </button>
-                              </div>
+                                    title="Hapus Penugasan"
+                                >
+                                    <FaTrash size={14} />
+                                </button>
                           </div>
                         </div>
                         
                         {/* --- Expanded Details (Members) --- */}
                         {isOpen && (
-                          <div className="bg-gray-50 border-t border-gray-100 px-6 py-6 pl-6 sm:pl-16 transition-all duration-300 ease-in-out">
-                             <div className="flex justify-between items-center mb-5">
+                          <div className="bg-gray-50/50 border-t border-gray-100 px-6 py-6 pl-6 sm:pl-16 transition-all duration-300 ease-in-out">
+                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-5">
                                   <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
                                       <FaLayerGroup /> Daftar Anggota Tim
                                   </h4>
                                   <Link 
                                       to={`/penugasan/detail/${task.id_penugasan}`} 
-                                      className="group/link text-[#1A2A80] font-bold text-xs hover:underline flex items-center gap-2 bg-white px-4 py-2 rounded-lg border border-gray-200 shadow-sm hover:border-blue-200 transition"
+                                      className="group/link text-[#1A2A80] font-bold text-xs hover:text-blue-700 flex items-center gap-2 bg-white px-4 py-2 rounded-lg border border-gray-200 shadow-sm hover:border-blue-200 transition"
                                   >
-                                      Detail & Cetak SPK 
+                                      <FaFileExport /> Detail & Cetak SPK 
                                       <FaArrowRight size={10} className="group-hover/link:translate-x-1 transition-transform" />
                                   </Link>
                              </div>
@@ -606,26 +617,28 @@ const Penugasan = () => {
                                    Belum ada anggota yang ditambahkan ke tim ini.
                                  </div>
                                ) : (
-                                 <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                 <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                                    {members.map((m, idx) => (
-                                     <li key={m.id_mitra || idx} className="flex items-center gap-4 bg-white px-4 py-3 rounded-xl border border-gray-200 shadow-sm hover:border-blue-200 transition-colors">
-                                       <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 flex items-center justify-center text-[#1A2A80] text-sm font-extrabold shadow-inner">
+                                     <li key={m.id_mitra || idx} className="flex items-center gap-3 bg-white px-3 py-3 rounded-xl border border-gray-200 shadow-sm hover:shadow hover:border-blue-200 transition-all">
+                                       <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-[#1A2A80] text-xs font-extrabold">
                                           {m.nama_lengkap ? m.nama_lengkap.charAt(0) : '?'}
                                        </div>
-                                       <div className="overflow-hidden w-full">
-                                          <div className="flex justify-between items-start w-full gap-2">
+                                       <div className="overflow-hidden w-full min-w-0">
+                                          <div className="flex justify-between items-center gap-2">
                                               <p className="text-gray-800 font-bold text-xs truncate" title={m.nama_lengkap}>
                                                   {m.nama_lengkap || m.nama_mitra || 'Nama Tidak Tersedia'}
                                               </p>
-                                              {m.volume_tugas > 0 && (
-                                                  <span className="text-[10px] font-bold bg-blue-50 text-[#1A2A80] px-1.5 py-0.5 rounded border border-blue-100 whitespace-nowrap">
-                                                      Vol: {m.volume_tugas}
-                                                  </span>
-                                              )}
                                           </div>
-                                          <p className="text-[11px] text-gray-400 truncate mt-0.5">
-                                              {m.nama_jabatan || '-'}
-                                          </p>
+                                          <div className="flex justify-between items-center mt-0.5">
+                                             <p className="text-[10px] text-gray-500 truncate max-w-[70%]">
+                                                 {m.nama_jabatan || '-'}
+                                             </p>
+                                             {m.volume_tugas > 0 && (
+                                                <span className="text-[9px] font-bold bg-gray-50 text-gray-600 px-1.5 py-0.5 rounded border border-gray-100">
+                                                    Vol: {m.volume_tugas}
+                                                </span>
+                                             )}
+                                          </div>
                                        </div>
                                      </li>
                                    ))}
@@ -644,7 +657,7 @@ const Penugasan = () => {
         )}
       </div>
 
-      {/* === IMPORT MODAL === */}
+      {/* === IMPORT MODAL (Sama seperti sebelumnya, style disesuaikan sedikit) === */}
       {showImportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm transition-opacity">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-fade-in-up">
