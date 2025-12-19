@@ -7,7 +7,8 @@ import {
   FaClipboardList, 
   FaCalendarAlt, 
   FaCheckCircle,
-  FaArrowRight
+  FaArrowRight,
+  FaBriefcase
 } from 'react-icons/fa';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
@@ -31,14 +32,12 @@ const PartDaftarKegiatan = () => {
         const token = localStorage.getItem('token');
         const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
 
-        // Ambil Data Kegiatan (Induk) & Sub-Kegiatan (Anak)
+        // Ambil Data Kegiatan & Sub-Kegiatan
         const [resKegiatan, resSubKegiatan] = await Promise.all([
           axios.get(`${API_URL}/api/kegiatan`, config).catch(() => ({ data: [] })),
           axios.get(`${API_URL}/api/subkegiatan`, config).catch(() => ({ data: [] }))
         ]);
 
-        // PERBAIKAN: Helper untuk mengekstrak array data dengan aman
-        // Laravel bisa mengembalikan array langsung [...] atau object { data: [...] }
         const getList = (response) => {
             if (Array.isArray(response.data)) {
                 return response.data;
@@ -51,8 +50,7 @@ const PartDaftarKegiatan = () => {
         const allInduk = getList(resKegiatan);
         const allAnak = getList(resSubKegiatan);
 
-        // Gabungkan Sub ke Induk
-        // Gunakan [...allInduk] untuk membuat salinan array agar aman saat di-sort
+        // Gabungkan
         const sortedInduk = [...allInduk].sort((a, b) => b.id - a.id); 
 
         const mergedData = sortedInduk.map(induk => {
@@ -62,27 +60,17 @@ const PartDaftarKegiatan = () => {
 
         setKegiatanList(mergedData);
 
-        // Cek User Login & Data Mitra
+        // Cek User & Mitra
         const storedUser = localStorage.getItem('user');
         if (storedUser) {
           const user = JSON.parse(storedUser);
-          
-          // Cek apakah user ini terdaftar sebagai Mitra
-          // Note: Error 404 di console wajar jika user belum jadi mitra
           try {
-            // Kita coba ambil data mitra berdasarkan User ID
-            // Pastikan endpoint ini tersedia di backend Anda. 
-            // Jika belum ada, Anda mungkin perlu menyesuaikan endpoint ini.
-            // Saat ini kita pakai try-catch agar tidak memblokir UI jika 404.
             const resMitra = await axios.get(`${API_URL}/api/mitra`, config); 
             const allMitra = getList(resMitra);
-            
-            // Cari mitra yang punya user_id sama dengan user login
             const myMitra = allMitra.find(m => m.user_id === user.id || m.id_user === user.id);
 
             if (myMitra) {
               setMitraData(myMitra);
-              
               const resKelompok = await axios.get(`${API_URL}/api/kelompok-penugasan`, config);
               const allKelompok = getList(resKelompok);
 
@@ -94,8 +82,7 @@ const PartDaftarKegiatan = () => {
               setUserTasks(myTasks);
             }
           } catch (err) {
-            // Silent error: User mungkin belum jadi mitra, biarkan saja
-            console.log("Info: User belum terdaftar sebagai mitra atau endpoint belum siap.");
+            console.log("Info: User belum terdaftar sebagai mitra.");
           }
         }
       } catch (err) {
@@ -122,8 +109,11 @@ const PartDaftarKegiatan = () => {
     }
 
     if (!mitraData) {
-      alert("Anda harus melengkapi profil Mitra terlebih dahulu.");
-      navigate('/lengkapi-profile');
+      // alert("Anda harus melengkapi profil Mitra terlebih dahulu.");
+      // Gunakan confirm agar lebih user friendly
+      if(confirm("Anda harus terdaftar sebagai Mitra untuk mengambil tugas. Lengkapi profil sekarang?")) {
+          navigate('/lengkapi-profile');
+      }
       return;
     }
 
@@ -148,142 +138,174 @@ const PartDaftarKegiatan = () => {
     }
   };
 
-  // --- 3. HELPERS UI ---
+  // --- 3. UI HELPERS ---
   const formatDate = (date) => {
     if (!date) return '-';
-    return new Date(date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+    return new Date(date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
   const getStatusBadge = (start, end) => {
     const now = new Date();
-    if (now < new Date(start)) return <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold">AKAN DATANG</span>;
-    if (now > new Date(end)) return <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold">SELESAI</span>;
-    return <span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded text-[10px] font-bold">BERJALAN</span>;
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+
+    if (now < startDate) 
+      return <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-100">AKAN DATANG</span>;
+    if (now > endDate) 
+      return <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-500 border border-gray-200">SELESAI</span>;
+    return <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100 animate-pulse">SEDANG BERJALAN</span>;
   };
 
-  // Logic Limitasi Data (Max 5 baris parent)
+  // Limit Display
   const displayedList = kegiatanList.slice(0, 5);
   const hasMore = kegiatanList.length > 5;
 
-  if (loading) return <div className="text-center p-8 text-gray-400 text-sm animate-pulse">Memuat data kegiatan...</div>;
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center py-12 space-y-4">
+        <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+        <p className="text-gray-400 text-sm font-medium">Memuat daftar kegiatan...</p>
+    </div>
+  );
 
   return (
-    <div className="w-full bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div className="w-full space-y-4">
       
-      {/* List Content */}
-      <div className="divide-y divide-gray-50">
-        {displayedList.length === 0 ? (
-          <div className="p-8 text-center text-gray-400 text-sm italic">
-            Belum ada kegiatan yang tersedia.
+      {displayedList.length === 0 ? (
+        <div className="bg-white rounded-2xl p-8 text-center border border-gray-100 shadow-sm">
+          <div className="mx-auto w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+            <FaClipboardList className="text-gray-300 text-2xl" />
           </div>
-        ) : (
-          displayedList.map((induk) => {
-            const isExpanded = expandedRow === induk.id;
-            const subCount = induk.sub_list ? induk.sub_list.length : 0;
+          <p className="text-gray-500 text-sm">Belum ada kegiatan yang tersedia saat ini.</p>
+        </div>
+      ) : (
+        displayedList.map((induk) => {
+          const isExpanded = expandedRow === induk.id;
+          const subCount = induk.sub_list ? induk.sub_list.length : 0;
 
-            return (
-              <div key={induk.id} className="bg-white transition-colors hover:bg-gray-50/50">
-                
-                {/* Parent Row (Clickable) */}
-                <div 
-                  onClick={() => handleRowClick(induk.id)} 
-                  className="px-6 py-4 cursor-pointer flex justify-between items-center group"
-                >
-                  <div className="flex items-center gap-3 overflow-hidden">
-                    <div className={`p-1.5 rounded-full transition-transform duration-200 ${isExpanded ? 'bg-indigo-50 text-indigo-600 rotate-180' : 'bg-gray-100 text-gray-400 group-hover:bg-indigo-50 group-hover:text-indigo-500'}`}>
-                      <FaChevronDown size={10} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className={`text-sm font-semibold truncate ${isExpanded ? 'text-indigo-700' : 'text-gray-700'}`}>
-                        {induk.nama_kegiatan}
-                      </h3>
-                      <p className="text-[11px] text-gray-400 mt-0.5 truncate max-w-xs">
-                        {induk.deskripsi || 'Kegiatan Statistik'}
-                      </p>
+          return (
+            <div 
+                key={induk.id} 
+                className={`bg-white rounded-2xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-blue-200 shadow-md ring-1 ring-blue-50' : 'border-gray-100 hover:border-blue-100 hover:shadow-sm'}`}
+            >
+              
+              {/* --- Parent Header --- */}
+              <div 
+                onClick={() => handleRowClick(induk.id)} 
+                className="p-5 cursor-pointer flex justify-between items-center group select-none"
+              >
+                <div className="flex items-start gap-4">
+                  {/* Icon Box */}
+                  <div className={`mt-1 p-3 rounded-xl transition-colors duration-300 ${isExpanded ? 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-200' : 'bg-gray-50 text-gray-400 group-hover:bg-blue-50 group-hover:text-blue-500'}`}>
+                    <FaBriefcase size={18} />
+                  </div>
+
+                  <div>
+                    <h3 className={`font-bold text-base transition-colors ${isExpanded ? 'text-gray-800' : 'text-gray-700 group-hover:text-blue-600'}`}>
+                      {induk.nama_kegiatan}
+                    </h3>
+                    <p className="text-sm text-gray-400 mt-1 line-clamp-1">
+                      {induk.deskripsi || 'Kegiatan Statistik Badan Pusat Statistik'}
+                    </p>
+                    
+                    <div className="flex items-center gap-3 mt-2">
+                        <span className="text-[11px] font-medium text-gray-500 bg-gray-100 px-2.5 py-1 rounded-md">
+                            {subCount} Sub-Kegiatan
+                        </span>
+                        {isExpanded && (
+                            <span className="text-[10px] text-blue-500 font-semibold animate-fade-in">
+                                Sedang Dilihat
+                            </span>
+                        )}
                     </div>
                   </div>
-                  <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full whitespace-nowrap">
-                    {subCount} Kegiatan
-                  </span>
                 </div>
 
-                {/* Child Table (Expanded) */}
-                {isExpanded && (
-                  <div className="bg-gray-50 border-y border-gray-100 animate-fade-in-down">
-                    {subCount > 0 ? (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left">
-                          <tbody className="divide-y divide-gray-200/50">
-                            {induk.sub_list.map((sub) => {
-                               const isTerdaftar = userTasks.has(sub.id_penugasan);
-                               
-                               return (
-                                <tr key={sub.id} className="hover:bg-white transition-colors">
-                                  <td className="px-6 py-3">
-                                    <div className="flex flex-col gap-1">
-                                      <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                                        <FaClipboardList className="text-gray-300 text-xs" />
-                                        {sub.nama_sub_kegiatan}
-                                      </div>
-                                      <div className="flex items-center gap-2 text-[11px] text-gray-500">
+                <div className={`transform transition-transform duration-300 text-gray-300 group-hover:text-blue-400 ${isExpanded ? 'rotate-180' : ''}`}>
+                  <FaChevronDown />
+                </div>
+              </div>
+
+              {/* --- Expanded Child List --- */}
+              <div className={`transition-all duration-500 ease-in-out ${isExpanded ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                <div className="bg-gray-50/50 border-t border-gray-100 p-4 space-y-3">
+                  
+                  {subCount > 0 ? (
+                    induk.sub_list.map((sub) => {
+                       const isTerdaftar = userTasks.has(sub.id_penugasan);
+                       
+                       return (
+                        <div key={sub.id} className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-blue-200 transition-colors">
+                            
+                            {/* Left Info */}
+                            <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <h4 className="font-semibold text-sm text-gray-700">{sub.nama_sub_kegiatan}</h4>
+                                    {getStatusBadge(sub.tanggal_mulai, sub.tanggal_selesai)}
+                                </div>
+                                <div className="flex items-center gap-4 text-xs text-gray-500">
+                                    <div className="flex items-center gap-1.5">
                                         <FaCalendarAlt className="text-gray-300" />
                                         <span>{formatDate(sub.tanggal_mulai)} - {formatDate(sub.tanggal_selesai)}</span>
-                                        {getStatusBadge(sub.tanggal_mulai, sub.tanggal_selesai)}
-                                      </div>
                                     </div>
-                                  </td>
-                                  
-                                  <td className="px-6 py-3 text-right align-middle">
-                                    {/* Logic Tombol Aksi */}
-                                    {!mitraData ? (
-                                      <button 
+                                </div>
+                            </div>
+
+                            {/* Right Action */}
+                            <div className="flex items-center justify-end">
+                                {!mitraData ? (
+                                    <button 
                                         onClick={(e) => { e.stopPropagation(); navigate('/lengkapi-profile'); }}
-                                        className="text-[10px] bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded transition"
-                                      >
+                                        className="text-xs font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg transition"
+                                    >
                                         Daftar Mitra
-                                      </button>
-                                    ) : !sub.id_penugasan ? (
-                                      <span className="text-[10px] text-gray-400 italic">Belum Dibuka</span>
-                                    ) : isTerdaftar ? (
-                                      <span className="inline-flex items-center gap-1 text-green-600 font-bold text-[10px] bg-green-50 px-2 py-1 rounded border border-green-200">
-                                        <FaCheckCircle /> TERDAFTAR
-                                      </span>
-                                    ) : (
-                                      <button
+                                    </button>
+                                ) : !sub.id_penugasan ? (
+                                    <span className="px-3 py-1.5 bg-gray-100 text-gray-400 text-[10px] font-bold rounded-lg uppercase tracking-wider">
+                                        Belum Dibuka
+                                    </span>
+                                ) : isTerdaftar ? (
+                                    <div className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-lg border border-green-100">
+                                        <FaCheckCircle />
+                                        <span className="text-xs font-bold">Terdaftar</span>
+                                    </div>
+                                ) : (
+                                    <button
                                         onClick={(e) => handleAmbilTugas(e, sub)}
                                         disabled={processingId === sub.id_penugasan}
-                                        className="text-[11px] bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded shadow-sm transition-transform active:scale-95 disabled:opacity-50"
-                                      >
-                                        {processingId === sub.id_penugasan ? '...' : 'Ambil Tugas'}
-                                      </button>
-                                    )}
-                                  </td>
-                                </tr>
-                            )})}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <div className="p-4 text-center text-xs text-gray-400 italic">
-                        Tidak ada sub-kegiatan.
-                      </div>
-                    )}
-                  </div>
-                )}
+                                        className="relative overflow-hidden group bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-bold px-5 py-2.5 rounded-lg shadow-md hover:shadow-lg hover:translate-y-[-1px] transition-all disabled:opacity-50 disabled:hover:translate-y-0"
+                                    >
+                                        <span className="relative z-10">
+                                            {processingId === sub.id_penugasan ? 'Memproses...' : 'Ambil Tugas'}
+                                        </span>
+                                        <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    )})
+                  ) : (
+                    <div className="text-center py-4 text-gray-400 text-xs italic">
+                      Tidak ada sub-kegiatan aktif saat ini.
+                    </div>
+                  )}
+                  
+                </div>
               </div>
-            );
-          })
-        )}
-      </div>
 
-      {/* Footer "Lihat Selengkapnya" */}
+            </div>
+          );
+        })
+      )}
+
+      {/* Footer Link */}
       {hasMore && (
-        <div className="bg-gray-50 border-t border-gray-100 p-3 text-center">
+        <div className="pt-4 text-center">
             <button 
                 onClick={() => navigate('/manajemen-kegiatan')}
-                className="inline-flex items-center gap-2 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors uppercase tracking-wide"
+                className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors group"
             >
-                Lihat Selengkapnya <FaArrowRight />
+                Lihat Selengkapnya
+                <FaArrowRight className="group-hover:translate-x-1 transition-transform" />
             </button>
         </div>
       )}

@@ -1,25 +1,21 @@
-// src/pages/admin/DetailKegiatan.jsx
+// src/pages/DetailKegiatanUser.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
-import Swal from 'sweetalert2';
-// 1. IMPORT ICON
 import { 
   FaArrowLeft, 
-  FaMoneyBillWave, 
   FaUserTag, 
-  FaLayerGroup,
-  FaCalendarAlt,
-  FaBullhorn,
-  FaCoins,
-  FaBoxOpen,
-  FaInfoCircle
+  FaLayerGroup, 
+  FaCalendarAlt, 
+  FaCoins, 
+  FaBoxOpen, 
+  FaInfoCircle 
 } from 'react-icons/fa';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
-const DetailKegiatan = () => {
-  const { id } = useParams(); // ID Kegiatan (Sub)
+const DetailKegiatanUser = () => {
+  const { id } = useParams(); // ID Sub Kegiatan
 
   const [subData, setSubData] = useState(null);
   const [honorList, setHonorList] = useState([]); 
@@ -28,27 +24,27 @@ const DetailKegiatan = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-        const token = localStorage.getItem('token');
-        const headers = { Authorization: `Bearer ${token}` };
+      setLoading(true);
+      setError(null);
+      try {
+          const token = localStorage.getItem('token');
+          const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-        const [resSub, resHon] = await Promise.all([
-            axios.get(`${API_URL}/api/subkegiatan/${id}`, { headers }),
-            axios.get(`${API_URL}/api/subkegiatan/${id}/honorarium`, { headers }),
-        ]);
+          const [resSub, resHon] = await Promise.all([
+              axios.get(`${API_URL}/api/subkegiatan/${id}`, { headers }),
+              axios.get(`${API_URL}/api/subkegiatan/${id}/honorarium`, { headers }),
+          ]);
 
-        setSubData(resSub.data.data);
-        setHonorList(resHon.data.data); 
+          setSubData(resSub.data.data);
+          setHonorList(resHon.data.data); 
 
-    } catch (err) {
-        console.error("Error fetching data:", err);
-        setError(err.response?.data?.message || err.message || "Gagal memuat data.");
-    } finally {
-        setLoading(false);
-    }
-};
+      } catch (err) {
+          console.error("Error fetching data:", err);
+          setError(err.response?.data?.message || err.message || "Gagal memuat data.");
+      } finally {
+          setLoading(false);
+      }
+    };
 
     if (id) fetchData();
   }, [id]);
@@ -62,7 +58,6 @@ const DetailKegiatan = () => {
     return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
-  // --- LOGIKA STATUS OTOMATIS ---
   const getComputedStatus = (startDate, endDate) => {
     if (!startDate || !endDate) return { label: 'Jadwal Belum Lengkap', className: 'bg-gray-100 text-gray-500' };
     
@@ -70,7 +65,6 @@ const DetailKegiatan = () => {
     const start = new Date(startDate);
     const end = new Date(endDate);
     
-    // Set jam agar perbandingan tanggal akurat
     now.setHours(0, 0, 0, 0);
     start.setHours(0, 0, 0, 0);
     end.setHours(23, 59, 59, 999);
@@ -78,67 +72,82 @@ const DetailKegiatan = () => {
     if (now < start) {
         return { label: 'Akan Datang', className: 'bg-blue-100 text-blue-700 border border-blue-200' };
     } else if (now > end) {
-        return { label: 'Selesai', className: 'bg-green-100 text-green-700 border border-green-200' };
+        return { label: 'Selesai', className: 'bg-gray-100 text-gray-600 border border-gray-200' };
     } else {
         return { label: 'Sedang Proses', className: 'bg-yellow-100 text-yellow-700 border border-yellow-200' };
     }
   };
 
-  if (loading) return <div className="text-center py-10 text-gray-500">Memuat detail...</div>;
-  if (error) return <div className="text-center py-10 text-red-600">{error}</div>;
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center min-h-[50vh]">
+        <div className="w-8 h-8 border-4 border-blue-200 border-t-[#1A2A80] rounded-full animate-spin mb-4"></div>
+        <p className="text-gray-500 font-medium">Memuat detail kegiatan...</p>
+    </div>
+  );
+
+  if (error) return (
+    <div className="text-center py-20 px-4">
+        <div className="bg-red-50 text-red-600 p-4 rounded-lg inline-block border border-red-100">
+            {error}
+        </div>
+        <div className="mt-4">
+            <Link to="/daftar-kegiatan" className="text-[#1A2A80] hover:underline font-bold text-sm">Kembali</Link>
+        </div>
+    </div>
+  );
+  
   if (!subData) return <div className="text-center py-10 text-gray-500">Data tidak ditemukan.</div>;
 
-  // Hitung status saat render
   const statusObj = getComputedStatus(subData.tanggal_mulai, subData.tanggal_selesai);
 
   return (
-    <div className="w-full space-y-8 pt-14 px-8 pb-10">
+    <div className="w-full mx-auto max-w-5xl space-y-8 pt-8 px-4 sm:px-6 pb-20">
       
-      {/* Header Navigasi */}
+      {/* --- TOMBOL KEMBALI (Updated Style) --- */}
       <div>
         <Link 
-          to="/admin/manage-kegiatan" 
-          className="inline-flex items-center gap-2 text-gray-500 hover:text-[#1A2A80] transition font-medium"
+          to="/daftar-kegiatan" 
+          className="group inline-flex items-center gap-3 px-5 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-600 hover:text-[#1A2A80] hover:border-blue-200 hover:bg-blue-50 transition-all duration-300 shadow-sm hover:shadow-md text-sm font-bold"
         >
-          <FaArrowLeft size={14} /> Kembali ke Daftar Survei/Sensus
+          <div className="w-6 h-6 rounded-full bg-gray-100 group-hover:bg-blue-200 flex items-center justify-center transition-colors duration-300">
+             <FaArrowLeft size={10} className="text-gray-500 group-hover:text-[#1A2A80] transition-colors" />
+          </div>
+          Kembali ke Daftar Survei & Sensus
         </Link>
       </div>
 
       {/* === BAGIAN 1: Header Informasi Kegiatan === */}
-      <div className="bg-white shadow-sm rounded-xl overflow-hidden border border-gray-100 relative">
-        {/* Status Bar di Kiri (Warna dinamis sesuai status) */}
+      <div className="bg-white shadow-sm rounded-2xl overflow-hidden border border-gray-100 relative">
         <div className={`absolute top-0 left-0 w-1.5 h-full ${
-            statusObj.label === 'Selesai' ? 'bg-green-500' : 
+            statusObj.label === 'Selesai' ? 'bg-gray-400' : 
             statusObj.label === 'Sedang Proses' ? 'bg-yellow-500' : 
-            'bg-blue-500'
+            'bg-[#1A2A80]'
         }`}></div>
         
-        <div className="p-8 pl-10">
+        <div className="p-6 md:p-8 pl-8 md:pl-10">
           <div className="flex flex-col md:flex-row justify-between items-start gap-6">
             <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-3xl font-bold text-gray-800">{subData.nama_sub_kegiatan}</h1>
-                <span className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-1 rounded border border-gray-200">ID: {subData.id}</span>
+              <div className="flex items-center gap-3 mb-3">
+                <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900">{subData.nama_sub_kegiatan}</h1>
               </div>
               
-              <p className="text-gray-600 max-w-3xl leading-relaxed mb-6">
-                {subData.deskripsi || 'Tidak ada deskripsi.'}
+              <p className="text-gray-600 leading-relaxed mb-6 text-sm md:text-base">
+                {subData.deskripsi || 'Tidak ada deskripsi rinci untuk kegiatan ini.'}
               </p>
               
-              {/* Info Tanggal Grid */}
               <div className="flex flex-wrap gap-4 text-sm text-gray-500">
-                 <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
+                 <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
                     <FaCalendarAlt className="text-[#1A2A80]" /> 
-                    <span className="font-semibold text-gray-700">Pelaksanaan:</span> 
+                    <span className="font-bold text-gray-700">Pelaksanaan:</span> 
                     {formatDate(subData.tanggal_mulai)} - {formatDate(subData.tanggal_selesai)}
                  </div>
               </div>
             </div>
             
-            {/* Status Display (Otomatis) */}
+            {/* Status Display */}
             <div className="flex flex-col items-end gap-2 min-w-fit">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">Status Kegiatan</span>
-              <div className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold shadow-sm ${statusObj.className}`}>
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">Status Saat Ini</span>
+              <div className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold shadow-sm ${statusObj.className}`}>
                 <FaInfoCircle /> {statusObj.label}
               </div>
             </div>
@@ -146,19 +155,19 @@ const DetailKegiatan = () => {
         </div>
       </div>
 
-      {/* === BAGIAN 2: Daftar Jabatan & Honorarium (Tabel Penuh) === */}
-      <div className="bg-white shadow-sm rounded-xl border border-gray-100 overflow-hidden">
-        <div className="px-8 py-6 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
+      {/* === BAGIAN 2: Daftar Jabatan & Honorarium === */}
+      <div className="bg-white shadow-sm rounded-2xl border border-gray-100 overflow-hidden">
+        <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
             <div>
                 <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                     <FaUserTag className="text-[#1A2A80]" /> Daftar Posisi & Honorarium
                 </h3>
                 <p className="text-sm text-gray-500 mt-1">
-                    Berikut adalah daftar jabatan yang tersedia beserta nominal honorarium untuk kegiatan ini.
+                    Jabatan yang tersedia beserta estimasi honorarium.
                 </p>
             </div>
             <span className="bg-[#1A2A80] text-white px-3 py-1 rounded-full text-xs font-bold shadow-sm">
-                {honorList.length} Jabatan
+                {honorList.length} Posisi
             </span>
         </div>
         
@@ -166,67 +175,55 @@ const DetailKegiatan = () => {
             {honorList.length === 0 ? (
                 <div className="text-center py-16 text-gray-400 bg-white">
                     <div className="mb-3 text-gray-200 text-5xl flex justify-center"><FaUserTag /></div>
-                    <p className="text-base font-medium text-gray-500">Belum ada aturan honorarium.</p>
-                    <p className="text-sm mb-4">Silakan atur tarif jabatan di menu Edit Survei/Sensus.</p>
-                    <Link 
-                        to={`/admin/manage-kegiatan/edit/${subData.id_kegiatan}`} 
-                        className="inline-flex items-center gap-2 text-[#1A2A80] font-bold border border-blue-100 bg-blue-50 px-4 py-2 rounded-lg hover:bg-blue-100 transition"
-                    >
-                        Kelola Honorarium
-                    </Link>
+                    <p className="text-sm font-medium text-gray-500">Belum ada informasi honorarium untuk kegiatan ini.</p>
                 </div>
             ) : (
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-100">
                         <thead className="bg-gray-50 text-gray-500 text-xs font-bold uppercase tracking-wider">
                             <tr>
-                                <th className="px-8 py-4 text-left">Nama Jabatan</th>
-                                <th className="px-8 py-4 text-left">Nominal Honor</th>
-                                <th className="px-8 py-4 text-left">Satuan / Volume</th>
-                                <th className="px-8 py-4 text-center">Kode Jabatan</th>
+                                <th className="px-6 py-4 text-left">Nama Jabatan</th>
+                                <th className="px-6 py-4 text-left">Nominal Honor</th>
+                                <th className="px-6 py-4 text-left">Volume Kerja</th>
+                                <th className="px-6 py-4 text-center">Kode</th>
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-50">
                             {honorList.map((honor) => (
-                                <tr key={honor.id_honorarium} className="hover:bg-blue-50/20 transition-colors group">
+                                <tr key={honor.id_honorarium} className="hover:bg-blue-50/30 transition-colors">
                                     {/* Kolom Jabatan */}
-                                    <td className="px-8 py-5 whitespace-nowrap">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-[#1A2A80] group-hover:scale-110 transition-transform">
-                                                <FaUserTag />
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-[#1A2A80]">
+                                                <FaUserTag size={14} />
                                             </div>
-                                            <div>
-                                                <span className="block text-sm font-bold text-gray-800">
-                                                    {honor.nama_jabatan || 'Jabatan Tidak Dikenal'}
-                                                </span>
-                                                <span className="block text-xs text-gray-400 mt-0.5">
-                                                    Tersedia untuk Mitra
-                                                </span>
-                                            </div>
+                                            <span className="text-sm font-bold text-gray-800">
+                                                {honor.nama_jabatan || 'Jabatan Umum'}
+                                            </span>
                                         </div>
                                     </td>
 
                                     {/* Kolom Tarif */}
-                                    <td className="px-8 py-5 whitespace-nowrap">
+                                    <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center gap-2">
                                             <FaCoins className="text-yellow-500" />
-                                            <span className="text-base font-bold text-gray-800">
+                                            <span className="text-sm font-bold text-gray-800">
                                                 {formatRupiah(honor.tarif)}
                                             </span>
                                         </div>
                                     </td>
 
                                     {/* Kolom Satuan */}
-                                    <td className="px-8 py-5 whitespace-nowrap">
-                                        <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg w-fit border border-gray-200">
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="flex items-center gap-2 text-xs text-gray-600 bg-gray-50 px-2.5 py-1 rounded-md w-fit border border-gray-200">
                                             <FaBoxOpen className="text-gray-400" />
-                                            <span>Per <strong>{honor.basis_volume}</strong> {honor.nama_satuan} <span className="text-gray-400">({honor.satuan_alias})</span></span>
+                                            <span>Per <strong>{honor.basis_volume}</strong> {honor.nama_satuan}</span>
                                         </div>
                                     </td>
 
                                     {/* Kolom Kode */}
-                                    <td className="px-8 py-5 whitespace-nowrap text-center">
-                                        <span className="inline-block px-2 py-1 text-xs font-mono font-bold text-gray-500 bg-gray-100 rounded border border-gray-200">
+                                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                                        <span className="inline-block px-2 py-0.5 text-[10px] font-mono font-bold text-gray-500 bg-gray-100 rounded border border-gray-200">
                                             {honor.kode_jabatan}
                                         </span>
                                     </td>
@@ -240,8 +237,8 @@ const DetailKegiatan = () => {
         
         {/* Footer Card */}
         {honorList.length > 0 && (
-            <div className="bg-gray-50 px-8 py-4 border-t border-gray-100 text-xs text-gray-500 flex items-center gap-2">
-              <FaLayerGroup /> Data di atas akan digunakan sebagai acuan perhitungan gaji mitra saat penugasan.
+            <div className="bg-gray-50 px-6 py-3 border-t border-gray-100 text-[11px] text-gray-500 flex items-center gap-2">
+              <FaLayerGroup /> *Besaran honor dapat berubah sewaktu-waktu sesuai kebijakan BPS.
             </div>
         )}
       </div>
@@ -250,4 +247,4 @@ const DetailKegiatan = () => {
   );
 };
 
-export default DetailKegiatan;
+export default DetailKegiatanUser;

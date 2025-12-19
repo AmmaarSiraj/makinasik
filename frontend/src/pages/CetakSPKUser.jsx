@@ -34,16 +34,8 @@ const CetakSPK = () => {
 
         const mitraData = resMitra.data.data || resMitra.data;
         const settingData = resSetting.data.data || resSetting.data;
-        
-        // Ambil raw data tasks
         const tasksResult = resTasks.data.data || resTasks.data;
-        let tasksData = Array.isArray(tasksResult) ? tasksResult : [];
-
-        // --- [MODIFIKASI DI SINI] FILTER HANYA STATUS DISETUJUI ---
-        // Jika backend belum mengirim status_penugasan, filter ini mungkin meloloskan semua atau memblokir semua tergantung data.
-        // Pastikan Backend sudah diupdate (Lihat poin 2 di bawah).
-        tasksData = tasksData.filter(item => item.status_penugasan === 'disetujui');
-        // -----------------------------------------------------------
+        const tasksData = Array.isArray(tasksResult) ? tasksResult : [];
 
         // 2. Cek Apakah Ada Template ID di Setting
         let templateData = null;
@@ -121,7 +113,7 @@ const CetakSPK = () => {
         setData({
             mitra: mitraData,
             setting: settingData,
-            tasks: tasksData, // Data sudah terfilter di sini
+            tasks: tasksData,
             templateParts: finalParts,
             templateArticles: finalArticles
         });
@@ -160,7 +152,6 @@ const CetakSPK = () => {
   const replaceVariables = (text) => {
     if (!text || !data) return '';
     const { mitra, setting, tasks } = data;
-    // totalHonor otomatis menghitung tasks yang sudah difilter
     const totalHonor = tasks.reduce((acc, curr) => acc + Number(curr.total_honor || 0), 0);
     const today = new Date();
     
@@ -184,13 +175,18 @@ const CetakSPK = () => {
 
     let result = text;
     Object.keys(map).forEach(key => {
+        // Regex ini akan menangkap {{KEY}} ATAU [KEY]
+        // Jadi template lama atau baru dua-duanya jalan.
         const regex = new RegExp(`(\\{\\{${key}\\}\\}|\\[${key}\\])`, 'g');
         result = result.replace(regex, map[key]);
     });
 
-    result = result.replace(/(\\{\\{Lampiran\\}\\}|\\[Lampiran\\])/g, ''); 
+    // Hapus lampiran dari teks utama
+    result = result.replace(/(\{\{Lampiran\}\}|\[Lampiran\])/g, ''); 
+
+    // Handle Manual Page Break
     result = result.replace(
-        /(\\{\\{Break_Space\\}\\}|\\[Break_Space\\])/g, 
+        /(\{\{Break_Space\}\}|\[Break_Space\])/g, 
         '<div class="page-break-spacer"><span class="no-print text-gray-300 text-xs block text-center py-2 border-t border-dashed border-gray-300">-- Pindah Halaman Manual --</span></div>'
     );
 
@@ -212,6 +208,8 @@ const CetakSPK = () => {
             html, body { margin: 0 !important; padding: 0 !important; background: white; }
             .no-print { display: none !important; }
             @page { size: A4 portrait; margin: 0; }
+
+            /* Jarak Atas saat pindah halaman */
             .page-break-spacer {
                 page-break-before: always !important; 
                 display: block !important;
@@ -219,11 +217,15 @@ const CetakSPK = () => {
                 width: 100%;
                 visibility: hidden;
             }
+
+            /* Halaman baru untuk lampiran */
             .force-new-page {
                 break-before: page;
                 page-break-before: always;
             }
         }
+
+        /* Container Dokumen (Portrait) */
         .document-container {
             width: 210mm;
             padding: 20mm; 
@@ -234,6 +236,8 @@ const CetakSPK = () => {
             line-height: 1.5;
             position: relative;
         }
+
+        /* Container Lampiran (Landscape via Rotation) */
         .lampiran-wrapper-rotated {
             width: 210mm;
             height: 297mm;
@@ -241,6 +245,7 @@ const CetakSPK = () => {
             overflow: hidden; 
             background: white;
         }
+
         .lampiran-content {
             width: 297mm;  
             height: 210mm; 
@@ -254,6 +259,7 @@ const CetakSPK = () => {
             transform-origin: top left;
             transform: translateX(210mm) rotate(90deg);
         }
+
         @media screen {
             .document-container { margin-bottom: 2rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
             .lampiran-wrapper-rotated {
@@ -284,7 +290,7 @@ const CetakSPK = () => {
         </button>
       </div>
 
-      {/* 1. KONTEN NASKAH */}
+      {/* 1. KONTEN NASKAH (MENGALIR + MANUAL PAGE BREAK) */}
       <div className="document-container mx-auto">
         <div className="text-center font-bold mb-6"> 
             <h3 className="uppercase text-lg m-0 leading-tight">PERJANJIAN KERJA</h3>
@@ -343,7 +349,7 @@ const CetakSPK = () => {
         </div>
       </div>
 
-      {/* 2. LAMPIRAN */}
+      {/* 2. LAMPIRAN (LANDSCAPE + OTOMATIS HALAMAN BARU) */}
       <div className="lampiran-wrapper-rotated force-new-page mx-auto">
           <div className="lampiran-content">
             <div className="text-center font-bold mb-6">
@@ -356,56 +362,62 @@ const CetakSPK = () => {
 
             <h4 className="font-bold mb-4 uppercase text-center text-sm">DAFTAR URAIAN TUGAS, JANGKA WAKTU, NILAI PERJANJIAN, DAN BEBAN ANGGARAN</h4>
 
-            {tasks.length === 0 ? (
-                 <div className="text-center py-10 border border-black italic text-gray-500">
-                    Tidak ada penugasan yang disetujui pada periode ini.
-                 </div>
-            ) : (
-                <table className="w-full border-collapse border border-black text-sm">
-                    <thead>
-                        <tr className="bg-gray-100">
-                            <th className="border border-black px-2 py-2 w-10 text-center">No</th>
-                            <th className="border border-black px-2 py-2 text-left">Uraian Tugas</th>
-                            <th className="border border-black px-2 py-2 text-center w-32">Jangka Waktu</th>
-                            <th className="border border-black px-2 py-2 text-center w-12">Vol</th>
-                            <th className="border border-black px-2 py-2 text-center w-24">Satuan</th>
-                            <th className="border border-black px-2 py-2 text-right w-28">Harga Satuan</th>
-                            <th className="border border-black px-2 py-2 text-right w-32">Nilai Perjanjian</th>
-                            <th className="border border-black px-2 py-2 text-center w-24">Beban Anggaran</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {tasks.map((task, index) => (
-                            <tr key={index}>
-                                <td className="border border-black px-2 py-2 text-center align-top">{index + 1}</td>
-                                <td className="border border-black px-2 py-2 align-top">
-                                    <span className="font-bold block">{task.nama_sub_kegiatan}</span>
-                                    {task.nama_jabatan && <span className="block text-[10px] italic">({task.nama_jabatan})</span>}
-                                </td>
-                                <td className="border border-black px-2 py-2 text-center align-top whitespace-nowrap">
-                                    {formatDateIndo(task.tanggal_mulai)} s.d. <br/> {formatDateIndo(task.tanggal_selesai)}
-                                </td>
-                                <td className="border border-black px-2 py-2 text-center align-top">{task.target_volume}</td>
-                                <td className="border border-black px-2 py-2 text-center align-top">{task.nama_satuan}</td>
-                                <td className="border border-black px-2 py-2 text-right align-top">{formatRupiah(task.harga_satuan)}</td>
-                                <td className="border border-black px-2 py-2 text-right align-top">{formatRupiah(task.total_honor)}</td>
-                                <td className="border border-black px-2 py-2 text-center align-top">{task.beban_anggaran || '-'}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                    <tfoot>
-                        <tr>
-                            <td colSpan="6" className="border border-black px-3 py-3 font-bold text-center italic bg-gray-50">
-                                Terbilang: {formatTerbilang(totalHonor)}
+            <table className="w-full border-collapse border border-black text-sm">
+                <thead>
+                    <tr className="bg-gray-100">
+                        <th className="border border-black px-2 py-2 w-10 text-center">No</th>
+                        {/* HEADER DIUBAH */}
+                        <th className="border border-black px-2 py-2 text-left">Survei dan Kegiatan</th>
+                        <th className="border border-black px-2 py-2 text-center w-24">Jabatan</th>
+                        
+                        <th className="border border-black px-2 py-2 text-center w-32">Jangka Waktu</th>
+                        <th className="border border-black px-2 py-2 text-center w-12">Vol</th>
+                        <th className="border border-black px-2 py-2 text-center w-24">Satuan</th>
+                        <th className="border border-black px-2 py-2 text-right w-28">Harga Satuan</th>
+                        <th className="border border-black px-2 py-2 text-right w-32">Nilai Perjanjian</th>
+                        <th className="border border-black px-2 py-2 text-center w-24">Beban Anggaran</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {tasks.map((task, index) => (
+                        <tr key={index}>
+                            <td className="border border-black px-2 py-2 text-center align-top">{index + 1}</td>
+                            
+                            {/* KONTEN URAIAN TUGAS (SURVEI & KEGIATAN) */}
+                            <td className="border border-black px-2 py-2 align-top">
+                                <span className="font-bold block">{task.nama_kegiatan}</span>
+                                <span className="block text-sm">{task.nama_sub_kegiatan}</span>
                             </td>
-                            <td className="border border-black px-3 py-3 text-right font-bold bg-gray-50 whitespace-nowrap">
-                                {formatRupiah(totalHonor)}
+
+                            {/* KOLOM BARU JABATAN */}
+                            <td className="border border-black px-2 py-2 text-center align-top">
+                                {task.nama_jabatan || '-'}
                             </td>
-                            <td className="border border-black px-3 py-3 bg-gray-50"></td>
+
+                            <td className="border border-black px-2 py-2 text-center align-top whitespace-nowrap">
+                                {formatDateIndo(task.tanggal_mulai)} s.d. <br/> {formatDateIndo(task.tanggal_selesai)}
+                            </td>
+                            <td className="border border-black px-2 py-2 text-center align-top">{task.target_volume}</td>
+                            <td className="border border-black px-2 py-2 text-center align-top">{task.nama_satuan}</td>
+                            <td className="border border-black px-2 py-2 text-right align-top">{formatRupiah(task.harga_satuan)}</td>
+                            <td className="border border-black px-2 py-2 text-right align-top">{formatRupiah(task.total_honor)}</td>
+                            <td className="border border-black px-2 py-2 text-center align-top">{task.beban_anggaran || '-'}</td>
                         </tr>
-                    </tfoot>
-                </table>
-            )}
+                    ))}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        {/* COLSPAN DISESUAIKAN JADI 7 */}
+                        <td colSpan="7" className="border border-black px-3 py-3 font-bold text-center italic bg-gray-50">
+                            Terbilang: {formatTerbilang(totalHonor)}
+                        </td>
+                        <td className="border border-black px-3 py-3 text-right font-bold bg-gray-50 whitespace-nowrap">
+                            {formatRupiah(totalHonor)}
+                        </td>
+                        <td className="border border-black px-3 py-3 bg-gray-50"></td>
+                    </tr>
+                </tfoot>
+            </table>
 
             <div className="mt-12 flex justify-between px-10 break-inside-avoid">
                 <div className="text-center w-64">

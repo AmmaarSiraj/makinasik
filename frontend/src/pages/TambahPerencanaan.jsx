@@ -5,12 +5,12 @@ import Swal from 'sweetalert2';
 import {
   FaArrowRight, FaArrowLeft, FaCheck, FaClipboardList,
   FaIdCard, FaSearch, FaTimes, FaUsers, FaMoneyBillWave,
-  FaExclamationCircle, FaChartBar, FaBoxOpen, FaFilter
+  FaExclamationCircle, FaChartBar, FaBoxOpen, FaFilter, FaCalendarDay
 } from 'react-icons/fa';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
-const TambahPenugasan = () => {
+const TambahPerencanaan = () => {
   const navigate = useNavigate();
   const location = useLocation(); // Hook untuk menangkap data import
 
@@ -18,6 +18,7 @@ const TambahPenugasan = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
+  // Data Master
   const [listKegiatan, setListKegiatan] = useState([]);
   const [listSubKegiatan, setListSubKegiatan] = useState([]);
   const [allSubKegiatan, setAllSubKegiatan] = useState([]);
@@ -25,20 +26,21 @@ const TambahPenugasan = () => {
   const [listHonorarium, setListHonorarium] = useState([]);
   const [listAturan, setListAturan] = useState([]);
   const [listKelompok, setListKelompok] = useState([]);
-  const [listPenugasan, setListPenugasan] = useState([]);
+  const [listPerencanaan, setListPerencanaan] = useState([]);
 
+  // Form State
   const [selectedKegiatanId, setSelectedKegiatanId] = useState('');
   const [selectedSubId, setSelectedSubId] = useState('');
-
   const [selectedMitras, setSelectedMitras] = useState([]);
 
   const [mitraSearch, setMitraSearch] = useState('');
   const [showMitraDropdown, setShowMitraDropdown] = useState(false);
 
+  // Finance State
   const [batasHonorPeriode, setBatasHonorPeriode] = useState(0);
   const [mitraIncomeMap, setMitraIncomeMap] = useState({});
 
-  // 1. Fetch Data Master
+  // 1. FETCH DATA MASTER
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -46,13 +48,13 @@ const TambahPenugasan = () => {
         const token = localStorage.getItem('token');
         const headers = { Authorization: `Bearer ${token}` };
 
-        const [resKeg, resMitra, resHonor, resAturan, resKelompok, resPenugasan, resAllSub] = await Promise.all([
+        const [resKeg, resMitra, resHonor, resAturan, resKelompok, resPerencanaan, resAllSub] = await Promise.all([
           axios.get(`${API_URL}/api/kegiatan`, { headers }),
           axios.get(`${API_URL}/api/mitra`, { headers }),
           axios.get(`${API_URL}/api/honorarium`, { headers }),
           axios.get(`${API_URL}/api/aturan-periode`, { headers }),
-          axios.get(`${API_URL}/api/kelompok-penugasan`, { headers }),
-          axios.get(`${API_URL}/api/penugasan`, { headers }),
+          axios.get(`${API_URL}/api/kelompok-perencanaan`, { headers }),
+          axios.get(`${API_URL}/api/perencanaan`, { headers }),
           axios.get(`${API_URL}/api/subkegiatan`, { headers })
         ]);
 
@@ -61,7 +63,7 @@ const TambahPenugasan = () => {
         setListHonorarium(resHonor.data.data || resHonor.data);
         setListAturan(resAturan.data.data || resAturan.data);
         setListKelompok(resKelompok.data.data || resKelompok.data);
-        setListPenugasan(resPenugasan.data.data || resPenugasan.data);
+        setListPerencanaan(resPerencanaan.data.data || resPerencanaan.data);
         setAllSubKegiatan(resAllSub.data.data || resAllSub.data);
 
       } catch (err) {
@@ -74,7 +76,7 @@ const TambahPenugasan = () => {
     fetchData();
   }, []);
 
-  // 2. Fetch Sub Kegiatan Dropdown saat Kegiatan Berubah
+  // 2. FILTER SUB KEGIATAN DROPDOWN
   useEffect(() => {
     const fetchSubDropdown = async () => {
       if (!selectedKegiatanId) {
@@ -94,50 +96,34 @@ const TambahPenugasan = () => {
     fetchSubDropdown();
   }, [selectedKegiatanId]);
 
-  // 3. [NEW] Handle Data dari Import (Auto-Fill)
+  // 3. [BARU] LOGIKA MENANGKAP DATA IMPORT
   useEffect(() => {
-    // Jalankan logika ini hanya jika loading master data selesai
     if (!loading && location.state) {
         const { preSelectedSubKegiatan, importedMembers } = location.state;
 
-        // A. Auto-select Kegiatan & Subkegiatan
+        // A. Auto Select Kegiatan & Sub
         if (preSelectedSubKegiatan) {
             setSelectedKegiatanId(preSelectedSubKegiatan.id_kegiatan);
             setSelectedSubId(preSelectedSubKegiatan.id);
-            setStep(2); // Langsung lompat ke langkah 2
+            setStep(2); // Langsung ke step 2
         }
 
-        // B. Auto-fill Mitra dari Import
+        // B. Auto Fill Mitra
         if (importedMembers && Array.isArray(importedMembers) && listMitra.length > 0) {
             const mappedMembers = importedMembers.map(imp => {
-                // Cari data lengkap mitra di listMitra (untuk dapat NIK, dll)
                 const fullMitra = listMitra.find(m => m.id === imp.id_mitra);
-                
-                if (fullMitra) {
-                    return {
-                        ...fullMitra,
-                        assignedJabatan: imp.kode_jabatan,
-                        assignedVolume: imp.volume_tugas
-                    };
-                }
-                
-                // Fallback jika tidak ketemu di list (jarang terjadi)
                 return {
+                    ...(fullMitra || {}),
                     id: imp.id_mitra,
-                    nama_lengkap: imp.nama_lengkap,
-                    nik: imp.sobat_id || '-',
-                    assignedJabatan: imp.kode_jabatan,
-                    assignedVolume: imp.volume_tugas
+                    nama_lengkap: imp.nama_lengkap || fullMitra?.nama_lengkap,
+                    nik: fullMitra?.nik || imp.sobat_id || '-',
+                    assignedJabatan: imp.kode_jabatan, 
+                    assignedVolume: imp.volume_tugas 
                 };
             });
 
-            // Hindari duplikasi jika effect jalan 2x
-            setSelectedMitras(prev => {
-                if (prev.length === 0) return mappedMembers;
-                return prev; 
-            });
-
-            // Notifikasi kecil
+            setSelectedMitras(prev => prev.length === 0 ? mappedMembers : prev);
+            
             Swal.fire({
                 toast: true,
                 position: 'top-end',
@@ -146,15 +132,11 @@ const TambahPenugasan = () => {
                 showConfirmButton: false,
                 timer: 3000
             });
-            
-            // Bersihkan state agar tidak loop (opsional, tergantung preferensi navigasi)
-            // window.history.replaceState({}, document.title);
         }
     }
   }, [loading, location.state, listMitra]);
 
-
-  // 4. Hitung Batas Honor & Pendapatan Mitra
+  // 4. HITUNG PENDAPATAN & LIMIT (BULANAN)
   useEffect(() => {
     if (!selectedSubId) {
       setBatasHonorPeriode(0);
@@ -163,14 +145,15 @@ const TambahPenugasan = () => {
     }
 
     const subInfo = allSubKegiatan.find(s => String(s.id) === String(selectedSubId));
-
     if (!subInfo || !subInfo.tanggal_mulai) return;
 
-    const tahunKegiatan = new Date(subInfo.tanggal_mulai).getFullYear().toString();
+    const targetDate = new Date(subInfo.tanggal_mulai);
+    const targetYear = targetDate.getFullYear().toString();
+    const targetMonth = targetDate.getMonth(); 
 
     const aturan = listAturan.find(r =>
-      String(r.tahun) === String(tahunKegiatan) ||
-      String(r.periode) === String(tahunKegiatan)
+      String(r.tahun) === String(targetYear) ||
+      String(r.periode) === String(targetYear)
     );
 
     if (aturan) {
@@ -182,15 +165,17 @@ const TambahPenugasan = () => {
     const incomeMap = {};
 
     listKelompok.forEach(k => {
-      const penugasan = listPenugasan.find(p => p.id_penugasan === k.id_penugasan);
-      if (!penugasan) return;
+      const perencanaan = listPerencanaan.find(p => p.id_perencanaan === k.id_perencanaan);
+      if (!perencanaan) return;
 
-      const sub = allSubKegiatan.find(s => s.id === penugasan.id_subkegiatan);
+      const sub = allSubKegiatan.find(s => s.id === perencanaan.id_subkegiatan);
       if (!sub || !sub.tanggal_mulai) return;
 
-      const subYear = new Date(sub.tanggal_mulai).getFullYear().toString();
+      const itemDate = new Date(sub.tanggal_mulai);
+      const itemYear = itemDate.getFullYear().toString();
+      const itemMonth = itemDate.getMonth();
 
-      if (subYear !== tahunKegiatan) return;
+      if (itemYear !== targetYear || itemMonth !== targetMonth) return;
 
       const honor = listHonorarium.find(h => h.id_subkegiatan === sub.id && h.kode_jabatan === k.kode_jabatan);
       const tarif = honor ? Number(honor.tarif) : 0;
@@ -204,8 +189,9 @@ const TambahPenugasan = () => {
 
     setMitraIncomeMap(incomeMap);
 
-  }, [selectedSubId, allSubKegiatan, listAturan, listKelompok, listPenugasan, listHonorarium]);
+  }, [selectedSubId, allSubKegiatan, listAturan, listKelompok, listPerencanaan, listHonorarium]);
 
+  // 5. MENGHITUNG TAHUN TARGET
   const targetYear = useMemo(() => {
     if (!selectedSubId) return null;
     const sub = allSubKegiatan.find(s => String(s.id) === String(selectedSubId));
@@ -213,31 +199,33 @@ const TambahPenugasan = () => {
     return new Date(sub.tanggal_mulai).getFullYear().toString();
   }, [selectedSubId, allSubKegiatan]);
 
+  // 6. FILTER MITRA SUDAH BERTUGAS
   const unavailableMitraIds = useMemo(() => {
     if (!selectedSubId) return new Set();
 
-    const relatedPenugasanIds = listPenugasan
+    const relatedPerencanaanIds = listPerencanaan
       .filter(p => String(p.id_subkegiatan) === String(selectedSubId))
-      .map(p => p.id_penugasan);
+      .map(p => p.id_perencanaan);
 
     const assignedIds = listKelompok
-      .filter(k => relatedPenugasanIds.includes(k.id_penugasan))
+      .filter(k => relatedPerencanaanIds.includes(k.id_perencanaan))
       .map(k => String(k.id_mitra));
 
     return new Set(assignedIds);
-  }, [selectedSubId, listPenugasan, listKelompok]);
+  }, [selectedSubId, listPerencanaan, listKelompok]);
 
+  // 7. DATA JABATAN & PROGRESS VOLUME
   const availableJabatan = useMemo(() => {
     return listHonorarium.filter(h => String(h.id_subkegiatan) === String(selectedSubId));
   }, [listHonorarium, selectedSubId]);
 
   const getVolumeStats = (kodeJabatan, basisVolume) => {
-    const relatedPenugasanIds = listPenugasan
+    const relatedPerencanaanIds = listPerencanaan
       .filter(p => String(p.id_subkegiatan) === String(selectedSubId))
-      .map(p => p.id_penugasan);
+      .map(p => p.id_perencanaan);
 
     const usedInDB = listKelompok
-      .filter(k => relatedPenugasanIds.includes(k.id_penugasan) && k.kode_jabatan === kodeJabatan)
+      .filter(k => relatedPerencanaanIds.includes(k.id_perencanaan) && k.kode_jabatan === kodeJabatan)
       .reduce((acc, curr) => acc + (Number(curr.volume_tugas) || 0), 0);
 
     const usedInDraft = selectedMitras
@@ -258,6 +246,19 @@ const TambahPenugasan = () => {
     if (!selectedKegiatanId || !selectedSubId) {
       Swal.fire('Perhatian', 'Silakan pilih Kegiatan dan Sub Kegiatan terlebih dahulu.', 'warning');
       return;
+    }
+    // Cek Duplikasi Perencanaan di SubKegiatan yang sama (jika ingin membatasi 1 planning per sub)
+    const exist = listPerencanaan.find(p => String(p.id_subkegiatan) === String(selectedSubId));
+    if (exist) {
+        Swal.fire({
+            title: 'Sudah Ada',
+            text: 'Perencanaan untuk sub kegiatan ini sudah dibuat. Anda akan diarahkan ke mode Edit.',
+            icon: 'info',
+            confirmButtonText: 'Ke Halaman Edit'
+        }).then(() => {
+            navigate(`/perencanaan/edit/${exist.id_perencanaan}`);
+        });
+        return;
     }
     setStep(2);
   };
@@ -289,46 +290,12 @@ const TambahPenugasan = () => {
       return Swal.fire('Data Belum Lengkap', `Harap pilih jabatan dan isi volume tugas (> 0) untuk mitra: ${incompleteMitra.nama_lengkap}`, 'warning');
     }
 
-    if (batasHonorPeriode > 0) {
-      const overLimitUser = selectedMitras.find(m => {
-        const hInfo = availableJabatan.find(h => h.kode_jabatan === m.assignedJabatan);
-        const tarif = hInfo ? Number(hInfo.tarif) : 0;
-        const totalHonorBaru = tarif * Number(m.assignedVolume);
-
-        const current = mitraIncomeMap[String(m.id)] || 0;
-        return (current + totalHonorBaru) > batasHonorPeriode;
-      });
-
-      if (overLimitUser) {
-        return Swal.fire(
-          'Gagal Menyimpan',
-          `Mitra <b>${overLimitUser.nama_lengkap}</b> melebihi batas honor tahunan ini. Silakan kurangi volume/honor atau hapus dari daftar.`,
-          'error'
-        );
-      }
-    }
-
-    for (const jabatan of availableJabatan) {
-      const stats = getVolumeStats(jabatan.kode_jabatan, jabatan.basis_volume);
-      
-      if (stats.max > 0 && stats.used > stats.max) {
-        return Swal.fire(
-          'Kuota Terlampaui',
-          `Total penugasan untuk jabatan <b>${jabatan.nama_jabatan}</b> melebihi batas kuota!<br/><br/>
-           Maksimal: ${stats.max}<br/>
-           Terpakai (termasuk baru): ${stats.used}<br/><br/>
-           Silakan kurangi jumlah petugas atau volume tugasnya.`,
-          'warning'
-        );
-      }
-    }
-
     setSubmitting(true);
     const token = localStorage.getItem('token');
     const user = JSON.parse(localStorage.getItem('user'));
     const headers = { Authorization: `Bearer ${token}` };
 
-    const rawIdPengawas = user?.id;
+    const rawIdPengawas = user?.id; // AMBIL OTOMATIS DARI LOGIN
     const idPengawas = parseInt(rawIdPengawas); 
 
     if (isNaN(idPengawas) || idPengawas < 1) { 
@@ -337,31 +304,6 @@ const TambahPenugasan = () => {
     }
 
     try {
-      const existingPenugasan = listPenugasan.find(
-        p => String(p.id_subkegiatan) === String(selectedSubId)
-      );
-      
-      if (existingPenugasan) {
-        const idPenugasanExist = existingPenugasan.id_penugasan;
-        const promises = selectedMitras.map(m => {
-          return axios.post(`${API_URL}/api/kelompok-penugasan`, {
-            id_penugasan: idPenugasanExist,
-            id_mitra: m.id,
-            kode_jabatan: m.assignedJabatan,
-            volume_tugas: m.assignedVolume
-          }, { headers });
-        });
-        await Promise.all(promises);
-
-        Swal.fire({
-          title: 'Berhasil',
-          text: `Mitra berhasil ditambahkan ke penugasan (ID: ${idPenugasanExist}).`,
-          icon: 'success',
-          timer: 2000,
-          showConfirmButton: false
-        }).then(() => navigate('/penugasan'));
-
-      } else {
         const payload = {
           id_subkegiatan: selectedSubId,
           id_pengawas: idPengawas, 
@@ -371,16 +313,15 @@ const TambahPenugasan = () => {
             volume_tugas: m.assignedVolume
           }))
         };
-        await axios.post(`${API_URL}/api/penugasan`, payload, { headers });
+        await axios.post(`${API_URL}/api/perencanaan`, payload, { headers });
 
         Swal.fire({
           title: 'Berhasil',
-          text: 'Penugasan baru dan tim berhasil disimpan.',
+          text: 'Perencanaan baru dan tim berhasil disimpan.',
           icon: 'success',
           timer: 2000,
           showConfirmButton: false
-        }).then(() => navigate('/penugasan'));
-      }
+        }).then(() => navigate('/perencanaan'));
 
     } catch (err) {
       console.error(err);
@@ -389,11 +330,9 @@ const TambahPenugasan = () => {
 
       if (err.response?.status === 422) {
           const errors = err.response.data.errors;
-          
           if (Object.keys(errors).length > 0) {
             const firstErrorField = Object.keys(errors)[0];
             const firstErrorMessage = errors[firstErrorField][0];
-            
             errorMessage = `Validasi Gagal pada field <b>${firstErrorField}</b>: ${firstErrorMessage}`;
           } else {
             errorMessage = err.response.data.message || 'Validasi Gagal! Periksa kembali data Anda.';
@@ -410,9 +349,7 @@ const TambahPenugasan = () => {
 
   const filteredMitra = listMitra.filter(m => {
     const matchSearch = m.nama_lengkap.toLowerCase().includes(mitraSearch.toLowerCase()) || m.nik.includes(mitraSearch);
-
     const notSelected = !selectedMitras.some(selected => selected.id === m.id);
-
     const notAlreadyAssigned = !unavailableMitraIds.has(String(m.id));
 
     let isActiveInYear = false;
@@ -432,7 +369,7 @@ const TambahPenugasan = () => {
     <div className="max-w-6xl mx-auto pb-20">
 
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-800">Wizard Penugasan Mitra</h1>
+        <h1 className="text-2xl font-bold text-gray-800">Wizard Perencanaan Mitra</h1>
         <div className="flex items-center gap-2 text-sm text-gray-500 mt-2">
           <span className={`px-3 py-1 rounded-full ${step === 1 ? 'bg-[#1A2A80] text-white font-bold' : 'bg-gray-200'}`}>1. Pilih Kegiatan</span>
           <span className="text-gray-300">-----</span>
@@ -495,11 +432,17 @@ const TambahPenugasan = () => {
 
             <div className="flex justify-between items-center mb-6">
               <div className='text-sm text-gray-600'>
-                Penugasan untuk: <span className="font-bold text-[#1A2A80] text-lg block">{allSubKegiatan.find(s => String(s.id) === String(selectedSubId))?.nama_sub_kegiatan}</span>
+                Perencanaan untuk: <span className="font-bold text-[#1A2A80] text-lg block">{allSubKegiatan.find(s => String(s.id) === String(selectedSubId))?.nama_sub_kegiatan}</span>
+                {selectedSubId && (
+                    <span className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                        <FaCalendarDay /> Periode: {new Date(allSubKegiatan.find(s => String(s.id) === String(selectedSubId))?.tanggal_mulai).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
+                    </span>
+                )}
               </div>
               <button onClick={() => setStep(1)} className="text-xs text-blue-600 underline hover:text-blue-800">Ganti Kegiatan</button>
             </div>
 
+            {/* INFO KUOTA */}
             <div className="mb-8 p-5 bg-gray-50 border border-gray-200 rounded-xl">
               <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
                 <FaChartBar /> Informasi Kuota & Honorarium
@@ -543,6 +486,7 @@ const TambahPenugasan = () => {
 
             <div className="flex flex-col md:flex-row gap-8 h-full">
 
+              {/* KIRI: PENCARIAN */}
               <div className="md:w-1/3">
                 <h3 className="text-sm font-bold text-gray-700 mb-3 uppercase flex items-center gap-2">
                   <FaSearch /> Tambah Mitra
@@ -579,22 +523,22 @@ const TambahPenugasan = () => {
                           return (
                             <div
                               key={m.id}
-                              onClick={() => !isFull && handleAddMitra(m)}
-                              className={`px-4 py-3 border-b last:border-none transition cursor-pointer ${isFull ? 'bg-gray-100 opacity-60 cursor-not-allowed' : 'hover:bg-blue-50'}`}
+                              onClick={() => handleAddMitra(m)}
+                              className={`px-4 py-3 border-b last:border-none transition cursor-pointer hover:bg-blue-50`}
                             >
                               <div className="flex justify-between items-start">
                                 <div>
                                   <p className="text-sm font-bold text-gray-800">{m.nama_lengkap}</p>
                                   <p className="text-xs text-gray-500">{m.nik}</p>
                                 </div>
-                                {isFull && <span className="text-[10px] font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded">PENUH</span>}
+                                {isFull && <span className="text-[10px] font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded">LIMIT</span>}
                               </div>
 
                               {limit > 0 && (
                                 <div className="mt-2">
                                   <div className="flex justify-between text-[10px] mb-1 text-gray-500">
                                     <span>Rp {currentIncome.toLocaleString('id-ID')}</span>
-                                    <span>Limit Thn: Rp {limit.toLocaleString('id-ID')}</span>
+                                    <span>Limit Bln: Rp {limit.toLocaleString('id-ID')}</span>
                                   </div>
                                   <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
                                     <div className={`h-1.5 rounded-full ${percent > 90 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${Math.min(percent, 100)}%` }}></div>
@@ -610,6 +554,7 @@ const TambahPenugasan = () => {
                 </div>
               </div>
 
+              {/* KANAN: DAFTAR SELEKSI */}
               <div className="md:w-2/3 bg-gray-50 rounded-xl border border-gray-200 p-5 flex flex-col">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-sm font-bold text-gray-700 uppercase flex items-center gap-2">
@@ -702,7 +647,7 @@ const TambahPenugasan = () => {
                             <div className="mt-3 border-t border-gray-100 pt-2">
                               <div className="flex justify-between text-[10px] text-gray-500 mb-1">
                                 <span>Total Proyeksi: {formatRupiah(totalProjected)}</span>
-                                <span>Batas Thn: {formatRupiah(limit)}</span>
+                                <span>Batas Bln: {formatRupiah(limit)}</span>
                               </div>
                               <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden flex">
                                 <div
@@ -721,7 +666,7 @@ const TambahPenugasan = () => {
 
                           {isOverLimit && (
                             <div className="mt-2 text-[10px] text-red-600 font-bold flex items-center gap-1 animate-pulse justify-end">
-                              <FaExclamationCircle /> Akumulasi pendapatan melebihi batas tahunan!
+                              <FaExclamationCircle /> Melebihi batas bulanan!
                             </div>
                           )}
 
@@ -748,4 +693,4 @@ const TambahPenugasan = () => {
   );
 };
 
-export default TambahPenugasan;
+export default TambahPerencanaan;

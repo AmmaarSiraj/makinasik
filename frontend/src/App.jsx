@@ -53,6 +53,13 @@ import TambahPerencanaan from './pages/admin/TambahPerencanaan';
 import EditPerencanaan from './pages/admin/EditPerencanaan';
 import DetailPerencanaan from './pages/admin/DetailPerencanaan';
 import RekapPerencanaan from './pages/admin/RekapPerencanaan';
+import LengkapiProfile from './pages/LengkapiProfile';
+
+import PerencanaanUser from './pages/Perencanaan';
+import TambahPerencanaanUser from './pages/TambahPerencanaan';
+import EditPerencanaanUser from './pages/EditPerencanaan';
+import DetailPerencanaanUser from './pages/DetailPerencanaan';
+import RekapPerencanaanUser from './pages/RekapPerencanaan';
 
 function AppRoutes() {
   return (
@@ -65,6 +72,7 @@ function AppRoutes() {
         <Route element={<RequireAuth allowedRoles={['user', 'admin']} />}>
           <Route element={<Layout />}>
             <Route path="/home" element={<Home />} />
+            <Route path="/lengkapi-profil" element={<LengkapiProfile />} />
             <Route path="/kegiatan/:id" element={<DetailKegiatanUser />} />
             <Route path="/penugasan" element={<PenugasanUser />} />
             <Route path="/daftar-mitra" element={<MitraUser />} />
@@ -77,6 +85,11 @@ function AppRoutes() {
             <Route path="/spk" element={<ManajemenSPKUser />} />
             <Route path="/spk/templates/create" element={<TambahTemplateSPKUser />} />
             <Route path="/spk/templates/edit/:id" element={<TambahTemplateSPKUser />} />
+            <Route path="/perencanaan" element={<PerencanaanUser />} />
+            <Route path="/perencanaan/tambah" element={<TambahPerencanaanUser />} />
+            <Route path="/perencanaan/detail/:id" element={<DetailPerencanaanUser />} />
+            <Route path="/perencanaan/edit/:id" element={<EditPerencanaanUser />} />
+            <Route path="/rekap" element={<RekapPerencanaanUser />} />
           </Route>
           <Route path="/spk/print/:periode/:id_mitra" element={<CetakSPKUser />} />
           <Route path="/spk/templates/preview" element={<PreviewTemplateSPKUser />} />

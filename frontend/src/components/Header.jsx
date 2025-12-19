@@ -1,11 +1,28 @@
+// src/components/Header.jsx
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { FaBars, FaTimes, FaSignOutAlt, FaUserCircle, FaChevronDown } from 'react-icons/fa';
+import { 
+  FaBars, 
+  FaTimes, 
+  FaSignOutAlt, 
+  FaUserCircle, 
+  FaChevronDown,
+  FaClipboardList,
+  FaChartPie,
+  FaHome,
+  FaPoll,
+  FaBriefcase,
+  FaFileSignature,
+  FaUsers,
+  FaList,
+  FaExchangeAlt
+} from 'react-icons/fa';
 import logoMAKINASIK from '../assets/logo.png';
 
 const Header = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isMitraDropdownOpen, setIsMitraDropdownOpen] = useState(false);
+  const [isPerencanaanDropdownOpen, setIsPerencanaanDropdownOpen] = useState(false);
   
   const location = useLocation();
   const navigate = useNavigate();
@@ -20,145 +37,238 @@ const Header = () => {
     }
   };
 
-  const isActive = (path) => {
-    return location.pathname === path
-      ? "text-[#1A2A80] bg-blue-50 font-bold"
-      : "text-gray-600 hover:text-[#1A2A80] hover:bg-gray-50 font-medium";
+  const getMenuClass = (path) => {
+    const active = location.pathname === path;
+    return `group flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+      active 
+        ? "text-blue-900 bg-blue-50 font-bold shadow-sm ring-1 ring-blue-100" 
+        : "text-gray-600 hover:text-blue-800 hover:bg-gray-50 font-medium"
+    }`;
   };
 
-  const isParentActive = (paths) => {
-    return paths.includes(location.pathname) 
-      ? "text-[#1A2A80] bg-blue-50 font-bold" 
-      : "text-gray-600 hover:text-[#1A2A80] hover:bg-gray-50 font-medium";
+  const getParentMenuClass = (paths) => {
+    const active = paths.some(p => location.pathname.startsWith(p));
+    return `group flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
+      active 
+        ? "text-blue-900 bg-blue-50 font-bold shadow-sm ring-1 ring-blue-100" 
+        : "text-gray-600 hover:text-blue-800 hover:bg-gray-50 font-medium"
+    }`;
   };
 
   return (
-    <header className="bg-white shadow-sm w-full sticky top-0 z-50 border-b border-gray-100">
+    // PERBAIKAN: 
+    // 1. z-[999] agar tidak tertimpa layer manapun di Home
+    // 2. bg-white (solid) agar tidak transparan/abu saat di atas background gelap
+    <header className="sticky top-0 z-[999] w-full bg-white border-b border-gray-200 shadow-md font-sans transition-all duration-300">
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
+        <div className="flex justify-between items-center h-20">
           
+          {/* --- LOGO SECTION --- */}
           <div className="flex-shrink-0 flex items-center gap-3">
-            <Link to="/home" className="flex items-center gap-2">
+            <Link to="/home" className="flex items-center gap-2 group">
               <img 
                 src={logoMAKINASIK} 
                 alt="Logo" 
-                className="h-8 w-auto" 
+                className="h-10 w-auto transform group-hover:scale-105 transition-transform duration-300" 
               />
-              <span className="text-xl font-extrabold text-[#1A2A80] tracking-tight">
-                MAKINASIK
-              </span>
+              <div className="flex flex-col leading-none">
+                <span className="text-xl font-extrabold text-blue-900 tracking-tight">
+                  MAKINASIK
+                </span>
+              </div>
             </Link>
           </div>
           
-          <div className="hidden md:block">
-            <div className="ml-10 flex items-center space-x-2">
+          {/* --- DESKTOP MENU --- */}
+          <div className="hidden md:flex flex-1 justify-center ml-8">
+            <div className="flex items-center space-x-1 lg:space-x-2">
               
-              <Link to="/home" className={`px-4 py-2 rounded-lg text-sm transition-all duration-200 ${isActive('/home')}`}>
-                Home
+              <Link to="/home" className={getMenuClass('/home')}>
+                <FaHome className="text-xs lg:text-sm opacity-70 group-hover:opacity-100" />
+                <span>Home</span>
               </Link>
 
-              <Link to="/daftar-kegiatan" className={`px-4 py-2 rounded-lg text-sm transition-all duration-200 ${isActive('/daftar-kegiatan')}`}>
-                Survei & Sensus
+              <Link to="/daftar-kegiatan" className={getMenuClass('/daftar-kegiatan')}>
+                <FaPoll className="text-xs lg:text-sm opacity-70 group-hover:opacity-100" />
+                <span>Survei</span>
               </Link>
 
-              <Link to="/penugasan" className={`px-4 py-2 rounded-lg text-sm transition-all duration-200 ${isActive('/penugasan')}`}>
-                Penugasan
-              </Link>
-
-              <Link to="/spk" className={`px-4 py-2 rounded-lg text-sm transition-all duration-200 ${isActive('/spk')}`}>
-                SPK
-              </Link>
-
+              {/* DROPDOWN PERENCANAAN */}
               <div 
-                className="relative group"
-                onMouseEnter={() => setIsMitraDropdownOpen(true)}
-                onMouseLeave={() => setIsMitraDropdownOpen(false)}
+                className="relative"
+                onMouseEnter={() => setIsPerencanaanDropdownOpen(true)}
+                onMouseLeave={() => setIsPerencanaanDropdownOpen(false)}
               >
-                <button 
-                    className={`flex items-center gap-1 px-4 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${isParentActive(['/daftar-mitra', '/transaksi-mitra'])}`}
-                >
-                    Mitra <FaChevronDown size={10} />
+                <button className={getParentMenuClass(['/perencanaan', '/rekap'])}>
+                    <FaClipboardList className="text-xs lg:text-sm opacity-70 group-hover:opacity-100" />
+                    <span>Perencanaan</span>
+                    <FaChevronDown size={10} className={`ml-1 transition-transform duration-200 ${isPerencanaanDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
 
-                <div className={`absolute left-0 mt-0 w-48 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden transition-all duration-200 transform origin-top-left ${isMitraDropdownOpen ? 'opacity-100 scale-100 visible' : 'opacity-0 scale-95 invisible'}`}>
-                    <div className="py-1">
-                        <Link 
-                            to="/daftar-mitra" 
-                            className={`block px-4 py-2.5 text-sm hover:bg-blue-50 transition ${location.pathname === '/daftar-mitra' ? 'text-[#1A2A80] font-bold bg-blue-50' : 'text-gray-700'}`}
-                        >
-                            Master Mitra
+                <div className={`absolute left-0 mt-0 w-60 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden transition-all duration-200 transform origin-top-left z-[1000] ${isPerencanaanDropdownOpen ? 'opacity-100 scale-100 visible translate-y-0' : 'opacity-0 scale-95 invisible -translate-y-2'}`}>
+                    <div className="p-1.5">
+                        <Link to="/perencanaan" className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-blue-50 group/item">
+                            <div className="p-2 bg-blue-100 text-blue-600 rounded-md group-hover/item:bg-blue-600 group-hover/item:text-white transition-colors">
+                              <FaClipboardList size={14}/>
+                            </div>
+                            <div>
+                                <span className="block text-sm font-semibold text-gray-700 group-hover/item:text-blue-700">Manajemen Perencanaan</span>
+                            </div>
                         </Link>
-                        <Link 
-                            to="/transaksi-mitra" 
-                            className={`block px-4 py-2.5 text-sm hover:bg-blue-50 transition ${location.pathname === '/transaksi-mitra' ? 'text-[#1A2A80] font-bold bg-blue-50' : 'text-gray-700'}`}
-                        >
-                            Transaksi Mitra
+                        <Link to="/rekap" className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-purple-50 group/item mt-1">
+                            <div className="p-2 bg-purple-100 text-purple-600 rounded-md group-hover/item:bg-purple-600 group-hover/item:text-white transition-colors">
+                              <FaChartPie size={14}/>
+                            </div>
+                            <div>
+                                <span className="block text-sm font-semibold text-gray-700 group-hover/item:text-purple-700">Rekap Perencanaan</span>
+                            </div>
                         </Link>
                     </div>
                 </div>
               </div>
 
-              <div className="h-6 w-px bg-gray-200 mx-2"></div>
+              <Link to="/penugasan" className={getMenuClass('/penugasan')}>
+                <FaBriefcase className="text-xs lg:text-sm opacity-70 group-hover:opacity-100" />
+                <span>Penugasan</span>
+              </Link>
 
-              <div className="flex items-center gap-4 pl-2">
-                <Link to="/lengkapi-profil" className="flex items-center gap-2 text-gray-700 hover:text-[#1A2A80] transition group" title="Lihat Profil Saya">
-                    <FaUserCircle className="text-xl text-gray-400 group-hover:text-[#1A2A80]" />
-                    <span className="text-sm font-semibold max-w-[100px] truncate">
-                        {user.username || 'User'}
-                    </span>
-                </Link>
-                
-                <button onClick={handleLogout} className="flex items-center gap-2 bg-red-50 text-red-600 hover:bg-red-100 px-3 py-1.5 rounded-lg text-xs font-bold transition">
-                  <FaSignOutAlt /> Keluar
+              <Link to="/spk" className={getMenuClass('/spk')}>
+                <FaFileSignature className="text-xs lg:text-sm opacity-70 group-hover:opacity-100" />
+                <span>SPK</span>
+              </Link>
+
+              {/* DROPDOWN MITRA */}
+              <div 
+                className="relative"
+                onMouseEnter={() => setIsMitraDropdownOpen(true)}
+                onMouseLeave={() => setIsMitraDropdownOpen(false)}
+              >
+                <button className={getParentMenuClass(['/daftar-mitra', '/transaksi-mitra'])}>
+                    <FaUsers className="text-xs lg:text-sm opacity-70 group-hover:opacity-100" />
+                    <span>Mitra</span>
+                    <FaChevronDown size={10} className={`ml-1 transition-transform duration-200 ${isMitraDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
+
+                <div className={`absolute right-0 lg:left-0 mt-0 w-56 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden transition-all duration-200 transform origin-top-left z-[1000] ${isMitraDropdownOpen ? 'opacity-100 scale-100 visible translate-y-0' : 'opacity-0 scale-95 invisible -translate-y-2'}`}>
+                    <div className="p-1.5">
+                        <Link to="/daftar-mitra" className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-emerald-50 group/item">
+                            <div className="p-2 bg-emerald-100 text-emerald-600 rounded-md group-hover/item:bg-emerald-600 group-hover/item:text-white transition-colors">
+                                <FaList size={14} />
+                            </div>
+                            <div>
+                                <span className="block text-sm font-semibold text-gray-700 group-hover/item:text-emerald-700">Master Mitra</span>
+                                <span className="text-[10px] text-gray-400">Database Mitra</span>
+                            </div>
+                        </Link>
+                        <Link to="/transaksi-mitra" className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-orange-50 group/item mt-1">
+                            <div className="p-2 bg-orange-100 text-orange-600 rounded-md group-hover/item:bg-orange-600 group-hover/item:text-white transition-colors">
+                                <FaExchangeAlt size={14} />
+                            </div>
+                            <div>
+                                <span className="block text-sm font-semibold text-gray-700 group-hover/item:text-orange-700">Transaksi Mitra</span>
+                                <span className="text-[10px] text-gray-400">Riwayat & Log</span>
+                            </div>
+                        </Link>
+                    </div>
+                </div>
               </div>
 
             </div>
           </div>
 
+          {/* --- USER PROFILE (RIGHT) --- */}
+          <div className="hidden md:flex items-center gap-3 pl-4 border-l border-gray-200 ml-4">
+             <Link to="/lengkapi-profil" className="group flex items-center gap-3 pl-2 pr-4 py-1.5 rounded-full hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-200">
+                <div className="flex flex-col items-end">
+                    <span className="text-xs font-bold text-gray-700 group-hover:text-blue-800 max-w-[100px] truncate leading-tight">
+                        {user.username || 'Guest'}
+                    </span>
+                    <span className="text-[10px] text-gray-400 leading-tight">User</span>
+                </div>
+                <FaUserCircle className="text-3xl text-gray-300 group-hover:text-blue-600 transition-colors" />
+             </Link>
+             
+             <button 
+                onClick={handleLogout} 
+                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-all" 
+                title="Keluar Aplikasi"
+             >
+               <FaSignOutAlt size={18} />
+             </button>
+          </div>
+
+          {/* --- MOBILE TOGGLE --- */}
           <div className="-mr-2 flex md:hidden">
-            <button onClick={() => setIsOpen(!isOpen)} className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-[#1A2A80] hover:bg-gray-100 focus:outline-none transition">
-              {isOpen ? <FaTimes size={20} /> : <FaBars size={20} />}
+            <button 
+                onClick={() => setIsOpen(!isOpen)} 
+                className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-blue-900 hover:bg-blue-50 focus:outline-none transition duration-200"
+            >
+              {isOpen ? <FaTimes size={22} /> : <FaBars size={22} />}
             </button>
           </div>
         </div>
       </nav>
 
+      {/* --- MOBILE MENU --- */}
       {isOpen && (
-        <div className="md:hidden bg-white border-t border-gray-100 absolute w-full shadow-lg h-screen overflow-y-auto pb-20">
-          <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+        <div className="md:hidden bg-white border-t border-gray-100 absolute top-full left-0 w-full shadow-2xl h-screen overflow-y-auto pb-40 z-[1000]">
+          <div className="px-4 py-4 space-y-2">
             
-            <Link to="/home" onClick={() => setIsOpen(false)} className={`block px-3 py-3 rounded-md text-base ${isActive('/home')}`}>
-              Home
+            <Link to="/home" onClick={() => setIsOpen(false)} className={`flex items-center gap-3 px-3 py-3 rounded-lg text-base ${location.pathname === '/home' ? 'bg-blue-50 text-blue-800 font-bold' : 'text-gray-600 hover:bg-gray-50'}`}>
+              <FaHome /> Home
             </Link>
 
-            <Link to="/daftar-kegiatan" onClick={() => setIsOpen(false)} className={`block px-3 py-3 rounded-md text-base ${isActive('/daftar-kegiatan')}`}>
-              Survei & Sensus
+            <Link to="/daftar-kegiatan" onClick={() => setIsOpen(false)} className={`flex items-center gap-3 px-3 py-3 rounded-lg text-base ${location.pathname === '/daftar-kegiatan' ? 'bg-blue-50 text-blue-800 font-bold' : 'text-gray-600 hover:bg-gray-50'}`}>
+              <FaPoll /> Survei & Sensus
             </Link>
 
-            <Link to="/penugasan" onClick={() => setIsOpen(false)} className={`block px-3 py-3 rounded-md text-base ${isActive('/penugasan')}`}>
-              Penugasan
-            </Link>
-
-            <Link to="/spk" onClick={() => setIsOpen(false)} className={`block px-3 py-3 rounded-md text-base ${isActive('/spk')}`}>
-              SPK
-            </Link>
-
-            <div className="px-3 py-3 rounded-md text-base font-medium text-gray-600 bg-gray-50/50">
-                <span className="block mb-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Menu Mitra</span>
-                <Link to="/daftar-mitra" onClick={() => setIsOpen(false)} className={`block pl-4 py-2 rounded-md text-sm mb-1 ${isActive('/daftar-mitra')}`}>
-                    Manajemen Mitra
-                </Link>
-                <Link to="/transaksi-mitra" onClick={() => setIsOpen(false)} className={`block pl-4 py-2 rounded-md text-sm ${isActive('/transaksi-mitra')}`}>
-                    Transaksi Mitra
-                </Link>
+            {/* Mobile Perencanaan */}
+            <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3 mt-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                    <FaClipboardList /> Perencanaan
+                </div>
+                <div className="space-y-1 pl-2 border-l-2 border-gray-200">
+                    <Link to="/perencanaan" onClick={() => setIsOpen(false)} className={`block px-3 py-2 rounded-md text-sm ${location.pathname === '/perencanaan' ? 'text-blue-700 font-bold' : 'text-gray-600'}`}>
+                         Manajemen Perencanaan
+                    </Link>
+                    <Link to="/rekap-perencanaan" onClick={() => setIsOpen(false)} className={`block px-3 py-2 rounded-md text-sm ${location.pathname === '/rekap-perencanaan' ? 'text-blue-700 font-bold' : 'text-gray-600'}`}>
+                         Rekapitulasi
+                    </Link>
+                </div>
             </div>
 
-            <div className="border-t border-gray-100 my-2 pt-2">
-                <Link to="/lengkapi-profil" onClick={() => setIsOpen(false)} className="px-3 py-2 flex items-center gap-2 text-gray-500 mb-2 hover:bg-gray-50 rounded-md transition">
-                    <FaUserCircle /> <span>Profil Saya ({user.username})</span>
+            <Link to="/penugasan" onClick={() => setIsOpen(false)} className={`flex items-center gap-3 px-3 py-3 rounded-lg text-base ${location.pathname === '/penugasan' ? 'bg-blue-50 text-blue-800 font-bold' : 'text-gray-600 hover:bg-gray-50'}`}>
+              <FaBriefcase /> Penugasan
+            </Link>
+
+            <Link to="/spk" onClick={() => setIsOpen(false)} className={`flex items-center gap-3 px-3 py-3 rounded-lg text-base ${location.pathname === '/spk' ? 'bg-blue-50 text-blue-800 font-bold' : 'text-gray-600 hover:bg-gray-50'}`}>
+              <FaFileSignature /> SPK
+            </Link>
+
+            {/* Mobile Mitra */}
+            <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3 mt-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                    <FaUsers /> Menu Mitra
+                </div>
+                <div className="space-y-1 pl-2 border-l-2 border-gray-200">
+                    <Link to="/daftar-mitra" onClick={() => setIsOpen(false)} className={`block px-3 py-2 rounded-md text-sm ${location.pathname === '/daftar-mitra' ? 'text-blue-700 font-bold' : 'text-gray-600'}`}>
+                         Manajemen Mitra
+                    </Link>
+                    <Link to="/transaksi-mitra" onClick={() => setIsOpen(false)} className={`block px-3 py-2 rounded-md text-sm ${location.pathname === '/transaksi-mitra' ? 'text-blue-700 font-bold' : 'text-gray-600'}`}>
+                         Transaksi Mitra
+                    </Link>
+                </div>
+            </div>
+
+            <div className="border-t border-gray-100 my-4 pt-4">
+                <Link to="/lengkapi-profil" onClick={() => setIsOpen(false)} className="flex items-center gap-3 px-3 py-3 text-gray-600 hover:bg-gray-50 rounded-lg">
+                    <FaUserCircle className="text-xl" /> 
+                    <div className="flex flex-col">
+                        <span className="font-bold text-sm">Profil Saya</span>
+                        <span className="text-xs text-gray-400">{user.username}</span>
+                    </div>
                 </Link>
-                <button onClick={handleLogout} className="w-full text-left flex items-center gap-2 px-3 py-3 text-red-600 hover:bg-red-50 rounded-md font-bold transition">
+                <button onClick={handleLogout} className="w-full text-left flex items-center gap-3 px-3 py-3 text-red-600 hover:bg-red-50 rounded-lg font-bold transition mt-1">
                     <FaSignOutAlt /> Keluar Aplikasi
                 </button>
             </div>
