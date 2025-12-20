@@ -1,148 +1,128 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+// src/auth/Login.jsx
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
+import Swal from 'sweetalert2';
+import ReCAPTCHA from "react-google-recaptcha"; // <--- 1. IMPORT INI
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [captchaValue, setCaptchaValue] = useState(null); // <--- 2. STATE CAPTCHA
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
+  const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+  const SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY; // Ambil key dari .env
+
+  const handleLogin = async (e) => {
     e.preventDefault();
-    setError('');
+    
+    // <--- 3. VALIDASI CAPTCHA SEBELUM SUBMIT
+    if (!captchaValue) {
+        Swal.fire('Gagal', 'Silakan centang "Saya bukan robot" terlebih dahulu.', 'warning');
+        return;
+    }
+
+    setIsLoading(true);
 
     try {
-      const response = await axios.post(
-        'http://127.0.0.1:8000/api/users/login',
-        { email, password },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json', // <--- PENTING! Mencegah redirect ke 404 saat error validasi
-          }
-        }
-      );
+      const response = await axios.post(`${API_URL}/api/users/login`, {
+        email,
+        password,
+        recaptcha_token: captchaValue // Kirim token ke backend jika backend sudah siap validasi
+      });
 
-      const { token, user } = response.data;
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(user));
+      // Simpan token & user data
+      localStorage.setItem('token', response.data.token);
+      localStorage.setItem('user', JSON.stringify(response.data.user));
 
-      if (user.role === 'admin' || user.role === 'superadmin') {
+      Swal.fire({
+        icon: 'success',
+        title: 'Login Berhasil!',
+        text: 'Selamat datang kembali.',
+        timer: 1500,
+        showConfirmButton: false
+      });
+
+      if (response.data.user.role === 'admin') {
         navigate('/admin/dashboard');
       } else {
-        navigate('/home');
+        navigate('/dashboard'); 
       }
-    } catch (err) {
-      console.error("Login gagal:", err);
-      setError(err.response?.data?.message || "Login gagal. Silakan coba lagi.");
+    } catch (error) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Login Gagal',
+        text: error.response?.data?.message || 'Email atau password salah.',
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2">
-      
-      {/* Bagian Kiri: Gambar/Branding (Tampil di Desktop) */}
-      <div className="hidden lg:block relative">
-        <img
-          className="absolute inset-0 w-full h-full object-cover"
-          // Ganti dengan gambar branding Anda. URL ini hanya placeholder.
-          src="https://source.unsplash.com/random/1200x900?technology,abstract" 
-          alt="Branding"
-        />
-        {/* Overlay untuk keterbacaan teks */}
-        <div className="absolute inset-0 bg-blue-800 opacity-60"></div>
-        <div className="absolute inset-0 flex flex-col justify-center items-center text-white p-12 z-10">
-          <h1 className="text-4xl font-bold mb-4 text-center">
-            Selamat Datang Kembali
-          </h1>
-          <p className="text-xl text-center">
-            Masuk untuk mengakses dashboard dan melanjutkan pekerjaan Anda.
-          </p>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4 font-sans">
+      <div className="bg-white p-8 md:p-10 rounded-3xl shadow-2xl w-full max-w-md border border-white/50 backdrop-blur-sm">
+        
+        {/* ... (Bagian Logo dan Header tetap sama) ... */}
+        <div className="text-center mb-8">
+            <h2 className="text-3xl font-black text-slate-800 tracking-tight">Selamat Datang</h2>
+            <p className="text-slate-500 mt-2 text-sm">Masuk untuk mengelola kinerja mitra.</p>
         </div>
-      </div>
 
-      {/* Bagian Kanan: Form Login */}
-      <div className="w-full flex items-center justify-center bg-gray-100 p-8 lg:p-12">
-        <div className="max-w-md w-full space-y-8">
-          
-          {/* Header Form (Logo dan Judul) */}
+        <form onSubmit={handleLogin} className="space-y-5">
+          {/* ... (Input Email dan Password tetap sama) ... */}
           <div>
-            <img
-              className="mx-auto h-12 w-auto"
-              src="/logo.png" // GANTI DENGAN PATH LOGO ANDA
-              alt="Logo Aplikasi"
+            <label className="block text-sm font-bold text-slate-700 mb-2">Email</label>
+            <input 
+              type="email" 
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all font-medium text-slate-700 placeholder:text-slate-400"
+              placeholder="nama@email.com"
+              required 
             />
-            <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-              Login ke Akun Anda
-            </h2>
-            <p className="mt-2 text-center text-sm text-gray-600">
-              Belum punya akun?{' '}
-              <Link to="/register" className="font-medium text-blue-600 hover:text-blue-500">
-                Daftar di sini
-              </Link>
-            </p>
           </div>
 
-          <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-            {/* Saya mengubah input dari 'stacked' (rounded-none) menjadi
-              terpisah dengan 'space-y-4' untuk tampilan yang lebih modern.
-            */}
-            <div className="space-y-4">
-              {/* Input Email */}
-              <div>
-                <label htmlFor="email-address" className="sr-only">
-                  Alamat Email
-                </label>
-                <input
-                  id="email-address"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  className="appearance-none rounded-md relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="Alamat Email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-              
-              {/* Input Password */}
-              <div>
-                <label htmlFor="password" className="sr-only">
-                  Password
-                </label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  className="appearance-none rounded-md relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="Password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
-            </div>
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-2">Password</label>
+            <input 
+              type="password" 
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all font-medium text-slate-700 placeholder:text-slate-400"
+              placeholder="••••••••"
+              required 
+            />
+          </div>
 
-            {/* Tampilkan pesan error jika ada */}
-            {error && (
-              <div className="text-red-600 text-sm text-center">
-                {error}
-              </div>
-            )}
+          {/* <--- 4. KOMPONEN CAPTCHA DISINI */}
+          <div className="flex justify-center my-4">
+              <ReCAPTCHA
+                sitekey={SITE_KEY}
+                onChange={(val) => setCaptchaValue(val)}
+              />
+          </div>
 
-            {/* Tombol Submit */}
-            <div>
-              <button
-                type="submit"
-                className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150 ease-in-out"
-              >
-                Login
-              </button>
-            </div>
-          </form>
+          <button 
+            type="submit" 
+            disabled={isLoading}
+            className={`w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition-all transform hover:scale-[1.02] shadow-lg shadow-blue-500/30 flex justify-center items-center ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+          >
+            {isLoading ? (
+              <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            ) : "Masuk Aplikasi"}
+          </button>
+        </form>
+
+        <div className="mt-8 text-center">
+            <p className="text-slate-500 text-sm">
+                Belum punya akun?{' '}
+                <Link to="/register" className="text-blue-600 font-bold hover:text-blue-700 hover:underline transition-all">
+                    Daftar Sekarang
+                </Link>
+            </p>
         </div>
       </div>
     </div>

@@ -16,6 +16,7 @@ import {
   FaBars,
   FaFileContract,
   FaMoneyBillWave,
+  FaCogs,
 } from 'react-icons/fa';
 
 import logoMAKINASIK from '../assets/logo.png'; 
@@ -40,6 +41,8 @@ const menuItems = [
   { path: "/admin/manajemen-jabatan", label: "Master Jabatan", icon: <FaBriefcase /> },
   { path: "/admin/batas-honor", label: "Atur Batas Honor", icon: <FaSlidersH /> },
   { path: "/admin/manage-users", label: "Manajemen User", icon: <FaUsers /> },
+
+  { path: "/admin/system-settings", label: "Pengaturan Sistem", icon: <FaCogs /> },
 ];
 
 const AdminHeader = ({ title, toggleSidebar, isProfileExpanded, setIsProfileExpanded }) => {

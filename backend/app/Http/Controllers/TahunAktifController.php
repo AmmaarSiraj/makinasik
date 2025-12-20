@@ -9,15 +9,21 @@ use Illuminate\Support\Facades\Validator;
 class TahunAktifController extends Controller
 {
     /**
-     * Tampilkan semua data tahun aktif (bisa difilter per user jika perlu)
+     * Tampilkan semua data tahun aktif (bisa difilter per user atau tahun)
      */
     public function index(Request $request)
     {
-        $query = TahunAktif::with('user');
+        // PERBAIKAN: Gunakan 'mitra' sesuai nama fungsi di Model TahunAktif
+        $query = TahunAktif::with('mitra');
 
-        // Jika ada filter user_id dari query param (?user_id=1)
+        // Filter User ID
         if ($request->has('user_id')) {
             $query->where('user_id', $request->user_id);
+        }
+
+        // Filter Tahun
+        if ($request->has('tahun')) {
+            $query->where('tahun', $request->tahun);
         }
 
         $data = $query->latest()->get();
@@ -28,14 +34,11 @@ class TahunAktifController extends Controller
         ]);
     }
 
-    /**
-     * Simpan data tahun aktif baru
-     */
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'user_id' => 'required|exists:users,id',
-            'tahun'   => 'required|digits:4', // Harus 4 angka (misal: 2025)
+            'user_id' => 'required|exists:mitra,id', // Pastikan validasi ke tabel mitra
+            'tahun'   => 'required|digits:4',
             'status'  => 'nullable|in:aktif,non-aktif',
         ]);
 
@@ -43,13 +46,12 @@ class TahunAktifController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // Cek apakah kombinasi user dan tahun sudah ada? (Opsional, agar tidak duplikat)
         $exists = TahunAktif::where('user_id', $request->user_id)
                             ->where('tahun', $request->tahun)
                             ->exists();
 
         if ($exists) {
-            return response()->json(['message' => 'Tahun ini sudah terdaftar untuk user tersebut'], 409);
+            return response()->json(['message' => 'Tahun ini sudah terdaftar untuk mitra tersebut'], 409);
         }
 
         $tahunAktif = TahunAktif::create([
@@ -65,39 +67,24 @@ class TahunAktifController extends Controller
         ], 201);
     }
 
-    /**
-     * Tampilkan detail
-     */
     public function show($id)
     {
-        $tahunAktif = TahunAktif::with('user')->find($id);
-
-        if (!$tahunAktif) {
-            return response()->json(['message' => 'Data tidak ditemukan'], 404);
-        }
-
+        $tahunAktif = TahunAktif::with('mitra')->find($id);
+        if (!$tahunAktif) return response()->json(['message' => 'Data tidak ditemukan'], 404);
         return response()->json(['status' => 'success', 'data' => $tahunAktif]);
     }
 
-    /**
-     * Update data
-     */
     public function update(Request $request, $id)
     {
         $tahunAktif = TahunAktif::find($id);
-
-        if (!$tahunAktif) {
-            return response()->json(['message' => 'Data tidak ditemukan'], 404);
-        }
+        if (!$tahunAktif) return response()->json(['message' => 'Data tidak ditemukan'], 404);
 
         $validator = Validator::make($request->all(), [
             'tahun'   => 'sometimes|digits:4',
             'status'  => 'sometimes|in:aktif,non-aktif',
         ]);
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
+        if ($validator->fails()) return response()->json(['errors' => $validator->errors()], 422);
 
         $tahunAktif->update($request->only(['tahun', 'status']));
 
@@ -108,22 +95,11 @@ class TahunAktifController extends Controller
         ]);
     }
 
-    /**
-     * Hapus data
-     */
     public function destroy($id)
     {
         $tahunAktif = TahunAktif::find($id);
-
-        if (!$tahunAktif) {
-            return response()->json(['message' => 'Data tidak ditemukan'], 404);
-        }
-
+        if (!$tahunAktif) return response()->json(['message' => 'Data tidak ditemukan'], 404);
         $tahunAktif->delete();
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Data berhasil dihapus'
-        ]);
+        return response()->json(['status' => 'success', 'message' => 'Data berhasil dihapus']);
     }
 }

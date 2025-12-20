@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { FaUser, FaEnvelope, FaLock } from 'react-icons/fa';
+import ReCAPTCHA from "react-google-recaptcha"; // IMPORT CAPTCHA
 import logoSikinerja from '../assets/logo.png'; 
 
-// KONFIGURASI URL API
-// Mengarah ke root API. Endpoint spesifik ditambahkan di fungsi axios.
+// KONFIGURASI URL API & SITE KEY
 const API_BASE_URL = 'http://127.0.0.1:8000/api';
+// Ganti string kosong dibawah dengan Site Key dari Google Admin Console Anda
+const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY || "MASUKKAN_SITE_KEY_DISINI";
 
 const AuthPage = () => {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -22,35 +24,37 @@ const AuthPage = () => {
   const [regPassword, setRegPassword] = useState('');
   const [regConfirm, setRegConfirm] = useState('');
 
-  // --- STATE UI ---
+  // --- STATE UI & CAPTCHA ---
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [captchaValue, setCaptchaValue] = useState(null); // State untuk menyimpan token captcha
 
   // HANDLER LOGIN
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
+
+    // 1. Validasi Captcha
+    if (!captchaValue) {
+        setError("Silakan centang 'Saya bukan robot' terlebih dahulu.");
+        return;
+    }
+
     setLoading(true);
 
     try {
-      // 1. Kirim Request ke Backend
-      // Pastikan route backend adalah: Route::post('/users/login', ...)
       const response = await axios.post(`${API_BASE_URL}/users/login`, { 
         email: loginEmail, 
-        password: loginPassword 
+        password: loginPassword,
+        recaptcha_token: captchaValue // Kirim token ke backend (opsional)
       });
       
-      // 2. Cek Token dari Response
-      // Laravel Sanctum mengembalikan "access_token", bukan "token"
       if (response.data && response.data.access_token) {
         const { access_token, user } = response.data;
         
-        // 3. Simpan ke LocalStorage
-        // Kita simpan dengan nama 'token' agar konsisten dengan komponen lain
         localStorage.setItem('token', access_token);
         localStorage.setItem('user', JSON.stringify(user));
 
-        // 4. Redirect sesuai Role
         if (user.role === 'admin' || user.role === 'superadmin') {
           navigate('/admin/dashboard');
         } else {
@@ -62,13 +66,14 @@ const AuthPage = () => {
 
     } catch (err) {
       console.error("Login Error:", err);
-      // Tangani pesan error dari validasi Laravel (422) atau Login Gagal (401)
       const errorMsg = err.response?.data?.message || 
                        err.response?.data?.errors?.email?.[0] || 
                        "Login gagal. Periksa koneksi atau kredensial Anda.";
       setError(errorMsg);
     } finally {
       setLoading(false);
+      // Reset captcha jika gagal (opsional, tapi disarankan)
+      // setCaptchaValue(null); 
     }
   };
 
@@ -82,18 +87,25 @@ const AuthPage = () => {
       return;
     }
 
+    // 1. Validasi Captcha
+    if (!captchaValue) {
+        setError("Silakan centang 'Saya bukan robot' terlebih dahulu.");
+        return;
+    }
+
     setLoading(true);
     try {
-      // Pastikan route backend untuk register sudah dibuat: Route::post('/register', ...)
       await axios.post(`${API_BASE_URL}/register`, {
         username: regUsername,
         email: regEmail,
         password: regPassword,
-        role: 'user' // Role default
+        role: 'user',
+        recaptcha_token: captchaValue
       });
       
       alert("Registrasi berhasil! Silakan login.");
-      setIsSignUp(false); // Geser kembali ke panel login
+      setIsSignUp(false);
+      setCaptchaValue(null); // Reset captcha
       
       // Reset form register
       setRegUsername(''); 
@@ -112,24 +124,32 @@ const AuthPage = () => {
     }
   };
 
+  // Helper untuk reset error & captcha saat pindah tab
+  const toggleMode = (mode) => {
+      setIsSignUp(mode);
+      setError('');
+      setCaptchaValue(null);
+  }
+
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4 font-sans overflow-hidden">
+    // FULL SCREEN BACKGROUND
+    <div className="h-screen w-screen bg-gradient-to-br from-blue-50 to-indigo-200 flex items-center justify-center p-4 font-sans overflow-hidden">
       
       {/* CONTAINER UTAMA */}
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl min-h-[600px] overflow-hidden">
+      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-4xl h-[650px] overflow-hidden flex flex-col md:flex-row">
         
         {/* --- FORM REGISTER (Sign Up) --- */}
         <div 
           className={`absolute top-0 h-full transition-all duration-700 ease-in-out w-full md:w-1/2 left-0 
           ${isSignUp ? "translate-x-full opacity-100 z-20" : "opacity-0 z-0"}`}
         >
-          <form onSubmit={handleRegister} className="bg-white flex flex-col items-center justify-center h-full px-10 text-center">
-            <h1 className="text-3xl font-bold text-[#1A2A80] mb-4">Buat Akun</h1>
-            <p className="text-sm text-gray-400 mb-6">Gunakan email Anda untuk mendaftar</p>
+          <form onSubmit={handleRegister} className="bg-white flex flex-col items-center justify-center h-full px-8 text-center overflow-y-auto custom-scrollbar">
+            <h1 className="text-2xl font-bold text-[#1A2A80] mb-2 mt-4">Buat Akun</h1>
+            <p className="text-xs text-gray-400 mb-4">Gunakan email Anda untuk mendaftar</p>
             
-            <div className="w-full space-y-3">
-              <div className="bg-gray-100 p-3 rounded-lg flex items-center">
-                <FaUser className="text-gray-400 mr-2" />
+            <div className="w-full space-y-2">
+              <div className="bg-gray-100 p-2.5 rounded-lg flex items-center">
+                <FaUser className="text-gray-400 mr-2 text-sm" />
                 <input 
                   type="text" 
                   placeholder="Username" 
@@ -139,8 +159,8 @@ const AuthPage = () => {
                   required 
                 />
               </div>
-              <div className="bg-gray-100 p-3 rounded-lg flex items-center">
-                <FaEnvelope className="text-gray-400 mr-2" />
+              <div className="bg-gray-100 p-2.5 rounded-lg flex items-center">
+                <FaEnvelope className="text-gray-400 mr-2 text-sm" />
                 <input 
                   type="email" 
                   placeholder="Email" 
@@ -150,8 +170,8 @@ const AuthPage = () => {
                   required 
                 />
               </div>
-              <div className="bg-gray-100 p-3 rounded-lg flex items-center">
-                <FaLock className="text-gray-400 mr-2" />
+              <div className="bg-gray-100 p-2.5 rounded-lg flex items-center">
+                <FaLock className="text-gray-400 mr-2 text-sm" />
                 <input 
                   type="password" 
                   placeholder="Password" 
@@ -161,8 +181,8 @@ const AuthPage = () => {
                   required 
                 />
               </div>
-              <div className="bg-gray-100 p-3 rounded-lg flex items-center">
-                <FaLock className="text-gray-400 mr-2" />
+              <div className="bg-gray-100 p-2.5 rounded-lg flex items-center">
+                <FaLock className="text-gray-400 mr-2 text-sm" />
                 <input 
                   type="password" 
                   placeholder="Konfirmasi Password" 
@@ -174,15 +194,22 @@ const AuthPage = () => {
               </div>
             </div>
 
-            {error && isSignUp && <p className="text-red-500 text-xs mt-3 bg-red-50 p-2 rounded w-full">{error}</p>}
+            {/* CAPTCHA REGISTER */}
+            <div className="mt-4 mb-2 flex justify-center transform scale-90 origin-center">
+                <ReCAPTCHA
+                    sitekey={RECAPTCHA_SITE_KEY}
+                    onChange={setCaptchaValue}
+                />
+            </div>
 
-            <button type="submit" disabled={loading} className="mt-6 bg-[#1A2A80] text-white font-bold py-3 px-10 rounded-full uppercase text-xs tracking-wider transform transition-transform active:scale-95 hover:shadow-lg disabled:opacity-50">
+            {error && isSignUp && <p className="text-red-500 text-xs mb-2 bg-red-50 p-2 rounded w-full">{error}</p>}
+
+            <button type="submit" disabled={loading} className="bg-[#1A2A80] text-white font-bold py-3 px-10 rounded-full uppercase text-xs tracking-wider transform transition-transform active:scale-95 hover:shadow-lg disabled:opacity-50 mb-4">
               {loading ? 'Proses...' : 'Daftar'}
             </button>
             
-            {/* Tombol Switch Mobile */}
-            <p className="mt-4 text-sm text-gray-600 md:hidden">
-              Sudah punya akun? <button type="button" onClick={() => setIsSignUp(false)} className="text-[#1A2A80] font-bold underline">Login</button>
+            <p className="text-sm text-gray-600 md:hidden pb-4">
+              Sudah punya akun? <button type="button" onClick={() => toggleMode(false)} className="text-[#1A2A80] font-bold underline">Login</button>
             </p>
           </form>
         </div>
@@ -192,12 +219,12 @@ const AuthPage = () => {
           className={`absolute top-0 h-full transition-all duration-700 ease-in-out w-full md:w-1/2 left-0 z-10 
           ${isSignUp ? "translate-x-full opacity-0" : "opacity-100"}`}
         >
-          <form onSubmit={handleLogin} className="bg-white flex flex-col items-center justify-center h-full px-10 text-center">
-            <div className="mb-6">
-               <img src={logoSikinerja} alt="Logo SIKINERJA" className="w-24 h-auto mx-auto object-contain" />
+          <form onSubmit={handleLogin} className="bg-white flex flex-col items-center justify-center h-full px-8 text-center overflow-y-auto custom-scrollbar">
+            <div className="mb-4 mt-4">
+               <img src={logoSikinerja} alt="Logo SIKINERJA" className="w-20 h-auto mx-auto object-contain" />
             </div>
-            <h1 className="text-3xl font-bold text-[#1A2A80] mb-2">Login SIKINERJA</h1>
-            <p className="text-sm text-gray-400 mb-8">Masuk untuk mengelola data mitra</p>
+            <h1 className="text-2xl font-bold text-[#1A2A80] mb-2">Login SIKINERJA</h1>
+            <p className="text-xs text-gray-400 mb-6">Masuk untuk mengelola data mitra</p>
             
             <div className="w-full space-y-4">
               <div className="bg-gray-100 p-3 rounded-lg flex items-center border border-transparent focus-within:border-[#1A2A80] transition-colors">
@@ -224,19 +251,26 @@ const AuthPage = () => {
               </div>
             </div>
 
-            <div className="my-4 w-full text-right">
+            <div className="my-2 w-full text-right">
                 <a href="#" className="text-xs text-gray-500 hover:text-[#1A2A80] transition-colors">Lupa Password?</a>
+            </div>
+
+            {/* CAPTCHA LOGIN */}
+            <div className="mb-4 flex justify-center transform scale-90 origin-center">
+                <ReCAPTCHA
+                    sitekey={RECAPTCHA_SITE_KEY}
+                    onChange={setCaptchaValue}
+                />
             </div>
 
             {error && !isSignUp && <p className="text-red-500 text-xs mb-4 bg-red-50 p-2 rounded w-full">{error}</p>}
 
-            <button type="submit" disabled={loading} className="bg-[#1A2A80] text-white font-bold py-3 px-10 rounded-full uppercase text-xs tracking-wider transform transition-transform active:scale-95 hover:shadow-lg disabled:opacity-50">
+            <button type="submit" disabled={loading} className="bg-[#1A2A80] text-white font-bold py-3 px-10 rounded-full uppercase text-xs tracking-wider transform transition-transform active:scale-95 hover:shadow-lg disabled:opacity-50 mb-4">
               {loading ? 'Masuk...' : 'Masuk'}
             </button>
 
-            {/* Tombol Switch Mobile */}
-            <p className="mt-6 text-sm text-gray-600 md:hidden">
-              Belum punya akun? <button type="button" onClick={() => setIsSignUp(true)} className="text-[#1A2A80] font-bold underline">Daftar</button>
+            <p className="text-sm text-gray-600 md:hidden pb-4">
+              Belum punya akun? <button type="button" onClick={() => toggleMode(true)} className="text-[#1A2A80] font-bold underline">Daftar</button>
             </p>
           </form>
         </div>
@@ -253,13 +287,13 @@ const AuthPage = () => {
             
             {/* Overlay Kiri (Untuk ke Login) */}
             <div className={`absolute top-0 flex flex-col items-center justify-center w-1/2 h-full px-10 text-center space-y-6 transform transition-transform duration-700 ease-in-out ${isSignUp ? "translate-x-0" : "-translate-x-[20%]"}`}>
-              <h1 className="text-4xl font-bold">Sudah Punya Akun?</h1>
-              <p className="text-blue-100 leading-relaxed">
+              <h1 className="text-3xl font-bold">Sudah Punya Akun?</h1>
+              <p className="text-blue-100 leading-relaxed text-sm">
                 Silakan masuk kembali untuk melanjutkan pekerjaan dan manajemen kinerja Anda.
               </p>
               <button 
-                onClick={() => setIsSignUp(false)}
-                className="bg-transparent border-2 border-white text-white font-bold py-3 px-10 rounded-full uppercase text-xs tracking-wider hover:bg-white hover:text-[#1A2A80] transition-all duration-300 transform active:scale-95"
+                onClick={() => toggleMode(false)}
+                className="bg-transparent border-2 border-white text-white font-bold py-2.5 px-8 rounded-full uppercase text-xs tracking-wider hover:bg-white hover:text-[#1A2A80] transition-all duration-300 transform active:scale-95"
               >
                 Masuk di sini
               </button>
@@ -267,13 +301,13 @@ const AuthPage = () => {
 
             {/* Overlay Kanan (Untuk ke Daftar) */}
             <div className={`absolute top-0 right-0 flex flex-col items-center justify-center w-1/2 h-full px-10 text-center space-y-6 transform transition-transform duration-700 ease-in-out ${isSignUp ? "translate-x-[20%]" : "translate-x-0"}`}>
-              <h1 className="text-4xl font-bold">Halo, Mitra!</h1>
-              <p className="text-blue-100 leading-relaxed">
+              <h1 className="text-3xl font-bold">Halo, Mitra!</h1>
+              <p className="text-blue-100 leading-relaxed text-sm">
                 Bergabunglah bersama kami. Masukkan data diri Anda untuk memulai perjalanan baru.
               </p>
               <button 
-                onClick={() => setIsSignUp(true)}
-                className="bg-transparent border-2 border-white text-white font-bold py-3 px-10 rounded-full uppercase text-xs tracking-wider hover:bg-white hover:text-[#1A2A80] transition-all duration-300 transform active:scale-95"
+                onClick={() => toggleMode(true)}
+                className="bg-transparent border-2 border-white text-white font-bold py-2.5 px-8 rounded-full uppercase text-xs tracking-wider hover:bg-white hover:text-[#1A2A80] transition-all duration-300 transform active:scale-95"
               >
                 Daftar di sini
               </button>

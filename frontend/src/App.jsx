@@ -60,6 +60,7 @@ import TambahPerencanaanUser from './pages/TambahPerencanaan';
 import EditPerencanaanUser from './pages/EditPerencanaan';
 import DetailPerencanaanUser from './pages/DetailPerencanaan';
 import RekapPerencanaanUser from './pages/RekapPerencanaan';
+import ManajemenSistem from './pages/admin/ManajemenSistem';
 
 function AppRoutes() {
   return (
@@ -133,6 +134,8 @@ function AppRoutes() {
             <Route path="/admin/batas-honor" element={<BatasHonor />} />
             <Route path="/admin/spk/templates/create" element={<TambahTemplate />} />
             <Route path="/admin/spk/templates/edit/:id" element={<TambahTemplate />} />
+
+            <Route path="/admin/system-settings" element={<ManajemenSistem />} />
           </Route>
         </Route>
 

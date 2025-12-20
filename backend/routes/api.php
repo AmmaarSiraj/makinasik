@@ -21,6 +21,7 @@ use App\Http\Controllers\MasterTemplateSPKController;
 use App\Http\Controllers\TemplateBagianTeksController;
 use App\Http\Controllers\TemplatePasalController;
 use App\Http\Controllers\TransaksiController;
+use App\Http\Controllers\SystemSettingController;
 
 Route::get('/users', function (Request $request) {
     return $request->user();
@@ -31,12 +32,14 @@ Route::get('/test', function () {
 });
 
 Route::post('/users/login', [AuthController::class, 'login']);
-
+Route::get('/system-settings', [SystemSettingController::class, 'index']);
 
 // --- PROTECTED ROUTES (Harus login / punya Token) ---
 Route::middleware(['auth:sanctum'])->group(function () {
 
     // Auth
+    
+    Route::post('/system-settings/upload', [SystemSettingController::class, 'upload']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [UserController::class, 'me']); // Cek profile sendiri
 

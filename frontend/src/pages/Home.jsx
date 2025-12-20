@@ -13,26 +13,36 @@ import Footer from '../components/Footer';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
+// --- GAMBAR DEFAULT (FALLBACK) ---
+const DEFAULT_BG = "https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop";
+const DEFAULT_LOGO = "/src/assets/bpslogo.png"; 
+
 const Home = () => {
   // --- STATE MANAGEMENT ---
   const [dashboardData, setDashboardData] = useState({
     raw: {
-        kegiatan: [],
+        subkegiatan: [], 
         penugasan: [],
-        mitra: [],
+        mitra: [], 
+        mitraAktifList: [], 
         transaksi: [],
         templateSpk: []
     },
     counts: {
-        kegiatanTotal: 0, kegiatanAktif: 0,
+        kegiatanStartThisMonth: 0, 
+        mitraAktifYear: 0,        
+        mitraAktifMonth: 0,        
+        
+        subkegiatanTotal: 0, 
         perencanaanTotal: 0,
-        penugasanTotal: 0, penugasanBulanIni: 0,
-        mitraTotal: 0, mitraAktif: 0,
+        penugasanTotal: 0, 
+        penugasanBulanIni: 0,
+        mitraTotal: 0, 
         transaksiTotal: 0,
         spkTotal: 0
     },
     tables: {
-        topKegiatan: [],
+        topSubKegiatan: [], 
         topPenugasan: [],
         topMitra: [],
         topTransaksi: [],
@@ -40,7 +50,15 @@ const Home = () => {
     }
   });
 
+  // State untuk Pengaturan Tampilan (Background & Logo)
+  const [systemSettings, setSystemSettings] = useState({
+      home_background: DEFAULT_BG,
+      app_logo: DEFAULT_LOGO
+  });
+
   const [isLoading, setIsLoading] = useState(true);
+  const currentYear = new Date().getFullYear().toString(); 
+  const currentMonthName = new Date().toLocaleString('id-ID', { month: 'long' });
 
   const scrollToContent = () => {
     const element = document.getElementById('content-area');
@@ -49,7 +67,6 @@ const Home = () => {
     }
   };
 
-  // Helper Format Data
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: '2-digit' });
@@ -57,6 +74,24 @@ const Home = () => {
 
   const formatRupiah = (number) => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number);
+  };
+
+  // --- HELPER: CONSTRUCT IMAGE URL ---
+  // Fungsi ini memperbaiki URL gambar dari database
+  const getImageUrl = (path, defaultVal) => {
+    if (!path) return defaultVal;
+    
+    // Jika path sudah berupa URL lengkap (misal dari unsplash atau asset() backend yang benar), pakai langsung
+    if (path.startsWith('http') || path.startsWith('https') || path.startsWith('data:')) {
+        return path;
+    }
+
+    // Jika path dari database (misal: uploads/system/foto.jpg), tambahkan prefix storage
+    // Hapus leading slash jika ada untuk menghindari double slash
+    const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+    
+    // Hasil: http://127.0.0.1:8000/storage/uploads/system/foto.jpg
+    return `${API_URL}/storage/${cleanPath}`;
   };
 
   // --- FETCH & PROCESS DATA ---
@@ -68,28 +103,50 @@ const Home = () => {
 
         // Request API Paralel
         const responses = await Promise.all([
-          axios.get(`${API_URL}/api/kegiatan`, config).catch(() => ({ data: { data: [] } })),
+          axios.get(`${API_URL}/api/subkegiatan`, config).catch(() => ({ data: { data: [] } })), 
           axios.get(`${API_URL}/api/perencanaan`, config).catch(() => ({ data: { data: [] } })),
           axios.get(`${API_URL}/api/penugasan`, config).catch(() => ({ data: { data: [] } })),
           axios.get(`${API_URL}/api/kelompok-penugasan`, config).catch(() => ({ data: { data: [] } })),
-          axios.get(`${API_URL}/api/mitra`, config).catch(() => ({ data: { data: [] } })),
-          axios.get(`${API_URL}/api/transaksi`, config).catch(() => ({ data: { data: [] } })),
-          axios.get(`${API_URL}/api/template-spk`, config).catch(() => ({ data: { data: [] } }))
+          axios.get(`${API_URL}/api/mitra`, config).catch(() => ({ data: { data: [] } })), 
+          axios.get(`${API_URL}/api/mitra/aktif?tahun=${currentYear}`, config).catch(() => ({ data: { data: [] } })),
+          
+          // Transaksi dengan parameter tahun
+          axios.get(`${API_URL}/api/transaksi?tahun=${currentYear}`, config).catch((err) => {
+              console.error("Gagal load transaksi:", err);
+              return { data: [] }; 
+          }),
+          
+          axios.get(`${API_URL}/api/template-spk`, config).catch(() => ({ data: { data: [] } })),
+
+          // Fetch System Settings (Public) untuk mengambil gambar yang diupload
+          axios.get(`${API_URL}/api/system-settings`).catch(() => ({ data: { data: {} } })) 
         ]);
 
-        const [resKeg, resRencana, resTugas, resKelompok, resMitra, resTrans, resSpk] = responses;
+        const [resSubKeg, resRencana, resTugas, resKelompok, resMitra, resMitraAktif, resTrans, resSpk, resSettings] = responses;
         
-        const rawKeg = resKeg.data.data || [];
+        const rawSubKeg = resSubKeg.data.data || [];
         const rawTugas = resTugas.data.data || [];
-        const rawMitraData = resMitra.data.data || [];
         const rawKelompok = resKelompok.data.data || [];
-        const rawTrans = resTrans.data.data || [];
+        const rawMitraData = resMitra.data.data || []; 
+        const rawMitraAktifData = resMitraAktif.data.data || []; 
+        const rawTrans = Array.isArray(resTrans.data) ? resTrans.data : (resTrans.data?.data || []);
         const rawSpk = resSpk.data.data || [];
+        
+        // --- PROSES SETTINGS ---
+        const settingsData = resSettings.data.data || {};
+        
+        // Gunakan helper getImageUrl untuk memastikan link benar
+        const bgImage = getImageUrl(settingsData.home_background, DEFAULT_BG);
+        const logoImage = getImageUrl(settingsData.app_logo, DEFAULT_LOGO);
+
+        setSystemSettings({
+            home_background: bgImage,
+            app_logo: logoImage
+        });
 
         // --- MAP DATA HELPERS ---
-        // Buat Map ID Mitra ke Nama untuk lookup cepat di tabel transaksi
         const mitraMap = rawMitraData.reduce((acc, curr) => {
-            acc[curr.id] = curr.nama;
+            acc[curr.id] = curr.nama_lengkap || curr.nama; 
             return acc;
         }, {});
 
@@ -98,54 +155,67 @@ const Home = () => {
         const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
         const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
-        // 1. Kegiatan Aktif
-        const kegAktif = rawKeg.filter(k => {
+        // 1. Kegiatan (Subkegiatan) Mulai Bulan Ini
+        const kegMulaiBulanIni = rawSubKeg.filter(k => {
+            if (!k.tanggal_mulai) return false;
             const start = new Date(k.tanggal_mulai);
-            const end = new Date(k.tanggal_selesai);
-            return start <= endOfMonth && end >= startOfMonth;
+            return start >= startOfMonth && start <= endOfMonth;
         }).length;
 
-        // 2. Penugasan & Mitra Aktif
+        // 2. Mitra Aktif Bulan Ini
         const activeTaskIds = new Set();
-        const tugasBulanIni = rawTugas.filter(t => {
+        rawTugas.forEach(t => {
+             if (!t.tanggal_mulai || !t.tanggal_selesai) return;
              const start = new Date(t.tanggal_mulai);
              const end = new Date(t.tanggal_selesai);
-             const isActive = start <= endOfMonth && end >= startOfMonth;
-             if(isActive) activeTaskIds.add(t.id_penugasan);
-             return isActive;
-        }).length;
-
-        const mitraAktifSet = new Set();
-        rawKelompok.forEach(k => {
-            if (activeTaskIds.has(k.id_penugasan)) mitraAktifSet.add(k.id_mitra);
+             
+             if (start <= endOfMonth && end >= startOfMonth) {
+                activeTaskIds.add(t.id_penugasan); 
+             }
         });
 
-        // --- SORTING & SLICING (TOP 5) ---
-        const sortedKegiatan = [...rawKeg].sort((a, b) => new Date(b.tanggal_mulai) - new Date(a.tanggal_mulai)).slice(0, 5);
+        const mitraAktifBulanIniSet = new Set();
+        rawKelompok.forEach(k => {
+            if (activeTaskIds.has(k.id_penugasan)) {
+                mitraAktifBulanIniSet.add(k.id_mitra);
+            }
+        });
+        const mitraAktifMonthCount = mitraAktifBulanIniSet.size;
+
+        // --- SORTING & SLICING ---
+        const sortedSubKegiatan = [...rawSubKeg].sort((a, b) => new Date(b.tanggal_mulai) - new Date(a.tanggal_mulai)).slice(0, 5);
         const sortedPenugasan = [...rawTugas].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5);
-        const sortedMitra = [...rawMitraData].sort((a, b) => b.id - a.id).slice(0, 5);
-        const sortedTemplate = [...rawSpk].slice(0, 5); // Default sort
+        const sortedMitraAktif = [...rawMitraAktifData].sort((a, b) => b.id - a.id).slice(0, 5);
+        const sortedTemplate = [...rawSpk].slice(0, 5);
         
-        // Enrich Transaksi dengan Nama Mitra
-        const enrichedTransaksi = rawTrans.map(t => ({
+        // Data transaksi sudah di-sort dari backend (total_pendapatan desc), kita ambil top 5
+        const enrichedTransaksi = rawTrans.slice(0, 5).map(t => ({
             ...t,
-            nama_mitra: mitraMap[t.id_mitra] || 'Mitra Tidak Dikenal'
-        })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5);
+            nama_mitra: t.nama_lengkap || mitraMap[t.id] || 'Mitra Tidak Dikenal'
+        }));
 
         setDashboardData({
-            raw: { kegiatan: rawKeg, penugasan: rawTugas, mitra: rawMitraData, transaksi: rawTrans, templateSpk: rawSpk },
+            raw: { 
+                subkegiatan: rawSubKeg, penugasan: rawTugas, mitra: rawMitraData, mitraAktifList: rawMitraAktifData,
+                transaksi: rawTrans, templateSpk: rawSpk 
+            },
             counts: {
-                kegiatanTotal: rawKeg.length, kegiatanAktif: kegAktif,
+                kegiatanStartThisMonth: kegMulaiBulanIni,
+                mitraAktifYear: rawMitraAktifData.length,
+                mitraAktifMonth: mitraAktifMonthCount,
+                
+                subkegiatanTotal: rawSubKeg.length,
                 perencanaanTotal: resRencana.data.data?.length || 0,
-                penugasanTotal: rawTugas.length, penugasanBulanIni: tugasBulanIni,
-                mitraTotal: rawMitraData.length, mitraAktif: mitraAktifSet.size,
+                penugasanTotal: rawTugas.length, 
+                penugasanBulanIni: activeTaskIds.size,
+                mitraTotal: rawMitraData.length, 
                 transaksiTotal: rawTrans.length,
                 spkTotal: rawSpk.length
             },
             tables: {
-                topKegiatan: sortedKegiatan,
+                topSubKegiatan: sortedSubKegiatan,
                 topPenugasan: sortedPenugasan,
-                topMitra: sortedMitra,
+                topMitra: sortedMitraAktif,
                 topTransaksi: enrichedTransaksi,
                 topTemplateSPK: sortedTemplate
             }
@@ -159,50 +229,41 @@ const Home = () => {
     };
 
     fetchData();
-  }, []);
+  }, [currentYear]);
 
   // --- COMPONENT: FEATURE CARD ---
   const features = [
-    { title: "Survei & Kegiatan", desc: "Monitoring kegiatan statistik.", icon: FaPoll, color: "blue", path: "/daftar-kegiatan", stats: [{ label: "Total", value: dashboardData.counts.kegiatanTotal }, { label: "Aktif", value: dashboardData.counts.kegiatanAktif, highlight: true }] },
-    { title: "Perencanaan", desc: "Matriks dan alokasi kebutuhan.", icon: FaClipboardList, color: "indigo", path: "/perencanaan", stats: [{ label: "Draft Rencana", value: dashboardData.counts.perencanaanTotal }, { label: "Status", value: "Ready" }] },
-    { title: "Rekapitulasi", desc: "Analisis beban kerja & anggaran.", icon: FaChartPie, color: "purple", path: "/rekap", stats: [{ label: "Analisis", value: "Bulanan" }] },
-    { title: "Penugasan", desc: "Distribusi beban kerja mitra.", icon: FaBriefcase, color: "emerald", path: "/penugasan", stats: [{ label: "Total", value: dashboardData.counts.penugasanTotal }, { label: "Bulan Ini", value: dashboardData.counts.penugasanBulanIni, highlight: true }] },
-    { title: "Generate SPK", desc: "Pencetakan perjanjian kerja.", icon: FaFileSignature, color: "rose", path: "/spk", stats: [{ label: "Template", value: dashboardData.counts.spkTotal }] },
-    { title: "Database Mitra", desc: "Pengelolaan data induk (Sobat).", icon: FaUsers, color: "amber", path: "/daftar-mitra", stats: [{ label: "Total", value: dashboardData.counts.mitraTotal }, { label: "Aktif", value: dashboardData.counts.mitraAktif, highlight: true }] },
-    { title: "Riwayat Transaksi", desc: "Log pembayaran honorarium.", icon: FaExchangeAlt, color: "orange", path: "/transaksi-mitra", stats: [{ label: "Total Log", value: dashboardData.counts.transaksiTotal }] }
+    { title: "Survei & Kegiatan", icon: FaPoll, color: "blue", path: "/daftar-kegiatan" },
+    { title: "Perencanaan", icon: FaClipboardList, color: "indigo", path: "/perencanaan" },
+    { title: "Rekapitulasi", icon: FaChartPie, color: "purple", path: "/rekap" },
+    { title: "Penugasan", icon: FaBriefcase, color: "emerald", path: "/penugasan" },
+    { title: "Generate SPK", icon: FaFileSignature, color: "rose", path: "/spk" },
+    { title: "Database Mitra", icon: FaUsers, color: "amber", path: "/daftar-mitra" },
+    { title: "Riwayat Transaksi", icon: FaExchangeAlt, color: "orange", path: "/transaksi-mitra" }
   ];
 
   const FeatureCard = ({ item }) => {
     const Icon = item.icon;
     const colorClasses = {
-        blue: "bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white border-blue-100",
-        indigo: "bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white border-indigo-100",
-        purple: "bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white border-purple-100",
-        emerald: "bg-emerald-50 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white border-emerald-100",
-        rose: "bg-rose-50 text-rose-600 group-hover:bg-rose-600 group-hover:text-white border-rose-100",
-        amber: "bg-amber-50 text-amber-600 group-hover:bg-amber-600 group-hover:text-white border-amber-100",
-        orange: "bg-orange-50 text-orange-600 group-hover:bg-orange-600 group-hover:text-white border-orange-100",
+        blue: "text-blue-600 bg-blue-50 group-hover:bg-blue-600 group-hover:text-white border-blue-100",
+        indigo: "text-indigo-600 bg-indigo-50 group-hover:bg-indigo-600 group-hover:text-white border-indigo-100",
+        purple: "text-purple-600 bg-purple-50 group-hover:bg-purple-600 group-hover:text-white border-purple-100",
+        emerald: "text-emerald-600 bg-emerald-50 group-hover:bg-emerald-600 group-hover:text-white border-emerald-100",
+        rose: "text-rose-600 bg-rose-50 group-hover:bg-rose-600 group-hover:text-white border-rose-100",
+        amber: "text-amber-600 bg-amber-50 group-hover:bg-amber-600 group-hover:text-white border-amber-100",
+        orange: "text-orange-600 bg-orange-50 group-hover:bg-orange-600 group-hover:text-white border-orange-100",
     };
     const styleClass = colorClasses[item.color] || colorClasses.blue;
 
     return (
-        <Link to={item.path} className="group relative flex flex-col h-full bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 overflow-hidden">
-            <div className="flex items-start justify-between mb-3">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors duration-300 ${styleClass}`}>
-                    <Icon size={18} />
-                </div>
-                <FaArrowRight size={12} className="text-gray-300 group-hover:text-blue-600 transition-colors" />
+        <Link to={item.path} className="group relative flex items-center p-4 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors duration-300 mr-4 ${styleClass}`}>
+                <Icon size={24} />
             </div>
-            <h3 className="text-base font-bold text-gray-800 mb-1 group-hover:text-blue-700 transition-colors">{item.title}</h3>
-            <p className="text-xs text-gray-500 leading-relaxed mb-4 h-8 line-clamp-2">{item.desc}</p>
-            <div className="mt-auto pt-3 border-t border-gray-50 grid grid-cols-2 gap-2">
-                {item.stats && item.stats.map((stat, idx) => (
-                    <div key={idx} className="flex flex-col">
-                        <span className="text-[10px] uppercase font-semibold text-gray-400 tracking-wider">{stat.label}</span>
-                        <span className={`text-sm font-bold ${stat.highlight ? 'text-blue-600' : 'text-gray-700'}`}>{isLoading ? '...' : stat.value}</span>
-                    </div>
-                ))}
+            <div className="flex-1">
+                <h3 className="text-sm font-bold text-gray-700 group-hover:text-gray-900 transition-colors">{item.title}</h3>
             </div>
+            <FaArrowRight className="text-gray-300 group-hover:text-gray-500 opacity-0 group-hover:opacity-100 transition-all transform group-hover:translate-x-1" size={14} />
         </Link>
     );
   };
@@ -217,7 +278,12 @@ const Home = () => {
 
       {/* --- BACKGROUND --- */}
       <div className="fixed inset-0 z-0">
-        <img src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop" alt="Background" className="w-full h-full object-cover"/>
+        <img 
+            src={systemSettings.home_background} 
+            alt="Background" 
+            className="w-full h-full object-cover transition-opacity duration-700"
+            onError={(e) => { e.target.onerror = null; e.target.src = DEFAULT_BG; }} 
+        />
         <div className="absolute inset-0 bg-gradient-to-b from-slate-900/90 via-slate-900/80 to-blue-900/80"></div>
         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-soft-light"></div>
       </div>
@@ -229,7 +295,12 @@ const Home = () => {
         <div className="relative min-h-[75vh] flex flex-col justify-center items-center px-4 text-center pb-32">
           <div className="space-y-6 max-w-4xl mx-auto">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 border border-white/20 backdrop-blur-md shadow-lg">
-              <img src="/src/assets/bpslogo.png" alt="BPS" className="h-4 w-auto opacity-90" />
+              <img 
+                  src={systemSettings.app_logo} 
+                  alt="BPS" 
+                  className="h-4 w-auto opacity-90"
+                  onError={(e) => { e.target.onerror = null; e.target.src = DEFAULT_LOGO; }} 
+              />
               <span className="text-blue-100 text-[10px] md:text-xs font-bold tracking-widest uppercase">Badan Pusat Statistik</span>
             </div>
             <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter leading-none drop-shadow-2xl">
@@ -249,21 +320,28 @@ const Home = () => {
         {/* FLOATING STATS */}
         <div className="relative container mx-auto px-4 md:px-8 -mt-32 mb-12 z-20">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            {/* CARD 1: KEGIATAN MULAI BULAN INI (DARI SUBKEGIATAN) */}
             <div className="bg-white/90 backdrop-blur-xl border border-white/50 p-6 rounded-3xl shadow-2xl flex flex-col relative overflow-hidden group hover:-translate-y-1 transition-all">
                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><FaClipboardList className="text-6xl text-blue-600" /></div>
-                 <span className="text-sm font-bold text-blue-600 uppercase tracking-wider mb-2">Kegiatan Bulan Ini</span>
-                 <div className="flex items-baseline gap-2"><span className="text-5xl font-black text-gray-800">{isLoading ? '-' : dashboardData.counts.kegiatanAktif}</span><span className="text-gray-500 font-medium">Aktif</span></div>
+                 <span className="text-sm font-bold text-blue-600 uppercase tracking-wider mb-2">Kegiatan {currentMonthName}</span>
+                 <div className="flex items-baseline gap-2"><span className="text-5xl font-black text-gray-800">{isLoading ? '-' : dashboardData.counts.kegiatanStartThisMonth}</span><span className="text-gray-500 font-medium">Kegiatan</span></div>
             </div>
+
+            {/* CARD 2: MITRA AKTIF TAHUN INI */}
             <div className="bg-white/90 backdrop-blur-xl border border-white/50 p-6 rounded-3xl shadow-2xl flex flex-col relative overflow-hidden group hover:-translate-y-1 transition-all">
                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><FaUsers className="text-6xl text-yellow-500" /></div>
-                 <span className="text-sm font-bold text-yellow-600 uppercase tracking-wider mb-2">Total Database Mitra</span>
-                 <div className="flex items-baseline gap-2"><span className="text-5xl font-black text-gray-800">{isLoading ? '-' : dashboardData.counts.mitraTotal}</span><span className="text-gray-500 font-medium">Orang</span></div>
+                 <span className="text-sm font-bold text-yellow-600 uppercase tracking-wider mb-2">Mitra Aktif {currentYear}</span>
+                 <div className="flex items-baseline gap-2"><span className="text-5xl font-black text-gray-800">{isLoading ? '-' : dashboardData.counts.mitraAktifYear}</span><span className="text-gray-500 font-medium">Orang</span></div>
             </div>
+
+            {/* CARD 3: MITRA AKTIF BULAN INI */}
             <div className="bg-white/90 backdrop-blur-xl border border-white/50 p-6 rounded-3xl shadow-2xl flex flex-col relative overflow-hidden group hover:-translate-y-1 transition-all">
                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><FaChartLine className="text-6xl text-emerald-600" /></div>
                  <span className="text-sm font-bold text-emerald-600 uppercase tracking-wider mb-2">Mitra Aktif Bulan Ini</span>
-                 <div className="flex items-baseline gap-2"><span className="text-5xl font-black text-gray-800">{isLoading ? '-' : dashboardData.counts.mitraAktif}</span><span className="text-gray-500 font-medium">Orang</span></div>
+                 <div className="flex items-baseline gap-2"><span className="text-5xl font-black text-gray-800">{isLoading ? '-' : dashboardData.counts.mitraAktifMonth}</span><span className="text-gray-500 font-medium">Orang</span></div>
             </div>
+
           </div>
         </div>
 
@@ -277,7 +355,7 @@ const Home = () => {
                     <span className="text-blue-600 font-bold tracking-widest text-xs uppercase mb-2 block">Modul Aplikasi</span>
                     <h2 className="text-3xl font-black text-slate-800">Akses Fitur Unggulan</h2>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
                     {features.map((item, index) => (
                         <FeatureCard key={index} item={item} />
                     ))}
@@ -299,13 +377,19 @@ const Home = () => {
                     </div>
                     <table className="w-full text-sm text-left text-gray-600">
                         <thead className="bg-gray-50 text-xs uppercase font-semibold text-gray-500">
-                            <tr><th className="px-6 py-3">Nama Kegiatan</th><th className="px-6 py-3">Periode</th></tr>
+                            <tr><th className="px-6 py-3">Nama Sub Kegiatan</th><th className="px-6 py-3">Periode</th></tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {isLoading ? <tr><td colSpan="2" className="px-6 py-4 text-center">Loading...</td></tr> :
-                             dashboardData.tables.topKegiatan.length === 0 ? <tr><td colSpan="2" className="px-6 py-4 text-center italic">Kosong</td></tr> :
-                             dashboardData.tables.topKegiatan.map((item, idx) => (
-                                <tr key={idx} className="hover:bg-blue-50/20"><td className="px-6 py-4 font-medium text-gray-800">{item.nama_kegiatan}</td><td className="px-6 py-4 text-xs">{formatDate(item.tanggal_mulai)} - {formatDate(item.tanggal_selesai)}</td></tr>
+                             dashboardData.tables.topSubKegiatan.length === 0 ? <tr><td colSpan="2" className="px-6 py-4 text-center italic">Kosong</td></tr> :
+                             dashboardData.tables.topSubKegiatan.map((item, idx) => (
+                                <tr key={idx} className="hover:bg-blue-50/20">
+                                    <td className="px-6 py-4 font-medium text-gray-800">
+                                        {item.nama_sub_kegiatan}
+                                        {item.kegiatan && <div className="text-[10px] text-gray-400 mt-0.5">{item.kegiatan.nama_kegiatan}</div>}
+                                    </td>
+                                    <td className="px-6 py-4 text-xs">{formatDate(item.tanggal_mulai)} - {formatDate(item.tanggal_selesai)}</td>
+                                </tr>
                             ))}
                         </tbody>
                     </table>
@@ -333,16 +417,16 @@ const Home = () => {
                     {/* Mitra */}
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
                         <div className="p-5 border-b border-gray-100 bg-gray-50/80 flex justify-between items-center">
-                             <h3 className="font-bold text-gray-700 flex items-center gap-2"><FaDatabase className="text-yellow-500"/> Mitra Terbaru</h3>
+                             <h3 className="font-bold text-gray-700 flex items-center gap-2"><FaDatabase className="text-yellow-500"/> Mitra Aktif {currentYear}</h3>
                              <Link to="/daftar-mitra" className="text-xs font-bold text-yellow-600 uppercase tracking-wider hover:underline">Semua Mitra</Link>
                         </div>
                         <table className="w-full text-sm text-left text-gray-600 flex-grow">
                             <thead className="bg-gray-50 text-xs uppercase font-semibold text-gray-500"><tr><th className="px-5 py-3">ID Sobat</th><th className="px-5 py-3">Nama Lengkap</th></tr></thead>
                             <tbody className="divide-y divide-gray-100">
                                  {isLoading ? <tr><td colSpan="2" className="px-5 py-4 text-center">Loading...</td></tr> :
-                                  dashboardData.tables.topMitra.length === 0 ? <tr><td colSpan="2" className="px-5 py-4 text-center italic">Kosong</td></tr> :
+                                  dashboardData.tables.topMitra.length === 0 ? <tr><td colSpan="2" className="px-5 py-4 text-center italic">Tidak ada mitra aktif tahun {currentYear}</td></tr> :
                                   dashboardData.tables.topMitra.map((m, idx) => (
-                                    <tr key={idx} className="hover:bg-yellow-50/20"><td className="px-5 py-3 font-mono text-xs font-bold text-blue-600">{m.sobat_id}</td><td className="px-5 py-3 font-medium">{m.nama}</td></tr>
+                                    <tr key={idx} className="hover:bg-yellow-50/20"><td className="px-5 py-3 font-mono text-xs font-bold text-blue-600">{m.sobat_id}</td><td className="px-5 py-3 font-medium">{m.nama_lengkap}</td></tr>
                                  ))}
                             </tbody>
                         </table>
@@ -366,9 +450,9 @@ const Home = () => {
                                     <tr key={idx} className="hover:bg-orange-50/20">
                                         <td className="px-5 py-3">
                                             <div className="font-medium text-gray-800">{t.nama_mitra}</div>
-                                            <div className="text-[10px] text-gray-400">{formatDate(t.created_at)}</div>
+                                            <div className="text-[10px] text-gray-400">Total Akumulasi {currentYear}</div>
                                         </td>
-                                        <td className="px-5 py-3 font-bold text-gray-700">{formatRupiah(t.total_net)}</td>
+                                        <td className="px-5 py-3 font-bold text-gray-700">{formatRupiah(t.total_pendapatan)}</td>
                                     </tr>
                                  ))}
                             </tbody>

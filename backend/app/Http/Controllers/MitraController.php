@@ -13,12 +13,13 @@ class MitraController extends Controller
 {
     /**
      * 1. GET ALL MITRA (OPTIMIZED)
-     * Menggunakan Eager Loading & Pagination untuk performa maksimal.
+     * Mengambil semua data mitra dan menyertakan riwayat tahun aktifnya.
      */
     public function index(Request $request)
     {
         $query = Mitra::query();
 
+        // Fitur Pencarian Global
         if ($request->has('search') && $request->search != '') {
             $search = $request->search;
             $query->where(function($q) use ($search) {
@@ -30,13 +31,15 @@ class MitraController extends Controller
 
         $mitra = $query->orderBy('nama_lengkap', 'asc')->get();
 
-        $mitra->map(function ($item) {
+        // Transform data untuk menyertakan riwayat tahun aktif sebagai string
+        $mitra->transform(function ($item) {
             $years = TahunAktif::where('user_id', $item->id)
                         ->orderBy('tahun', 'desc')
                         ->pluck('tahun')
                         ->toArray();
             
-            $item->riwayat_tahun = implode(', ', $years);
+            // Menggunakan setAttribute agar properti ini ikut terekspos dalam JSON
+            $item->setAttribute('riwayat_tahun', implode(', ', $years));
             return $item;
         });
 
@@ -46,6 +49,9 @@ class MitraController extends Controller
         ]);
     }
     
+    /**
+     * Endpoint khusus untuk kebutuhan tabel dengan pagination (Server-side processing)
+     */
     public function optimize(Request $request)
     {
         $selectedYear = $request->query('year', date('Y'));
@@ -53,6 +59,7 @@ class MitraController extends Controller
 
         $query = Mitra::query();
 
+        // Filter hanya yang aktif di tahun terpilih
         $query->whereHas('tahunAktif', function($q) use ($selectedYear) {
             $q->where('tahun', $selectedYear);
         });
@@ -65,6 +72,7 @@ class MitraController extends Controller
             });
         }
 
+        // Hitung total aktif untuk meta data
         $totalActiveInYear = Mitra::whereHas('tahunAktif', function($q) use ($selectedYear) {
             $q->where('tahun', $selectedYear);
         })->count();
@@ -76,8 +84,8 @@ class MitraController extends Controller
         ->paginate(20);
 
         $mitra->getCollection()->transform(function ($item) {
-            $item->riwayat_tahun = $item->tahunAktif->pluck('tahun')->implode(', ');
-            unset($item->tahunAktif);
+            $item->setAttribute('riwayat_tahun', $item->tahunAktif->pluck('tahun')->implode(', '));
+            unset($item->tahunAktif); // Bersihkan relasi agar response lebih ringan
             return $item;
         });
 
@@ -92,6 +100,9 @@ class MitraController extends Controller
         ], 200);
     }
 
+    /**
+     * Mengambil mitra berdasarkan periode penugasan (berguna untuk filter laporan)
+     */
     public function getByPeriode($periode)
     {
         try {
@@ -391,11 +402,16 @@ class MitraController extends Controller
         return ($index >= 0 && isset($row[$index])) ? trim($row[$index]) : null;
     }
 
+    /**
+     * MENGAMBIL MITRA AKTIF (KHUSUS DASHBOARD)
+     * Mengembalikan mitra yang hanya aktif pada tahun tertentu.
+     */
     public function mitraAktif(Request $request)
     {
         $tahun = $request->tahun;
 
-        $mitra = Mitra::select('id', 'nama_lengkap', 'nik')
+        // MENAMBAHKAN 'sobat_id' ke select agar frontend bisa menampilkannya di tabel
+        $mitra = Mitra::select('id', 'nama_lengkap', 'nik', 'sobat_id')
             ->whereHas('tahunAktif', function ($q) use ($tahun) {
                 $q->where('tahun', $tahun);
             })

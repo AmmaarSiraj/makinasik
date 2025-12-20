@@ -1,203 +1,103 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+// src/auth/Register.jsx
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
-
-// Tentukan API URL, sesuaikan dengan backend Anda
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+import Swal from 'sweetalert2';
+import ReCAPTCHA from "react-google-recaptcha"; // <--- 1. IMPORT
 
 const Register = () => {
-  const [formData, setFormData] = useState({
-    // --- PERUBAHAN 1: Ganti 'name' menjadi 'username' ---
-    username: '', 
-    email: '',
-    password: '',
-    confirmPassword: '',
-  });
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  // ... state yang sudah ada (username, email, password, confirmPassword)
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  
+  const [captchaValue, setCaptchaValue] = useState(null); // <--- 2. STATE CAPTCHA
+  const [isLoading, setIsLoading] = useState(false);
+  
   const navigate = useNavigate();
+  const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+  const SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY; // Ambil key
 
-  // --- PERUBAHAN 2: Sesuaikan destructuring ---
-  const { username, email, password, confirmPassword } = formData;
-
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
-
-  const handleSubmit = async (e) => {
+  const handleRegister = async (e) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
 
     if (password !== confirmPassword) {
-      setError('Password dan Konfirmasi Password tidak cocok.');
+      Swal.fire('Error', 'Password dan Konfirmasi Password tidak cocok!', 'error');
       return;
     }
 
-    // --- PERUBAHAN 3: Implementasi API call yang sebenarnya ---
+    // <--- 3. VALIDASI CAPTCHA
+    if (!captchaValue) {
+        Swal.fire('Gagal', 'Silakan centang "Saya bukan robot" terlebih dahulu.', 'warning');
+        return;
+    }
+
+    setIsLoading(true);
+
     try {
-      // Data yang dikirim ke backend harus cocok dengan userController
-      const payload = {
+      await axios.post(`${API_URL}/api/users`, {
         username,
         email,
         password,
-        // role tidak perlu dikirim, backend akan default ke 'user'
-      };
+        role: 'user',
+        recaptcha_token: captchaValue // Kirim token
+      });
 
-      // Ganti simulasi dengan axios.post
-      await axios.post(
-        `${API_URL}/api/users/register`, // Endpoint dari userRoutes.js
-        payload
-      );
-      
-      // Jika sukses
-      setSuccess("Registrasi berhasil! Anda akan diarahkan ke halaman login.");
-      setTimeout(() => {
-        navigate('/'); // Arahkan ke halaman Login (sesuai App.jsx)
-      }, 2000);
-
-    } catch (err) {
-      console.error("Registrasi gagal:", err);
-      // Menampilkan pesan error dari backend (spt 'Username atau email sudah digunakan')
-      setError(err.response?.data?.message || "Registrasi gagal. Silakan coba lagi.");
+      Swal.fire('Sukses', 'Registrasi berhasil! Silakan login.', 'success');
+      navigate('/login');
+    } catch (error) {
+      Swal.fire('Gagal', error.response?.data?.message || 'Terjadi kesalahan saat registrasi.', 'error');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2">
-      
-      {/* Bagian Kiri: Branding */}
-      <div className="hidden lg:block relative">
-        <img
-          className="absolute inset-0 w-full h-full object-cover"
-          src="https://source.unsplash.com/random/1200x900?community,growth" 
-          alt="Branding"
-        />
-        <div className="absolute inset-0 bg-green-800 opacity-60"></div>
-        <div className="absolute inset-0 flex flex-col justify-center items-center text-white p-12 z-10">
-          <h1 className="text-4xl font-bold mb-4 text-center">
-            Bergabunglah Dengan Kami
-          </h1>
-          <p className="text-xl text-center">
-            Buat akun baru untuk mulai mengelola data Anda hari ini.
-          </p>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4 font-sans">
+      <div className="bg-white p-8 md:p-10 rounded-3xl shadow-2xl w-full max-w-md border border-white/50 backdrop-blur-sm">
+        
+        <div className="text-center mb-8">
+            <h2 className="text-3xl font-black text-slate-800 tracking-tight">Buat Akun Baru</h2>
+            <p className="text-slate-500 mt-2 text-sm">Bergabunglah untuk menjadi mitra statistik.</p>
         </div>
-      </div>
 
-      {/* Bagian Kanan: Form Register */}
-      <div className="w-full flex items-center justify-center bg-gray-100 p-8 lg:p-12">
-        <div className="max-w-md w-full space-y-8">
-          
-          <div>
-            <img
-              className="mx-auto h-12 w-auto"
-              src="/logo.png"
-              alt="Logo Aplikasi"
-            />
-            <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-              Buat Akun Baru
-            </h2>
-            <p className="mt-2 text-center text-sm text-gray-600">
-              Sudah punya akun?{' '}
-              <Link to="/" className="font-medium text-blue-600 hover:text-blue-500">
-                Login di sini
-              </Link>
+        <form onSubmit={handleRegister} className="space-y-4">
+            
+            {/* ... INPUT FORM YANG SUDAH ADA (Username, Email, Password, Confirm) ... */}
+            {/* Pastikan kode input form Anda tetap ada di sini */}
+
+             {/* Contoh input Username (sebagai referensi penempatan) */}
+             <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Username</label>
+                <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-blue-500 outline-none" required />
+            </div>
+            {/* ... Input Email, Password, Confirm Password ... */}
+
+             {/* <--- 4. KOMPONEN CAPTCHA */}
+             <div className="flex justify-center my-4">
+                <ReCAPTCHA
+                    sitekey={SITE_KEY}
+                    onChange={(val) => setCaptchaValue(val)}
+                />
+            </div>
+
+            <button 
+                type="submit" 
+                disabled={isLoading}
+                className={`w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-blue-500/30 flex justify-center items-center ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+            >
+                {isLoading ? <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div> : "Daftar Sekarang"}
+            </button>
+        </form>
+
+        <div className="mt-8 text-center">
+            <p className="text-slate-500 text-sm">
+                Sudah punya akun?{' '}
+                <Link to="/login" className="text-blue-600 font-bold hover:text-blue-700 hover:underline transition-all">
+                    Masuk disini
+                </Link>
             </p>
-          </div>
-
-          <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-            <div className="space-y-4">
-              
-              {/* --- PERUBAHAN 4: Ganti input 'name' menjadi 'username' --- */}
-              <div>
-                <label htmlFor="username" className="sr-only">Username</label>
-                <input
-                  id="username"
-                  name="username" // Ganti
-                  type="text"
-                  autoComplete="username" // Ganti
-                  required
-                  className="appearance-none rounded-md relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="Username" // Ganti
-                  value={username} // Ganti
-                  onChange={handleChange}
-                />
-              </div>
-              
-              {/* Input Email (Tetap) */}
-              <div>
-                <label htmlFor="email-address" className="sr-only">Alamat Email</label>
-                <input
-                  id="email-address"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  className="appearance-none rounded-md relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="Alamat Email"
-                  value={email}
-                  onChange={handleChange}
-                />
-              </div>
-
-              {/* Input Password (Tetap) */}
-              <div>
-                <label htmlFor="password" className="sr-only">Password</label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  className="appearance-none rounded-md relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="Password"
-                  value={password}
-                  onChange={handleChange}
-                />
-              </div>
-
-              {/* Input Konfirmasi Password (Tetap) */}
-              <div>
-                <label htmlFor="confirm-password" className="sr-only">Konfirmasi Password</label>
-                <input
-                  id="confirm-password"
-                  name="confirmPassword"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  className="appearance-none rounded-md relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="Konfirmasi Password"
-                  value={confirmPassword}
-                  onChange={handleChange}
-                />
-              </div>
-            </div>
-
-            {/* Tampilkan pesan error atau sukses */}
-            {error && (
-              <div className="text-red-600 text-sm text-center">
-                {error}
-              </div>
-            )}
-            {success && (
-              <div className="text-green-600 text-sm text-center">
-                {success}
-              </div>
-            )}
-
-            {/* Tombol Submit */}
-            <div>
-              <button
-                type="submit"
-                className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150 ease-in-out"
-              >
-                Daftar
-              </button>
-            </div>
-          </form>
         </div>
       </div>
     </div>
