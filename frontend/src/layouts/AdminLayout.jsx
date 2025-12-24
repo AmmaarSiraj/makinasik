@@ -17,6 +17,7 @@ import {
   FaFileContract,
   FaMoneyBillWave,
   FaCogs,
+  FaRulerCombined,
 } from 'react-icons/fa';
 
 import logoMAKINASIK from '../assets/logo.png'; 
@@ -39,6 +40,7 @@ const menuItems = [
   
   // 4. MASTER DATA & PENGATURAN
   { path: "/admin/manajemen-jabatan", label: "Master Jabatan", icon: <FaBriefcase /> },
+  { path: "/admin/manajemen-satuan", label: "Satuan Honor", icon: <FaRulerCombined /> },
   { path: "/admin/batas-honor", label: "Atur Batas Honor", icon: <FaSlidersH /> },
   { path: "/admin/manage-users", label: "Manajemen User", icon: <FaUsers /> },
 

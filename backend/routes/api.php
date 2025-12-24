@@ -63,6 +63,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Create (Butuh id_kegiatan di body)
     Route::get('/subkegiatan', [SubkegiatanController::class, 'index']);
     Route::post('/subkegiatan', [SubkegiatanController::class, 'store']);
+    Route::get('/subkegiatan/template', [SubkegiatanController::class, 'downloadTemplate']);
+    Route::post('/subkegiatan/import', [SubkegiatanController::class, 'import']);
     Route::put('/subkegiatan/{id}/info', [SubkegiatanController::class, 'update']);
     Route::get('/subkegiatan/{id}', [SubkegiatanController::class, 'show']);
     Route::delete('/subkegiatan/{id}', [SubkegiatanController::class, 'destroy']);
