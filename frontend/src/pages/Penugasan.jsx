@@ -16,8 +16,6 @@ import {
   FaTrash,
   FaSearch, 
   FaFilter,
-  FaCheckCircle,
-  FaUndoAlt,
   FaTimes,
   FaLayerGroup,
   FaCalendarAlt,
@@ -40,8 +38,6 @@ const Penugasan = () => {
   const [expandedTaskId, setExpandedTaskId] = useState(null); 
   const [membersCache, setMembersCache] = useState({});
   const [loadingMembers, setLoadingMembers] = useState(false);
-
-  const [processingGroup, setProcessingGroup] = useState(null);
   
   const [showImportModal, setShowImportModal] = useState(false);
   const [importKegiatanList, setImportKegiatanList] = useState([]);
@@ -268,71 +264,6 @@ const Penugasan = () => {
     }
   };
 
-  const handleStatusChange = async (e, id, currentStatus) => {
-    e.stopPropagation();
-    const newStatus = currentStatus === 'disetujui' ? 'menunggu' : 'disetujui';
-
-    try {
-      setAllPenugasan(prev => prev.map(p => 
-        p.id_penugasan === id ? { ...p, status_penugasan: newStatus } : p
-      ));
-
-      const token = getToken();
-      await axios.put(`${API_URL}/api/penugasan/${id}`, 
-        { status_penugasan: newStatus }, 
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-    } catch (err) {
-      console.error(err);
-      Swal.fire('Gagal', `Gagal mengubah status.`, 'error');
-      fetchPenugasan();
-    }
-  };
-
-  const handleGroupStatusChange = async (subItems, groupName) => {
-    const allApproved = subItems.every(item => item.status_penugasan === 'disetujui');
-    const targetStatus = allApproved ? 'menunggu' : 'disetujui';
-    const actionText = targetStatus === 'disetujui' ? 'Menyetujui Semua' : 'Membatalkan Semua';
-
-    const result = await Swal.fire({
-        title: `${actionText}?`,
-        text: `Akan mengubah status ${subItems.length} penugasan dalam grup ini menjadi '${targetStatus}'.`,
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonColor: targetStatus === 'disetujui' ? '#10B981' : '#F59E0B',
-        confirmButtonText: `Ya, ${actionText}`
-    });
-
-    if (result.isConfirmed) {
-        setProcessingGroup(groupName); 
-        try {
-            const token = getToken();
-            const config = { headers: { Authorization: `Bearer ${token}` } };
-            
-            const promises = subItems.map(item => {
-                if (item.status_penugasan !== targetStatus) {
-                    return axios.put(`${API_URL}/api/penugasan/${item.id_penugasan}`, {
-                        status_penugasan: targetStatus
-                    }, config);
-                }
-                return Promise.resolve();
-            });
-
-            await Promise.all(promises);
-
-            Swal.fire('Sukses', 'Status grup berhasil diperbarui!', 'success');
-            fetchPenugasan();
-
-        } catch (err) {
-            console.error(err);
-            Swal.fire('Error', 'Terjadi kesalahan saat memproses grup.', 'error');
-        } finally {
-            setProcessingGroup(null); 
-        }
-    }
-  };
-
   const handleDelete = async (e, id) => {
     e.stopPropagation();
     const result = await Swal.fire({
@@ -375,7 +306,6 @@ const Penugasan = () => {
     XLSX.writeFile(workbook, "template_import_penugasan.xlsx");
   };
 
-  // --- LOADING STATE ---
   if (isLoading) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh]">
         <div className="w-10 h-10 border-4 border-blue-100 border-t-[#1A2A80] rounded-full animate-spin mb-4"></div>
@@ -384,11 +314,9 @@ const Penugasan = () => {
   );
 
   return (
-    // Container disesuaikan dengan Layout (max-w-7xl) agar serasi dengan Header & Footer
     <div className="w-full mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       
       {/* === HEADER SECTION === */}
-      {/* Menggunakan Card Putih agar konsisten dengan ManajemenKegiatan */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-6">
             <div>
@@ -403,7 +331,6 @@ const Penugasan = () => {
                </p>
             </div>
 
-            {/* Action Buttons */}
             <div className="flex flex-wrap gap-3">
                <button 
                  onClick={handleDownloadTemplate} 
@@ -470,10 +397,6 @@ const Penugasan = () => {
           </div>
         ) : (
           Object.entries(groupedPenugasan).map(([kegiatanName, subItems]) => {
-            const allApproved = subItems.length > 0 && subItems.every(i => i.status_penugasan === 'disetujui');
-            const isThisGroupProcessing = processingGroup === kegiatanName;
-
-            // Card untuk setiap Grup Kegiatan Induk
             return (
               <div key={kegiatanName} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow duration-300">
                 
@@ -490,21 +413,6 @@ const Penugasan = () => {
                           </span>
                       </div>
                    </div>
-
-                   <button 
-                      onClick={() => handleGroupStatusChange(subItems, kegiatanName)}
-                      disabled={isThisGroupProcessing || processingGroup !== null}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm border
-                        ${allApproved 
-                          ? 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100' 
-                          : 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'}
-                        disabled:opacity-50 disabled:cursor-not-allowed
-                      `}
-                   >
-                      {isThisGroupProcessing ? 'Memproses...' : (
-                        allApproved ? <><FaUndoAlt /> Batalkan Semua</> : <><FaCheckCircle /> Setujui Semua</>
-                      )}
-                   </button>
                 </div>
 
                 {/* --- List Items (Accordion Style) --- */}
@@ -513,7 +421,6 @@ const Penugasan = () => {
                     const isOpen = expandedTaskId === task.id_penugasan;
                     const members = membersCache[task.id_penugasan] || [];
                     const membersCount = members.length;
-                    const isApproved = task.status_penugasan === 'disetujui';
 
                     return (
                       <div key={task.id_penugasan} className={`group/item transition-colors ${isOpen ? 'bg-blue-50/10' : 'bg-white hover:bg-gray-50'}`}>
@@ -523,7 +430,6 @@ const Penugasan = () => {
                           onClick={() => toggleRow(task.id_penugasan)} 
                           className="px-6 py-5 cursor-pointer flex flex-col md:flex-row md:items-center md:justify-between gap-4"
                         >
-                          {/* Kiri: Info Utama */}
                           <div className="flex-1 flex items-start gap-4">
                             <div className={`mt-1 p-1.5 rounded-full transition-transform duration-300 border bg-white ${isOpen ? 'rotate-180 text-[#1A2A80] border-blue-200 shadow-sm' : 'text-gray-400 border-gray-200'}`}>
                                 <FaChevronDown size={10} />
@@ -534,13 +440,6 @@ const Penugasan = () => {
                                     <h3 className={`font-bold text-sm transition-colors ${isOpen ? 'text-[#1A2A80]' : 'text-gray-800'}`}>
                                         {task.nama_sub_kegiatan}
                                     </h3>
-                                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold border uppercase tracking-wider
-                                        ${isApproved 
-                                        ? 'bg-green-50 text-green-700 border-green-100' 
-                                        : 'bg-gray-100 text-gray-500 border-gray-200'}
-                                    `}>
-                                        {task.status_penugasan || 'Menunggu'}
-                                    </span>
                                 </div>
                                 
                                 <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-gray-500 mt-2">
@@ -562,16 +461,6 @@ const Penugasan = () => {
 
                           {/* Kanan: Actions */}
                           <div className="flex items-center gap-2 md:border-l md:pl-6 border-gray-100 self-end md:self-center">
-                                <button 
-                                    onClick={(e) => handleStatusChange(e, task.id_penugasan, task.status_penugasan)}
-                                    className={`p-2 rounded-lg transition-all shadow-sm border ${isApproved 
-                                        ? 'bg-white text-amber-500 border-gray-200 hover:bg-amber-50' 
-                                        : 'bg-white text-green-600 border-gray-200 hover:bg-green-50'}`}
-                                    title={isApproved ? "Batalkan Persetujuan" : "Setujui Penugasan"}
-                                >
-                                    {isApproved ? <FaUndoAlt size={14} /> : <FaCheckCircle size={14} />}
-                                </button>
-
                                 <button 
                                     onClick={(e) => handleEdit(e, task.id_penugasan)} 
                                     className="p-2 bg-white text-indigo-500 border border-gray-200 hover:border-indigo-200 hover:bg-indigo-50 rounded-lg transition-all shadow-sm" 
@@ -657,7 +546,7 @@ const Penugasan = () => {
         )}
       </div>
 
-      {/* === IMPORT MODAL (Sama seperti sebelumnya, style disesuaikan sedikit) === */}
+      {/* === IMPORT MODAL === */}
       {showImportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm transition-opacity">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-fade-in-up">

@@ -132,107 +132,110 @@ class SubkegiatanController extends Controller
         ]);
     }
 
-    public function downloadTemplate()
+   public function downloadTemplate()
     {
-        $spreadsheet = new Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
+        $filePath = storage_path('app/template_import_kegiatan.xlsx');
 
-        $headers = [
-            'nama_kegiatan',
-            'nama_sub_kegiatan',
-            'deskripsi',
-            'tanggal_mulai',
-            'tanggal_selesai',
-            'jabatan',
-            'tarif',
-            'total_dokumen',
-            'satuan'
-        ];
-
-        $sheet->fromArray($headers, null, 'A1');
-        $sheet->getStyle('A1:I1')->getFont()->setBold(true);
-
-        $exampleData = [
-            'Sensus Penduduk 2030',
-            'Petugas Pemeriksaan Lapangan (PML)',
-            'Rapat di Aula Utama',
-            date('Y-m-d'),
-            date('Y-m-d', strtotime('+5 days')),
-            'Petugas Pendataan',
-            '150000',
-            '10',
-            'DOK'
-        ];
-        $sheet->fromArray($exampleData, null, 'A2');
-
-        foreach (range('A', 'I') as $col) {
-            $sheet->getColumnDimension($col)->setAutoSize(true);
+        if (!file_exists($filePath)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'File template belum tersedia di server.'
+            ], 404);
         }
 
-        $writer = new Xlsx($spreadsheet);
-
-        return response()->streamDownload(function() use ($writer) {
-            $writer->save('php://output');
-        }, 'template_import_kegiatan.xlsx', [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        ]);
+        return response()->download($filePath, 'template_import_kegiatan.xlsx');
     }
 
     public function import(Request $request)
     {
+        // 1. Validasi
         $validator = Validator::make($request->all(), [
             'file' => 'required|file|mimes:xlsx,xls,csv,txt|max:10240',
         ]);
-    
+
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
-    
+
         $file = $request->file('file');
         $successCount = 0;
         $errors = [];
-    
+
         DB::beginTransaction();
-    
+
         try {
-            $spreadsheet = IOFactory::load($file->getPathname());
+            // 2. BACA FILE (INI PERBAIKANNYA)
+            // Kita minta IOFactory mendeteksi jenis file secara otomatis
+            $reader = IOFactory::createReaderForFile($file->getPathname());
+            
+            // ERROR FIX: Bungkus setDelimiter dengan pengecekan
+            // Fungsi ini mengecek: "Apakah reader ini punya fitur setDelimiter?"
+            // Jika file Excel (.xlsx), jawabannya TIDAK, maka baris di dalam if dilewati (Aman)
+            if (method_exists($reader, 'setDelimiter')) {
+                $reader->setDelimiter(';'); 
+            }
+            
+            $reader->setReadDataOnly(true);
+            $spreadsheet = $reader->load($file->getPathname());
             $sheet = $spreadsheet->getActiveSheet();
             $rows = $sheet->toArray();
-    
-            $headerRaw = array_shift($rows);
-            if (!$headerRaw) throw new \Exception("File kosong atau format header salah.");
-            $header = array_map(function ($h) { return trim(strtolower($h)); }, $headerRaw);
-    
-            $colMap = [
-                'kegiatan'       => $this->findHeaderIndex($header, ['nama_kegiatan', 'kegiatan']),
-                'subkegiatan'    => $this->findHeaderIndex($header, ['nama_sub_kegiatan', 'subkegiatan']),
-                'deskripsi'      => $this->findHeaderIndex($header, ['deskripsi']),
-                'tgl_mulai'      => $this->findHeaderIndex($header, ['tanggal_mulai', 'tgl_mulai']),
-                'tgl_selesai'    => $this->findHeaderIndex($header, ['tanggal_selesai', 'tgl_selesai']),
-                'jabatan'        => $this->findHeaderIndex($header, ['jabatan', 'nama_jabatan', 'kode_jabatan']),
-                'tarif'          => $this->findHeaderIndex($header, ['tarif', 'harga_satuan']),
-                'satuan'         => $this->findHeaderIndex($header, ['satuan', 'id_satuan']),
-                'basis_volume'   => $this->findHeaderIndex($header, ['basis_volume', 'basis', 'total_dokumen']),
-                'beban_anggaran' => $this->findHeaderIndex($header, ['beban_anggaran', 'beban']),
-            ];
-    
+
+            if (empty($rows)) throw new \Exception("File kosong.");
+
+            // 3. Scan Header
+            $headerIndex = -1;
+            $headerRow = [];
             foreach ($rows as $index => $row) {
-                $rowNumber = $index + 2;
+                // Gabung baris jadi string huruf kecil
+                $rowString = strtolower(implode(' ', array_map(function($val){ return trim($val); }, $row)));
+                
+                // Cari kata kunci header
+                if (str_contains($rowString, 'nama_kegiatan') || (str_contains($rowString, 'kegiatan') && str_contains($rowString, 'sub'))) {
+                    $headerIndex = $index;
+                    $headerRow = array_map(function ($h) { return trim(strtolower($h)); }, $row);
+                    break;
+                }
+                if ($index > 5) break; // Batas pencarian baris ke-5
+            }
+
+            if ($headerIndex === -1) throw new \Exception("Header tidak ditemukan! Pastikan Anda mengupload Template Kegiatan.");
+
+            // 4. Mapping Kolom
+            $colMap = [
+                'kegiatan'       => $this->findHeaderIndex($headerRow, ['nama_kegiatan', 'kegiatan']),
+                'subkegiatan'    => $this->findHeaderIndex($headerRow, ['nama_sub_kegiatan', 'subkegiatan', 'nama_sub']),
+                'deskripsi'      => $this->findHeaderIndex($headerRow, ['deskripsi', 'keterangan']),
+                'tgl_mulai'      => $this->findHeaderIndex($headerRow, ['tanggal_mulai', 'tgl_mulai', 'mulai']),
+                'tgl_selesai'    => $this->findHeaderIndex($headerRow, ['tanggal_selesai', 'tgl_selesai', 'selesai']),
+                'jabatan'        => $this->findHeaderIndex($headerRow, ['jabatan', 'nama_jabatan', 'posisi', 'role']),
+                'tarif'          => $this->findHeaderIndex($headerRow, ['tarif', 'honor', 'harga']),
+                'satuan'         => $this->findHeaderIndex($headerRow, ['satuan', 'satuan_kegiatan']),
+                'basis_volume'   => $this->findHeaderIndex($headerRow, ['basis_volume', 'volume']),
+                'beban_anggaran' => $this->findHeaderIndex($headerRow, ['beban_anggaran', 'kode_anggaran']),
+            ];
+
+            // 5. Looping Data
+            for ($i = $headerIndex + 1; $i < count($rows); $i++) {
+                $row = $rows[$i];
+                $rowNumber = $i + 1;
+
                 $namaKegiatan = $this->getValue($row, $colMap['kegiatan']);
                 $namaSub      = $this->getValue($row, $colMap['subkegiatan']);
-    
+
                 if (empty($namaKegiatan) || empty($namaSub)) continue;
-    
+
                 try {
+                    // --- Save Kegiatan ---
                     $kegiatan = Kegiatan::firstOrCreate(
-                        ['nama_kegiatan' => trim($namaKegiatan)],
-                        ['deskripsi' => 'Auto-generated via import']
+                        ['nama_kegiatan' => $namaKegiatan],
+                        ['deskripsi' => 'Imported via Excel']
                     );
-    
+
+                    // --- Save Subkegiatan ---
                     $sub = Subkegiatan::updateOrCreate(
                         [
                             'id_kegiatan'       => $kegiatan->id,
-                            'nama_sub_kegiatan' => trim($namaSub)
+                            'nama_sub_kegiatan' => $namaSub
                         ],
                         [
                             'deskripsi'       => $this->getValue($row, $colMap['deskripsi']),
@@ -241,63 +244,78 @@ class SubkegiatanController extends Controller
                             'status'          => 'aktif'
                         ]
                     );
-    
-                    $namaJabatan = $this->getValue($row, $colMap['jabatan']);
+
+                    // --- Save Honorarium (Logic Pintar "Nama (Kode)") ---
+                    $rawJabatan = $this->getValue($row, $colMap['jabatan']);
                     
-                    if (!empty($namaJabatan)) {
-                        $jabatan = JabatanMitra::where('nama_jabatan', trim($namaJabatan))->first();
-                        
+                    if (!empty($rawJabatan)) {
+                        $jabatan = null;
+                        $cleanJabatan = strtolower(trim($rawJabatan));
+
+                        // Cek 1: Persis
+                        $jabatan = JabatanMitra::whereRaw('LOWER(nama_jabatan) = ?', [$cleanJabatan])
+                                    ->orWhereRaw('LOWER(kode_jabatan) = ?', [$cleanJabatan])
+                                    ->first();
+
+                        // Cek 2: Pecah "Nama (Kode)"
                         if (!$jabatan) {
-                            $errors[] = "Baris $rowNumber: Jabatan '$namaJabatan' tidak ditemukan di tabel jabatan_mitra.";
-                            continue; 
+                            // Ambil teks sebelum kurung (Nama) dan dalam kurung (Kode)
+                            if (preg_match('/^(.*?)\s*\((.*?)\)$/', $rawJabatan, $matches)) {
+                                $potNama = trim($matches[1]);
+                                $potKode = trim($matches[2]);
+                                
+                                $jabatan = JabatanMitra::whereRaw('LOWER(nama_jabatan) = ?', [strtolower($potNama)])
+                                            ->orWhereRaw('LOWER(kode_jabatan) = ?', [strtolower($potKode)])
+                                            ->first();
+                            }
                         }
 
-                        $namaSatuan = $this->getValue($row, $colMap['satuan']);
-                        $satuan = null;
-                        if($namaSatuan) {
-                             $satuan = SatuanKegiatan::where('nama_satuan', trim($namaSatuan))->first();
-                        }
+                        if (!$jabatan) {
+                            $errors[] = "Baris $rowNumber: Jabatan '$rawJabatan' tidak ditemukan.";
+                        } else {
+                            $namaSatuan = $this->getValue($row, $colMap['satuan']);
+                            $satuan = null;
+                            if ($namaSatuan) {
+                                $satuan = SatuanKegiatan::whereRaw('LOWER(nama_satuan) = ?', [strtolower(trim($namaSatuan))])->first();
+                            }
 
-                        if ($namaSatuan && !$satuan) {
-                            $errors[] = "Baris $rowNumber: Satuan '$namaSatuan' tidak ditemukan di database.";
-                            continue;
+                            Honorarium::updateOrCreate(
+                                [
+                                    'id_subkegiatan' => $sub->id,
+                                    'kode_jabatan'   => $jabatan->kode_jabatan,
+                                ],
+                                [
+                                    'tarif'          => preg_replace('/[^0-9]/', '', $this->getValue($row, $colMap['tarif'])) ?: 0,
+                                    'id_satuan'      => $satuan ? $satuan->id : null,
+                                    'basis_volume'   => $this->getValue($row, $colMap['basis_volume']) ?: 1,
+                                    'beban_anggaran' => $this->getValue($row, $colMap['beban_anggaran']),
+                                ]
+                            );
                         }
-                        
-                        Honorarium::updateOrCreate(
-                            [
-                                'id_subkegiatan' => $sub->id,
-                                'kode_jabatan'   => $jabatan->id, 
-                            ],
-                            [
-                                'tarif'          => preg_replace('/[^0-9]/', '', $this->getValue($row, $colMap['tarif'])) ?: 0,
-                                'id_satuan'      => $satuan ? $satuan->id : null,
-                                'basis_volume'   => $this->getValue($row, $colMap['basis_volume']) ?: 1,
-                                'beban_anggaran' => $this->getValue($row, $colMap['beban_anggaran']), // Bisa NULL jika di Excel kosong
-                            ]
-                        );
                     }
-    
                     $successCount++;
                 } catch (\Exception $e) {
                     $errors[] = "Baris $rowNumber: " . $e->getMessage();
                 }
             }
-    
+
             DB::commit();
-            
+
             return response()->json([
                 'status' => 'success',
-                'message' => "Import Selesai.",
+                'message' => "Import Selesai. Sukses: $successCount baris.",
                 'successCount' => $successCount,
                 'failCount' => count($errors),
                 'errors' => $errors
             ]);
-    
+
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
     }
+
+    
 
     private function formatDate($date) {
         if (empty($date)) return null;
