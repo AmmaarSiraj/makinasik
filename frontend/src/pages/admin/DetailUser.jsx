@@ -31,7 +31,7 @@ const DetailUser = () => {
         const response = await axios.get(`${API_URL}/api/users/${id}`, {
             headers: { Authorization: `Bearer ${token}` }
         });
-        setUserData(response.data);
+        setUserData(response.data.data);
       } catch (err) {
         console.error(err);
         setError(err.response?.data?.message || 'Gagal mengambil data user');

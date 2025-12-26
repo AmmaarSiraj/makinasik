@@ -63,9 +63,20 @@ class AuthController extends Controller
      */
     public function login(Request $request)
     {
-        // Validasi Input
+        // 1. Ambil input identifier
+        // Kita cek apakah frontend mengirim field 'email' atau 'username'
+        // Ini agar fleksibel: user bisa mengetik username di kolom email
+        $identifier = $request->input('email') ?? $request->input('username');
+
+        // 2. Validasi Input
+        // Kita tidak lagi memaksa format 'email', cukup pastikan identifier terisi
+        if (!$identifier) {
+            return response()->json([
+                'errors' => ['email' => ['Email atau Username wajib diisi.']]
+            ], 422);
+        }
+
         $validator = Validator::make($request->all(), [
-            'email'    => 'required|email',
             'password' => 'required|string',
         ]);
 
@@ -73,27 +84,30 @@ class AuthController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // Cari User berdasarkan Email
-        $user = User::where('email', $request->email)->first();
+        // 3. Cari User berdasarkan Email ATAU Username
+        $user = User::where('email', $identifier)
+                    ->orWhere('username', $identifier)
+                    ->first();
 
-        // Cek apakah user ada & password cocok
+        // 4. Cek apakah user ada & password cocok
         if (!$user || !Hash::check($request->password, $user->password)) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Email atau password salah.'
+                'message' => 'Username, Email, atau Password salah.'
             ], 401);
         }
 
-        // Hapus token lama (opsional, agar 1 user 1 token)
+        // Hapus token lama (opsional)
         // $user->tokens()->delete();
 
-        // Buat Token Baru
+        // 5. Buat Token Baru
         $token = $user->createToken('auth_token')->plainTextToken;
 
+        // 6. Return Response (Sesuai Permintaan Anda)
         return response()->json([
             'status' => 'success',
             'message' => 'Login berhasil.',
-            'access_token' => $token,
+            'access_token' => $token, // <--- Sudah dikembalikan ke 'access_token'
             'token_type' => 'Bearer',
             'user' => [
                 'id' => $user->id,

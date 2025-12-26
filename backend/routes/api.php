@@ -32,7 +32,7 @@ Route::get('/test', function () {
 });
 
 Route::post('/users/login', [AuthController::class, 'login']);
-Route::post('/users/register', [AuthController::class, 'register']);
+Route::post('/register', [AuthController::class, 'register']);
 Route::get('/system-settings', [SystemSettingController::class, 'index']);
 
 // --- PROTECTED ROUTES (Harus login / punya Token) ---
