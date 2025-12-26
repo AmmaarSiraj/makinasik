@@ -32,13 +32,14 @@ Route::get('/test', function () {
 });
 
 Route::post('/users/login', [AuthController::class, 'login']);
+Route::post('/users/register', [AuthController::class, 'register']);
 Route::get('/system-settings', [SystemSettingController::class, 'index']);
 
 // --- PROTECTED ROUTES (Harus login / punya Token) ---
 Route::middleware(['auth:sanctum'])->group(function () {
 
     // Auth
-    
+
     Route::post('/system-settings/upload', [SystemSettingController::class, 'upload']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [UserController::class, 'me']); // Cek profile sendiri
@@ -116,7 +117,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/penugasan/{id}/anggota', [PenugasanController::class, 'getAnggota']);
     Route::post('/penugasan/import-perencanaan', [App\Http\Controllers\PenugasanController::class, 'importFromPerencanaan']);
     Route::post('/penugasan/preview-import', [PenugasanController::class, 'previewImport']);
-    
+    Route::post('/penugasan/store-import', [PenugasanController::class, 'storeImport']);
 
 
     // --- KELOMPOK PENUGASAN (DETAIL ANGGOTA) ---
@@ -132,6 +133,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::delete('/perencanaan/{id}', [PerencanaanController::class, 'destroy']);
     Route::get('/perencanaan/{id}/anggota', [PerencanaanController::class, 'getAnggota']);
     Route::post('/perencanaan/preview-import', [PerencanaanController::class, 'previewImport']);
+    Route::post('/perencanaan/store-import', [PerencanaanController::class, 'storeImport']);
 
     Route::get('/rekap/bulanan', [PerencanaanController::class, 'getRekapBulanan']);
     Route::get('/rekap/mitra', [PerencanaanController::class, 'getRekapMitra']);

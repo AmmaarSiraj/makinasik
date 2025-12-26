@@ -164,17 +164,14 @@ class SubkegiatanController extends Controller
         DB::beginTransaction();
 
         try {
-            // 2. BACA FILE (INI PERBAIKANNYA)
-            // Kita minta IOFactory mendeteksi jenis file secara otomatis
-            $reader = IOFactory::createReaderForFile($file->getPathname());
-            
-            // ERROR FIX: Bungkus setDelimiter dengan pengecekan
-            // Fungsi ini mengecek: "Apakah reader ini punya fitur setDelimiter?"
-            // Jika file Excel (.xlsx), jawabannya TIDAK, maka baris di dalam if dilewati (Aman)
-            if (method_exists($reader, 'setDelimiter')) {
-                $reader->setDelimiter(';'); 
+            // 2. Setup Reader
+            $inputFileType = IOFactory::identify($file->getPathname());
+            $reader = IOFactory::createReader($inputFileType);
+
+            if ($reader instanceof \PhpOffice\PhpSpreadsheet\Reader\Csv) {
+                $reader->setDelimiter(',');
             }
-            
+
             $reader->setReadDataOnly(true);
             $spreadsheet = $reader->load($file->getPathname());
             $sheet = $spreadsheet->getActiveSheet();
@@ -186,28 +183,25 @@ class SubkegiatanController extends Controller
             $headerIndex = -1;
             $headerRow = [];
             foreach ($rows as $index => $row) {
-                // Gabung baris jadi string huruf kecil
-                $rowString = strtolower(implode(' ', array_map(function($val){ return trim($val); }, $row)));
-                
-                // Cari kata kunci header
+                $rowString = strtolower(implode(' ', array_map(function($val){ return trim((string)$val); }, $row)));
                 if (str_contains($rowString, 'nama_kegiatan') || (str_contains($rowString, 'kegiatan') && str_contains($rowString, 'sub'))) {
                     $headerIndex = $index;
-                    $headerRow = array_map(function ($h) { return trim(strtolower($h)); }, $row);
+                    $headerRow = array_map(function ($h) { return trim(strtolower((string)$h)); }, $row);
                     break;
                 }
-                if ($index > 5) break; // Batas pencarian baris ke-5
+                if ($index > 5) break; 
             }
 
-            if ($headerIndex === -1) throw new \Exception("Header tidak ditemukan! Pastikan Anda mengupload Template Kegiatan.");
+            if ($headerIndex === -1) throw new \Exception("Header tidak ditemukan!");
 
             // 4. Mapping Kolom
             $colMap = [
                 'kegiatan'       => $this->findHeaderIndex($headerRow, ['nama_kegiatan', 'kegiatan']),
-                'subkegiatan'    => $this->findHeaderIndex($headerRow, ['nama_sub_kegiatan', 'subkegiatan', 'nama_sub']),
+                'subkegiatan'    => $this->findHeaderIndex($headerRow, ['nama_sub_kegiatan', 'subkegiatan']),
                 'deskripsi'      => $this->findHeaderIndex($headerRow, ['deskripsi', 'keterangan']),
-                'tgl_mulai'      => $this->findHeaderIndex($headerRow, ['tanggal_mulai', 'tgl_mulai', 'mulai']),
-                'tgl_selesai'    => $this->findHeaderIndex($headerRow, ['tanggal_selesai', 'tgl_selesai', 'selesai']),
-                'jabatan'        => $this->findHeaderIndex($headerRow, ['jabatan', 'nama_jabatan', 'posisi', 'role']),
+                'tgl_mulai'      => $this->findHeaderIndex($headerRow, ['tanggal_mulai', 'tgl_mulai']),
+                'tgl_selesai'    => $this->findHeaderIndex($headerRow, ['tanggal_selesai', 'tgl_selesai']),
+                'jabatan'        => $this->findHeaderIndex($headerRow, ['jabatan', 'nama_jabatan', 'role']),
                 'tarif'          => $this->findHeaderIndex($headerRow, ['tarif', 'honor', 'harga']),
                 'satuan'         => $this->findHeaderIndex($headerRow, ['satuan', 'satuan_kegiatan']),
                 'basis_volume'   => $this->findHeaderIndex($headerRow, ['basis_volume', 'volume']),
@@ -225,49 +219,66 @@ class SubkegiatanController extends Controller
                 if (empty($namaKegiatan) || empty($namaSub)) continue;
 
                 try {
-                    // --- Save Kegiatan ---
+                    // --- A. Handle Kegiatan ---
                     $kegiatan = Kegiatan::firstOrCreate(
                         ['nama_kegiatan' => $namaKegiatan],
                         ['deskripsi' => 'Imported via Excel']
                     );
 
-                    // --- Save Subkegiatan ---
-                    $sub = Subkegiatan::updateOrCreate(
-                        [
-                            'id_kegiatan'       => $kegiatan->id,
-                            'nama_sub_kegiatan' => $namaSub
-                        ],
-                        [
-                            'deskripsi'       => $this->getValue($row, $colMap['deskripsi']),
-                            'tanggal_mulai'   => $this->formatDate($this->getValue($row, $colMap['tgl_mulai'])),
-                            'tanggal_selesai' => $this->formatDate($this->getValue($row, $colMap['tgl_selesai'])),
-                            'status'          => 'aktif'
-                        ]
-                    );
+                    // --- B. Handle Subkegiatan ---
+                    $existingSub = Subkegiatan::where('id_kegiatan', $kegiatan->id)
+                        ->where('nama_sub_kegiatan', $namaSub)
+                        ->first();
 
-                    // --- Save Honorarium (Logic Pintar "Nama (Kode)") ---
+                    $subId = null;
+
+                    if ($existingSub) {
+                        $subId = $existingSub->id;
+                        $existingSub->update([
+                             'deskripsi' => $this->getValue($row, $colMap['deskripsi']),
+                             'tanggal_mulai' => $this->formatDate($this->getValue($row, $colMap['tgl_mulai'])),
+                             'tanggal_selesai' => $this->formatDate($this->getValue($row, $colMap['tgl_selesai'])),
+                        ]);
+                    } else {
+                        Subkegiatan::create([
+                            'id_kegiatan'       => $kegiatan->id,
+                            'nama_sub_kegiatan' => $namaSub,
+                            'deskripsi'         => $this->getValue($row, $colMap['deskripsi']),
+                            'tanggal_mulai'     => $this->formatDate($this->getValue($row, $colMap['tgl_mulai'])),
+                            'tanggal_selesai'   => $this->formatDate($this->getValue($row, $colMap['tgl_selesai'])),
+                            'status'            => 'aktif'
+                        ]);
+
+                        // Re-Query Trigger ID
+                        $newSub = Subkegiatan::where('id_kegiatan', $kegiatan->id)
+                                    ->where('nama_sub_kegiatan', $namaSub)
+                                    ->orderBy('created_at', 'desc')
+                                    ->first();
+                        
+                        if ($newSub) {
+                            $subId = $newSub->id;
+                        } else {
+                            throw new \Exception("Gagal mengambil ID Subkegiatan (Trigger DB Error).");
+                        }
+                    }
+
+                    // --- C. Handle Honorarium ---
                     $rawJabatan = $this->getValue($row, $colMap['jabatan']);
                     
-                    if (!empty($rawJabatan)) {
+                    if (!empty($rawJabatan) && $subId) {
                         $jabatan = null;
                         $cleanJabatan = strtolower(trim($rawJabatan));
 
-                        // Cek 1: Persis
                         $jabatan = JabatanMitra::whereRaw('LOWER(nama_jabatan) = ?', [$cleanJabatan])
                                     ->orWhereRaw('LOWER(kode_jabatan) = ?', [$cleanJabatan])
                                     ->first();
 
-                        // Cek 2: Pecah "Nama (Kode)"
-                        if (!$jabatan) {
-                            // Ambil teks sebelum kurung (Nama) dan dalam kurung (Kode)
-                            if (preg_match('/^(.*?)\s*\((.*?)\)$/', $rawJabatan, $matches)) {
-                                $potNama = trim($matches[1]);
-                                $potKode = trim($matches[2]);
-                                
-                                $jabatan = JabatanMitra::whereRaw('LOWER(nama_jabatan) = ?', [strtolower($potNama)])
-                                            ->orWhereRaw('LOWER(kode_jabatan) = ?', [strtolower($potKode)])
-                                            ->first();
-                            }
+                        if (!$jabatan && preg_match('/^(.*?)\s*\((.*?)\)$/', $rawJabatan, $matches)) {
+                            $potNama = trim($matches[1]);
+                            $potKode = trim($matches[2]);
+                            $jabatan = JabatanMitra::whereRaw('LOWER(nama_jabatan) = ?', [strtolower($potNama)])
+                                        ->orWhereRaw('LOWER(kode_jabatan) = ?', [strtolower($potKode)])
+                                        ->first();
                         }
 
                         if (!$jabatan) {
@@ -281,7 +292,7 @@ class SubkegiatanController extends Controller
 
                             Honorarium::updateOrCreate(
                                 [
-                                    'id_subkegiatan' => $sub->id,
+                                    'id_subkegiatan' => $subId,
                                     'kode_jabatan'   => $jabatan->kode_jabatan,
                                 ],
                                 [
@@ -301,12 +312,14 @@ class SubkegiatanController extends Controller
 
             DB::commit();
 
+            // --- PERUBAHAN UTAMA DISINI ---
+            // Menyesuaikan struktur JSON agar dibaca oleh ManageKegiatan.jsx
             return response()->json([
                 'status' => 'success',
-                'message' => "Import Selesai. Sukses: $successCount baris.",
-                'successCount' => $successCount,
-                'failCount' => count($errors),
-                'errors' => $errors
+                'successCount' => $successCount, // <-- Frontend butuh ini
+                'failCount' => count($errors),   // <-- Frontend butuh ini
+                'errors' => $errors,
+                'message' => "Import selesai."
             ]);
 
         } catch (\Exception $e) {
@@ -314,7 +327,6 @@ class SubkegiatanController extends Controller
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
     }
-
     
 
     private function formatDate($date) {
