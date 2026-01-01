@@ -15,7 +15,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 // --- GAMBAR DEFAULT (FALLBACK) ---
 const DEFAULT_BG = "https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop";
-const DEFAULT_LOGO = "/src/assets/bpslogo.png"; 
+const DEFAULT_LOGO = "/src/assets/logo.png"; 
 
 const Home = () => {
   // --- STATE MANAGEMENT ---

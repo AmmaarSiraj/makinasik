@@ -216,7 +216,7 @@ const AuthPage = () => {
                <img src={logoSikinerja} alt="Logo SIKINERJA" className="w-20 h-auto mx-auto object-contain" />
             </div>
             <h1 className="text-2xl font-bold text-[#1A2A80] mb-2">Login MAKINASIK</h1>
-            <p className="text-xs text-gray-400 mb-6">Masuk untuk mengelola data mitra</p>
+            <p className="text-xs text-gray-400 mb-6">Masuk untuk Mengelola Kinerja dan Administrasi Mitra</p>
             
             <div className="w-full space-y-4">
               <div className="bg-gray-100 p-3 rounded-lg flex items-center border border-transparent focus-within:border-[#1A2A80] transition-colors">

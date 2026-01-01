@@ -142,8 +142,8 @@ const ManageKegiatan = () => {
         "Survei/Sensus": "(SAKERNAS26-TW) SURVEI ANGKATAN KERJA NASIONAL (SAKERNAS) TAHUN 2026", 
         "Kegiatan": "PENDATAAN - TRIWULAN I", 
         "Deskripsi": "Kegiatan Pendataan Lapangan Sakernas",
-        "Tanggal Mulai": "2026-01-01",
-        "Tanggal Selesai": "2026-02-28",
+        "Tanggal Mulai": "01/01/2026",
+        "Tanggal Selesai": "28/02/2026",
         "Jabatan": "Petugas Pendataan Lapangan (PPL Survei)", // Mengacu ke Master Jabatan
         "Tarif": 55000,
         "Satuan": "Dokumen", // Mengacu ke Master Satuan
@@ -154,8 +154,8 @@ const ManageKegiatan = () => {
         "Survei/Sensus": "(SAKERNAS26-TW) SURVEI ANGKATAN KERJA NASIONAL (SAKERNAS) TAHUN 2026", 
         "Kegiatan": "PENDATAAN - TRIWULAN I", 
         "Deskripsi": "Kegiatan Pemeriksaan Lapangan Sakernas",
-        "Tanggal Mulai": "2026-01-01",
-        "Tanggal Selesai": "2026-02-28",
+        "Tanggal Mulai": "01/01/2026",
+        "Tanggal Selesai": "28/02/2026",
         "Jabatan": "Petugas Pemeriksaan Lapangan (PML Survei)",
         "Tarif": 19000,
         "Satuan": "Dokumen",
