@@ -49,13 +49,20 @@ const AuthPage = () => {
       if (response.data && response.data.access_token) {
         const { access_token, user } = response.data;
         
+        // 1. Simpan Token
         localStorage.setItem('token', access_token);
+        
+        // 2. PERBAIKAN UTAMA: Simpan Data User ke LocalStorage
+        // Ini wajib ada agar RequireAuth bisa membaca role user
         localStorage.setItem('user', JSON.stringify(user));
 
-        if (user.role === 'admin' || user.role === 'superadmin') {
+        // 3. Perbaikan Logika Redirect
+        // Cek apakah role valid (admin, user, atau superadmin)
+        if (['admin', 'user', 'superadmin'].includes(user.role)) {
           navigate('/admin/dashboard');
         } else {
-          navigate('/home');
+          // Jika role tidak dikenali, kembalikan ke home atau tampilkan error
+          navigate('/');
         }
       } else {
         throw new Error("Token tidak diterima dari server.");

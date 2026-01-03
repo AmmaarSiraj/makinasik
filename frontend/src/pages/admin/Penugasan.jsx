@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useDropzone } from 'react-dropzone'; // Pastikan install react-dropzone
+import { useDropzone } from 'react-dropzone';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import * as XLSX from 'xlsx';
@@ -28,8 +28,22 @@ import {
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 const getToken = () => localStorage.getItem('token');
 
+// Helper untuk ambil data user
+const getUser = () => {
+  try {
+    const userStr = localStorage.getItem('user');
+    return userStr ? JSON.parse(userStr) : null;
+  } catch (err) {
+    return null;
+  }
+};
+
 const Penugasan = () => {
   const navigate = useNavigate();
+  
+  // Cek Role Admin
+  const user = getUser();
+  const isAdmin = user && user.role === 'admin';
 
   // State Data
   const [allPenugasan, setAllPenugasan] = useState([]);
@@ -101,7 +115,7 @@ const Penugasan = () => {
     fetchPenugasan();
   }, []);
 
-  // --- LOGIKA IMPORT BARU (SAMA SEPERTI PERENCANAAN) ---
+  // --- LOGIKA IMPORT BARU ---
 
   useEffect(() => {
     if (!showImportModal) {
@@ -122,7 +136,6 @@ const Penugasan = () => {
     setIsProcessing(true);
     try {
       const token = getToken();
-      // Menggunakan endpoint preview-import yang baru di PenugasanController
       const res = await axios.post(`${API_URL}/api/penugasan/preview-import`, formData, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -162,7 +175,6 @@ const Penugasan = () => {
     setIsProcessing(true);
     try {
       const token = getToken();
-      // Menggunakan endpoint store-import baru
       await axios.post(`${API_URL}/api/penugasan/store-import`, {
         data: previewData
       }, { headers: { Authorization: `Bearer ${token}` } });
@@ -238,7 +250,6 @@ const Penugasan = () => {
       const jabatanData = resJabatan.data.data || resJabatan.data;
       const satuanData = resSatuan.data.data || resSatuan.data;
 
-      // ... (Bagian mapping masterRows, jabatanRows, satuanRows tetap sama) ...
       const masterRows = honorData.map(item => ({
         "Survei/Sensus": item.nama_kegiatan || '-',
         "Kegiatan": item.nama_sub_kegiatan || '-',
@@ -260,26 +271,19 @@ const Penugasan = () => {
         .map(sat => ({ "Nama Satuan": sat.nama_satuan, "Alias": sat.alias || '-' }))
         .sort((a, b) => a["Nama Satuan"].localeCompare(b["Nama Satuan"]));
 
-      // 4. Buat Workbook
       const workbook = XLSX.utils.book_new();
 
-      // --- Sheet 1: Template Import ---
       const wsTemplate = XLSX.utils.json_to_sheet(rows);
       autoFitColumns(rows, wsTemplate);
 
-      // FITUR TAMBAHAN: AutoFilter (Panah Filter di Header)
-      // Kita set filter dari kolom A1 sampai kolom terakhir di baris 1 (Header)
-      // Ref "A1:E1" berarti filter aktif di 5 kolom pertama
       if (wsTemplate['!ref']) {
         wsTemplate['!autofilter'] = { ref: wsTemplate['!ref'] };
       }
 
       XLSX.utils.book_append_sheet(workbook, wsTemplate, "template_import_perencanaan");
 
-      // --- Sheet 2, 3, 4 (Master) ---
       const wsMaster = XLSX.utils.json_to_sheet(masterRows);
       autoFitColumns(masterRows, wsMaster);
-      // Tambahkan filter juga di master agar mudah dicari
       if (wsMaster['!ref']) wsMaster['!autofilter'] = { ref: wsMaster['!ref'] };
       XLSX.utils.book_append_sheet(workbook, wsMaster, "master_kegiatan");
 
@@ -293,7 +297,6 @@ const Penugasan = () => {
       if (wsSatuan['!ref']) wsSatuan['!autofilter'] = { ref: wsSatuan['!ref'] };
       XLSX.utils.book_append_sheet(workbook, wsSatuan, "master_satuan_honor");
 
-      // 5. Download
       XLSX.writeFile(workbook, "template_import_penugasan.xlsx");
 
       Swal.close();
@@ -528,20 +531,22 @@ const Penugasan = () => {
                       {subItems.length} Tim
                     </span>
                   </div>
-                  <button
-                    onClick={() => handleGroupStatusChange(subItems, kegiatanName)}
-                    disabled={isThisGroupProcessing || processingGroup !== null}
-                    className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition shadow-sm 
-                        ${allApproved
-                        ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-200'
-                        : 'bg-green-100 text-green-700 hover:bg-green-200 border border-green-200'}
-                        disabled:opacity-50 disabled:cursor-not-allowed
-                      `}
-                  >
-                    {isThisGroupProcessing ? 'Memproses...' : (
-                      allApproved ? <><FaUndoAlt /> Batalkan Semua</> : <><FaCheckCircle /> Setujui Semua</>
-                    )}
-                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => handleGroupStatusChange(subItems, kegiatanName)}
+                      disabled={isThisGroupProcessing || processingGroup !== null}
+                      className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition shadow-sm 
+                          ${allApproved
+                          ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-200'
+                          : 'bg-green-100 text-green-700 hover:bg-green-200 border border-green-200'}
+                          disabled:opacity-50 disabled:cursor-not-allowed
+                        `}
+                    >
+                      {isThisGroupProcessing ? 'Memproses...' : (
+                        allApproved ? <><FaUndoAlt /> Batalkan Semua</> : <><FaCheckCircle /> Setujui Semua</>
+                      )}
+                    </button>
+                  )}
                 </div>
 
                 <div className="divide-y divide-gray-100">
@@ -581,13 +586,15 @@ const Penugasan = () => {
                               <FaUsers /> {membersCount} Anggota
                             </div>
                             <div className="flex items-center gap-1 border-l pl-4 border-gray-200">
-                              <button
-                                onClick={(e) => handleStatusChange(e, task.id_penugasan, task.status_penugasan)}
-                                className={`p-2 rounded-full transition ${isApproved ? 'text-amber-500 hover:bg-amber-100' : 'text-green-600 hover:bg-green-100'}`}
-                                title={isApproved ? "Batalkan Persetujuan" : "Setujui Penugasan"}
-                              >
-                                {isApproved ? <FaUndoAlt size={14} /> : <FaCheckCircle size={14} />}
-                              </button>
+                              {isAdmin && (
+                                <button
+                                  onClick={(e) => handleStatusChange(e, task.id_penugasan, task.status_penugasan)}
+                                  className={`p-2 rounded-full transition ${isApproved ? 'text-amber-500 hover:bg-amber-100' : 'text-green-600 hover:bg-green-100'}`}
+                                  title={isApproved ? "Batalkan Persetujuan" : "Setujui Penugasan"}
+                                >
+                                  {isApproved ? <FaUndoAlt size={14} /> : <FaCheckCircle size={14} />}
+                                </button>
+                              )}
                               <button onClick={(e) => handleEdit(e, task.id_penugasan)} className="p-2 text-indigo-500 hover:bg-indigo-100 rounded-full transition"><FaEdit size={14} /></button>
                               <button onClick={(e) => handleDelete(e, task.id_penugasan)} className="p-2 text-red-500 hover:bg-red-100 rounded-full transition"><FaTrash size={14} /></button>
                             </div>
