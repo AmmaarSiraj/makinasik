@@ -1,11 +1,21 @@
 import React, { useState, useMemo } from 'react';
 import { FaUserTie, FaEdit, FaTrash, FaFilter, FaCalendarCheck, FaSearch } from 'react-icons/fa';
 
-const PartTableMitra = ({ data, onEdit, onDelete, onDetail, readOnly }) => { // 1. TERIMA PROPS readOnly
-  const [selectedYear, setSelectedYear] = useState('');
-  const [searchQuery, setSearchQuery] = useState(''); 
+const PartTableMitra = ({ 
+    data, 
+    onEdit, 
+    onDelete, 
+    onDetail, 
+    readOnly,
+    keyword, 
+    onSearch 
+}) => { 
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+  const [localSearch, setLocalSearch] = useState(''); 
 
-  // Ambil daftar tahun unik
+  const isServerSearch = typeof onSearch === 'function';
+  const currentSearch = isServerSearch ? keyword : localSearch;
+
   const availableYears = useMemo(() => {
     const years = new Set();
     years.add(new Date().getFullYear().toString());
@@ -21,16 +31,17 @@ const PartTableMitra = ({ data, onEdit, onDelete, onDetail, readOnly }) => { // 
     return Array.from(years).sort().reverse();
   }, [data]);
 
-  // Filter Data
   const filteredData = useMemo(() => {
     if (!selectedYear) return [];
 
-    let results = data.filter(mitra => {
-      return mitra.riwayat_tahun && mitra.riwayat_tahun.split(', ').includes(selectedYear);
-    });
+    let results = data;
 
-    if (searchQuery) {
-        const lowerQuery = searchQuery.toLowerCase();
+    results = results.filter(mitra => 
+      mitra.riwayat_tahun && mitra.riwayat_tahun.split(', ').includes(selectedYear)
+    );
+
+    if (!isServerSearch && currentSearch) {
+        const lowerQuery = currentSearch.toLowerCase();
         results = results.filter(mitra => 
             mitra.nama_lengkap.toLowerCase().includes(lowerQuery) ||
             mitra.nik.includes(lowerQuery) ||
@@ -39,18 +50,25 @@ const PartTableMitra = ({ data, onEdit, onDelete, onDetail, readOnly }) => { // 
     }
 
     return results;
-  }, [data, selectedYear, searchQuery]);
+  }, [data, selectedYear, currentSearch, isServerSearch]);
+
+  const handleSearchChange = (e) => {
+      const val = e.target.value;
+      if (isServerSearch) {
+          onSearch(val); 
+      } else {
+          setLocalSearch(val); 
+      }
+  };
 
   return (
     <div className="flex flex-col">
-      
-      {/* HEADER & FILTER */}
       <div className="px-6 py-4 bg-white border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
          <div className="flex items-center gap-4">
             <div className="bg-blue-50 text-[#1A2A80] p-2 rounded-lg"><FaFilter /></div>
             <div>
                 <h3 className="text-sm font-bold text-gray-700">Master Data Mitra</h3>
-                <p className="text-xs text-gray-500">Pilih tahun untuk melihat daftar mitra aktif.</p>
+                <p className="text-xs text-gray-500">Data ditampilkan berdasarkan tahun aktif.</p>
             </div>
          </div>
 
@@ -59,10 +77,10 @@ const PartTableMitra = ({ data, onEdit, onDelete, onDetail, readOnly }) => { // 
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><FaSearch /></span>
                 <input 
                     type="text" 
-                    placeholder="Cari Nama / ID Sobat..." 
+                    placeholder="Cari Nama / NIK..." 
                     className="w-full pl-9 pr-4 py-2 border border-gray-300 bg-gray-50 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#1A2A80] transition"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    value={currentSearch}
+                    onChange={handleSearchChange}
                 />
             </div>
 
@@ -81,7 +99,6 @@ const PartTableMitra = ({ data, onEdit, onDelete, onDetail, readOnly }) => { // 
          </div>
       </div>
 
-      {/* TABEL DATA */}
       {!selectedYear ? (
          <div className="flex flex-col items-center justify-center py-16 bg-gray-50 text-gray-400">
             <FaCalendarCheck className="text-4xl mb-3 opacity-20" />
@@ -96,17 +113,15 @@ const PartTableMitra = ({ data, onEdit, onDelete, onDetail, readOnly }) => { // 
                   <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">NIK / ID Sobat</th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Pekerjaan</th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Kontak</th>
-                  {/* 2. SEMBUNYIKAN HEADER AKSI JIKA READONLY */}
                   {!readOnly && <th className="px-6 py-4 text-right text-xs font-bold text-gray-500 uppercase">Aksi</th>}
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-100">
                 {filteredData.length === 0 ? (
                   <tr>
-                      {/* 3. SESUAIKAN COLSPAN JIKA KOLOM AKSI HILANG */}
                       <td colSpan={readOnly ? 4 : 5} className="px-6 py-12 text-center text-gray-400 italic bg-white">
-                        {searchQuery ? (
-                            <span>Tidak ditemukan data untuk pencarian "<b>{searchQuery}</b>" di tahun <b>{selectedYear}</b>.</span>
+                        {currentSearch ? (
+                            <span>Tidak ditemukan data untuk pencarian "<b>{currentSearch}</b>" di tahun <b>{selectedYear}</b>.</span>
                         ) : (
                             <span>Tidak ada mitra aktif di tahun <b>{selectedYear}</b>.</span>
                         )}
@@ -140,7 +155,6 @@ const PartTableMitra = ({ data, onEdit, onDelete, onDetail, readOnly }) => { // 
                         <div className="text-xs text-gray-400 truncate max-w-[200px]">{mitra.alamat || '-'}</div>
                       </td>
 
-                      {/* 4. SEMBUNYIKAN SEL AKSI (TOMBOL) JIKA READONLY */}
                       {!readOnly && (
                         <td className="px-6 py-4 text-right">
                             <div className="flex items-center justify-end gap-1">
