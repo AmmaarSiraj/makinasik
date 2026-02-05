@@ -32,6 +32,7 @@ const Perencanaan = () => {
 
   // --- STATE DATA ---
   const [allPerencanaan, setAllPerencanaan] = useState([]);
+  const [allPenugasan, setAllPenugasan] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // --- STATE INCOME & LIMIT ---
@@ -73,15 +74,17 @@ const Perencanaan = () => {
       const token = getToken();
       const config = { headers: { Authorization: `Bearer ${token}` } };
 
-      const [resPerencanaan, resKelompok, resHonor, resAturan] = await Promise.all([
+      const [resPerencanaan, resKelompok, resHonor, resAturan, resPenugasan] = await Promise.all([
         axios.get(`${API_URL}/api/perencanaan`, config),
         axios.get(`${API_URL}/api/kelompok-perencanaan`, config),
         axios.get(`${API_URL}/api/honorarium`, config),
-        axios.get(`${API_URL}/api/aturan-periode`, config)
+        axios.get(`${API_URL}/api/aturan-periode`, config),
+        axios.get(`${API_URL}/api/penugasan`, config)
       ]);
 
       const perencanaanData = resPerencanaan.data.data;
       setAllPerencanaan(perencanaanData);
+      setAllPenugasan(resPenugasan.data.data || []);
 
       // Mapping Honor
       const honorMap = {};
@@ -450,52 +453,85 @@ const Perencanaan = () => {
   };
 
   const handleForwardToPenugasan = async (e, idsArray, title) => {
-    e.stopPropagation();
+  e.stopPropagation();
 
-    let warningMessages = [];
+  let warningMessages = [];
+  let hasBlockingError = false;
 
-    idsArray.forEach(id => {
-      const plan = allPerencanaan.find(p => p.id_perencanaan === id);
-      if (!plan) return;
+  idsArray.forEach(id => {
+    const plan = allPerencanaan.find(p => p.id_perencanaan === id);
+    if (!plan) return;
 
-      // Validasi Volume
-      if (plan.total_alokasi > plan.target_volume) {
-        warningMessages.push(`⚠️ <b>${plan.nama_sub_kegiatan}</b>: Volume melebihi target (${plan.total_alokasi}/${plan.target_volume}).`);
-      } else if (plan.total_alokasi < plan.target_volume) {
-        warningMessages.push(`⚠️ <b>${plan.nama_sub_kegiatan}</b>: Volume belum terpenuhi (${plan.total_alokasi}/${plan.target_volume}).`);
-      }
+    // --- 1. CEK STATUS DI MENU PENUGASAN (BLOCKING) ---
+    // Cari apakah subkegiatan ini sudah ada di penugasan dan berstatus disetujui
+    const existingApprovedTask = allPenugasan.find(
+      pg => pg.id_subkegiatan === plan.id_subkegiatan && pg.status_penugasan === 'disetujui'
+    );
 
-      // Validasi Pendapatan
-      const members = membersCache[id] || [];
-      const taskDate = new Date(plan.tanggal_mulai);
-      const y = taskDate.getFullYear();
-      const m = taskDate.getMonth();
-      const monthlyLimit = limitMap[y] || 0;
+    if (existingApprovedTask) {
+      warningMessages.push(`⛔ <b>${plan.nama_sub_kegiatan}</b>: Penugasan untuk subkegiatan ini sudah disetujui di menu Penugasan.`);
+      hasBlockingError = true;
+    }
 
-      if (monthlyLimit > 0) {
-        members.forEach(member => {
-          const key = `${member.id_mitra}-${y}-${m}`;
-          const totalIncome = incomeStats[key] || 0;
+    // --- 2. VALIDASI VOLUME (BLOCKING jika Over) ---
+    if (plan.total_alokasi > plan.target_volume) {
+      warningMessages.push(`⚠️ <b>${plan.nama_sub_kegiatan}</b>: Volume melebihi target (${plan.total_alokasi}/${plan.target_volume}).`);
+      hasBlockingError = true; 
+    } else if (plan.total_alokasi < plan.target_volume) {
+      warningMessages.push(`⚠️ <b>${plan.nama_sub_kegiatan}</b>: Volume belum terpenuhi (${plan.total_alokasi}/${plan.target_volume}).`);
+    }
 
-          if (totalIncome > monthlyLimit) {
-            warningMessages.push(`⚠️ <b>${member.nama_lengkap}</b>: Pendapatan Total (${formatRupiah(totalIncome)}) melebihi batas.`);
-          }
-        });
-      }
-    });
+    // --- 3. VALIDASI PENDAPATAN (BLOCKING jika Over) ---
+    const members = membersCache[id] || [];
+    const taskDate = new Date(plan.tanggal_mulai);
+    const y = taskDate.getFullYear();
+    const m = taskDate.getMonth();
+    const monthlyLimit = limitMap[y] || 0;
 
-    if (warningMessages.length > 0) {
-      const uniqueWarnings = [...new Set(warningMessages)];
-      const confirmResult = await Swal.fire({
-        title: 'Peringatan Batas/Volume',
+    if (monthlyLimit > 0) {
+      members.forEach(member => {
+        const key = `${member.id_mitra}-${y}-${m}`;
+        const totalIncome = incomeStats[key] || 0;
+
+        if (totalIncome > monthlyLimit) {
+          warningMessages.push(`⚠️ <b>${member.nama_lengkap}</b>: Pendapatan Total (${formatRupiah(totalIncome)}) melebihi batas.`);
+          hasBlockingError = true;
+        }
+      });
+    }
+  });
+
+  if (warningMessages.length > 0) {
+    const uniqueWarnings = [...new Set(warningMessages)];
+
+    if (hasBlockingError) {
+      await Swal.fire({
+        title: 'Tidak Dapat Meneruskan',
         html: `
-                <div style="text-align:left; font-size:13px; max-height:200px; overflow-y:auto;">
-                    Beberapa data melebihi target atau batas honor:<br/><br/>
-                    ${uniqueWarnings.join('<br/>')}
-                    <br/><br/>
-                    <b>Apakah Anda ingin tetap meneruskan data ini?</b>
-                </div>
-            `,
+          <div style="text-align:left; font-size:13px; max-height:200px; overflow-y:auto;">
+              Proses dihentikan karena terdapat data yang sudah disetujui atau melanggar batas:<br/><br/>
+              ${uniqueWarnings.join('<br/>')}
+          </div>
+        `,
+        icon: 'error',
+        showConfirmButton: false, // Tombol "Ya" HILANG sesuai permintaan
+        showCancelButton: true,
+        cancelButtonColor: '#d33',
+        cancelButtonText: 'Tutup'
+      });
+      return; 
+    } else {
+      // Jika hanya warning (misal volume kurang), tombol tetap muncul
+      const confirmResult = await Swal.fire({
+        title: 'Peringatan Volume',
+        html: `
+            <div style="text-align:left; font-size:13px; max-height:200px; overflow-y:auto;">
+                Beberapa target belum sepenuhnya terpenuhi:<br/><br/>
+                ${uniqueWarnings.join('<br/>')}
+                <br/><br/>
+                <b>Apakah Anda ingin tetap meneruskan data ini?</b>
+            </div>
+        `,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#f59e0b',
@@ -505,35 +541,36 @@ const Perencanaan = () => {
       });
 
       if (!confirmResult.isConfirmed) return;
-    } else {
-      const finalConfirm = await Swal.fire({
-        title: 'Teruskan ke Penugasan?',
-        html: `Anda akan menyalin data perencanaan <b>${title}</b> ke menu Penugasan.<br/>Data Perencanaan asli tidak akan berubah.`,
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonColor: '#1A2A80',
-        confirmButtonText: 'Ya, Teruskan'
-      });
-      if (!finalConfirm.isConfirmed) return;
     }
+  } else {
+    // KONDISI BERSIH
+    const finalConfirm = await Swal.fire({
+      title: 'Teruskan ke Penugasan?',
+      html: `Anda akan menyalin data perencanaan <b>${title}</b> ke menu Penugasan.`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#1A2A80',
+      confirmButtonText: 'Ya, Teruskan'
+    });
+    if (!finalConfirm.isConfirmed) return;
+  }
 
-    try {
-      const token = getToken();
-      const response = await axios.post(`${API_URL}/api/penugasan/import-perencanaan`, {
-        ids_perencanaan: idsArray
-      }, { headers: { Authorization: `Bearer ${token}` } });
+  // EKSEKUSI API
+  try {
+    const token = getToken();
+    const response = await axios.post(`${API_URL}/api/penugasan/import-perencanaan`, {
+      ids_perencanaan: idsArray
+    }, { headers: { Authorization: `Bearer ${token}` } });
 
-      Swal.fire({
-        title: 'Berhasil!',
-        text: response.data.message,
-        icon: 'success'
-      });
+    Swal.fire('Berhasil!', response.data.message, 'success');
+    // Refresh data penugasan setelah import
+    const resPenugasan = await axios.get(`${API_URL}/api/penugasan`, { headers: { Authorization: `Bearer ${token}` } });
+    setAllPenugasan(resPenugasan.data.data || []);
 
-    } catch (err) {
-      console.error(err);
-      Swal.fire('Gagal', err.response?.data?.message || 'Gagal meneruskan data.', 'error');
-    }
-  };
+  } catch (err) {
+    Swal.fire('Gagal', err.response?.data?.message || 'Gagal meneruskan data.', 'error');
+  }
+};
 
   if (isLoading) return <div className="text-center py-10 text-gray-500">Memuat data Perencanaan...</div>;
 
