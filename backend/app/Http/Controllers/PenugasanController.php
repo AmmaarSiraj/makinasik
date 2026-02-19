@@ -438,7 +438,7 @@ class PenugasanController extends Controller
                     'p.status_penugasan',
                     DB::raw("IFNULL(h.tarif, 0) as harga_satuan"),
                     DB::raw("(kp.volume_tugas * IFNULL(h.tarif, 0)) as total_honor"),
-                    DB::raw("COALESCE(h.beban_anggaran) as beban_anggaran")
+                    'h.beban_anggaran'
                 ])
                 ->orderBy('s.tanggal_mulai', 'asc')
                 ->get();
