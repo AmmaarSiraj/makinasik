@@ -48,6 +48,52 @@ class MasterTemplateSPKTest extends TestCase
             'is_active'     => false 
         ]);
     }
+    public function test_index_template_spk_berhasil()
+    {
+        $this->authenticateAdmin();
+        MasterTemplateSPK::create(['nama_template' => 'Template A']);
+        MasterTemplateSPK::create(['nama_template' => 'Template B']);
+
+        $response = $this->getJson('/api/template-spk');
+
+        $response->assertStatus(200)
+                 ->assertJsonCount(2, 'data');
+    }
+
+    /**
+     * TEST: Update Template Lengkap (Meningkatkan Coverage Update)
+     * Menguji pembaruan Nama, Bagian Teks, dan Pasal sekaligus.
+     */
+    public function test_update_template_lengkap_berhasil()
+    {
+        $this->authenticateAdmin();
+        $template = MasterTemplateSPK::create(['nama_template' => 'Template Awal']);
+
+        $payload = [
+            'nama_template' => 'Template Diperbarui',
+            'parts' => [
+                'pembuka' => 'Teks pembuka baru',
+                'penutup' => 'Teks penutup baru'
+            ],
+            'articles' => [
+                [
+                    'nomor_pasal' => '1',
+                    'judul_pasal' => 'Pasal Baru',
+                    'isi_pasal'   => 'Isi pasal baru'
+                ]
+            ]
+        ];
+
+        $response = $this->putJson("/api/template-spk/{$template->id}", $payload);
+
+        $response->assertStatus(200)
+                 ->assertJsonPath('data.nama_template', 'Template Diperbarui');
+
+        // Pastikan data tersimpan di database
+        $this->assertDatabaseHas('master_template_spk', ['nama_template' => 'Template Diperbarui']);
+        $this->assertDatabaseHas('template_bagian_teks', ['isi_teks' => 'Teks pembuka baru']);
+        $this->assertDatabaseHas('template_pasal', ['judul_pasal' => 'Pasal Baru']);
+    }
 
     /**
      * TEST 2: Fitur Set Active (Toggle)
