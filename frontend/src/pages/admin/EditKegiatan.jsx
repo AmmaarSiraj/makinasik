@@ -20,10 +20,10 @@ const EditKegiatan = () => {
   const [indukData, setIndukData] = useState({ nama_kegiatan: '', deskripsi: '' });
   const [subKegiatans, setSubKegiatans] = useState([]);
 
-  // State Pelacakan Hapus
+  // State untuk melacak ID awal (untuk fitur hapus)
   const [originalSubIds, setOriginalSubIds] = useState([]);
-  // [FIX 1] Hapus originalHonorIds karena membingungkan logic save hybrid
-  
+  const [originalHonorIds, setOriginalHonorIds] = useState([]); // [BARU] Melacak honor awal
+
   // --- FETCH DATA ---
   useEffect(() => {
     fetchData();
@@ -47,9 +47,17 @@ const EditKegiatan = () => {
       });
 
       const allHonors = resHonor.data.data;
+      
+      // [BARU] Simpan semua ID honor yang terkait dengan kegiatan ini sejak awal
+      // Kita perlu filter honor yang id_subkegiatan-nya ada di list sub kegiatan kita
+      const currentSubIdsFromDb = resSub.data.map(s => s.id);
+      const relevantHonors = allHonors.filter(h => currentSubIdsFromDb.includes(h.id_subkegiatan));
+      setOriginalHonorIds(relevantHonors.map(h => h.id || h.id_honorarium));
+
       const mappedSubs = resSub.data.map(sub => {
         const myHonors = allHonors.filter(h => h.id_subkegiatan === sub.id).map(h => ({
-          id: h.id_honorarium, 
+          // Pastikan ID tersimpan dengan benar
+          id: h.id || h.id_honorarium, 
           kode_jabatan: h.kode_jabatan,
           tarif: Number(h.tarif),
           id_satuan: h.id_satuan,
@@ -89,10 +97,9 @@ const EditKegiatan = () => {
 
   const addSubCard = () => {
     setSubKegiatans([...subKegiatans, { 
-      id: Date.now(), // ID Sementara
+      id: Date.now(), 
       nama_sub_kegiatan: '', 
       deskripsi: '', honorList: [] 
-      // ...field lain kosong
     }]);
   };
 
@@ -108,7 +115,34 @@ const EditKegiatan = () => {
     const config = { headers: { Authorization: `Bearer ${token}` } };
 
     try {
-      // 1. Hapus Sub Kegiatan yang dibuang user
+      // --- LANGKAH 1: UPDATE KEGIATAN INDUK ---
+      await axios.put(`${API_URL}/api/kegiatan/${id}`, indukData, config);
+
+      // --- LANGKAH 2: DETEKSI & HAPUS HONOR YANG DIBUANG ---
+      // Kumpulkan ID honor yang masih ada di UI saat ini
+      const currentHonorIds = [];
+      subKegiatans.forEach(sub => {
+        sub.honorList.forEach(h => {
+          const hId = h.id || h.id_honorarium;
+          // Hanya masukkan ID valid (bukan ID sementara timestamp dari Date.now())
+          if (hId && (typeof hId !== 'number' || hId < 9999999999)) { 
+            currentHonorIds.push(hId);
+          }
+        });
+      });
+
+      // Bandingkan: ID yang ada di Original tapi TIDAK ada di Current = HARUS DIHAPUS
+      // (Ini otomatis mencakup honor yang hilang karena Sub-Kegiatannya dihapus)
+      const honorsToDelete = originalHonorIds.filter(oldId => !currentHonorIds.includes(oldId));
+
+      if (honorsToDelete.length > 0) {
+        // Hapus honor terlebih dahulu agar Sub-Kegiatan bisa dihapus (Menghindari error FK Constraint)
+        await Promise.all(honorsToDelete.map(delId => 
+           axios.delete(`${API_URL}/api/honorarium/${delId}`, config).catch(e => console.warn("Skip error delete honor", e))
+        ));
+      }
+
+      // --- LANGKAH 3: HAPUS SUB KEGIATAN YANG DIBUANG ---
       const currentSubIds = subKegiatans.map(s => s.id);
       const subsToDelete = originalSubIds.filter(oldId => !currentSubIds.includes(oldId));
       
@@ -118,10 +152,7 @@ const EditKegiatan = () => {
           ));
       }
 
-      // 2. Update Kegiatan Induk
-      await axios.put(`${API_URL}/api/kegiatan/${id}`, indukData, config);
-
-      // 3. Loop Upsert Sub Kegiatan
+      // --- LANGKAH 4: UPSERT (INSERT/UPDATE) SUB KEGIATAN & HONOR ---
       for (const sub of subKegiatans) {
         let subId = sub.id;
         
@@ -137,48 +168,39 @@ const EditKegiatan = () => {
           close_req: sub.close_req
         };
 
-        // Cek apakah Sub Kegiatan Baru atau Lama
-        const isNewSub = typeof sub.id === 'number' && sub.id > 999999; // Asumsi ID timestamp
+        const isNewSub = typeof sub.id === 'number' && sub.id > 999999; 
 
         if (isNewSub) {
-          // INSERT Sub Baru
           const res = await axios.post(`${API_URL}/api/subkegiatan`, {
              ...payloadSub, mode_kegiatan: 'existing'
           }, config);
-          subId = res.data.data.id; // Update ID Sub dengan yang asli dari DB
+          subId = res.data.data.id; 
         } else {
-          // UPDATE Sub Lama
           await axios.put(`${API_URL}/api/subkegiatan/${subId}/info`, payloadSub, config);
         }
 
-        // [FIX 2] LOGIKA HONORARIUM DIPERBAIKI
-        // Kita loop honorList, tapi harus hati-hati karena PartManageHonor mungkin sudah menyimpan datanya.
-        // Strategi: 
-        // 1. Jika Sub Kegiatan BARU -> Kita WAJIB simpan honorariumnya (karena PartManageHonor gagal simpan kalau induk blm ada).
-        // 2. Jika Sub Kegiatan LAMA -> Kita asumsikan PartManageHonor sudah menangani Insert/Delete/Update, 
-        //    tapi kita lakukan UPDATE (PUT) saja untuk memastikan data form terakhir tersimpan (misal user edit tarif tapi lupa klik simpan kecil).
-        
+        // Loop Honorarium
         for (const h of sub.honorList) {
-          const payloadHonor = {
-            id_subkegiatan: subId, 
-            kode_jabatan: h.kode_jabatan,
-            tarif: h.tarif,
-            id_satuan: h.id_satuan || 1, 
-            basis_volume: h.basis_volume || 1,
-            beban_anggaran: h.beban_anggaran 
-          };
+          try {
+              const payloadHonor = {
+                id_subkegiatan: subId, 
+                kode_jabatan: h.kode_jabatan,
+                tarif: h.tarif,
+                id_satuan: h.id_satuan || 1, 
+                basis_volume: h.basis_volume || 1,
+                beban_anggaran: h.beban_anggaran 
+              };
 
-          // Logic Deteksi Insert vs Update
-          // Jika ID honor ada di DB, dia pasti bukan timestamp (asumsi ID DB auto-increment kecil atau UUID string)
-          const isNewHonor = !h.id || (typeof h.id === 'number' && h.id > 999999999); 
+              const hId = h.id || h.id_honorarium;
+              const isNewHonor = !hId || (typeof hId === 'number' && hId > 999999999); 
 
-          if (isNewHonor) {
-            // INSERT (Hanya jika belum punya ID valid)
-            await axios.post(`${API_URL}/api/honorarium`, payloadHonor, config);
-          } else {
-            // UPDATE (Jika sudah punya ID valid)
-            // Ini aman dilakukan berulang (idempotent)
-            await axios.put(`${API_URL}/api/honorarium/${h.id}`, payloadHonor, config);
+              if (isNewHonor) {
+                await axios.post(`${API_URL}/api/honorarium`, payloadHonor, config);
+              } else {
+                await axios.put(`${API_URL}/api/honorarium/${hId}`, payloadHonor, config);
+              }
+          } catch (honorErr) {
+              console.warn(`Gagal simpan honor ${h.kode_jabatan}`, honorErr);
           }
         }
       }
@@ -195,7 +217,7 @@ const EditKegiatan = () => {
 
     } catch (err) {
       console.error(err);
-      Swal.fire('Gagal', err.response?.data?.message || 'Terjadi kesalahan.', 'error');
+      Swal.fire('Gagal', err.response?.data?.message || 'Terjadi kesalahan saat menyimpan.', 'error');
     } finally {
       setSaving(false);
     }
@@ -262,9 +284,6 @@ const EditKegiatan = () => {
           <PartSubKegiatan 
             subKegiatans={subKegiatans} 
             setSubKegiatans={setSubKegiatans}
-            // PENTING: Jika PartManageHonor melakukan refresh data, kita harus sync ulang
-            // Tapi karena EditKegiatan memegang master state, idealnya PartManageHonor hanya update state lokal jika SubKegiatan BARU
-            // Jika SubKegiatan LAMA, PartManageHonor boleh refresh.
             onRefresh={fetchData} 
           />
 

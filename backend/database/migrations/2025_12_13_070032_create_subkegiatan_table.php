@@ -9,7 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // 1. Buat Tabel
+        // 1. Buat Tabel (Tetap dieksekusi untuk semua database)
         Schema::create('subkegiatan', function (Blueprint $table) {
             $table->string('id', 50)->primary(); // ID string, bukan auto increment integer
             
@@ -29,30 +29,35 @@ return new class extends Migration
             $table->timestamp('updated_at')->nullable()->useCurrentOnUpdate();
         });
 
-        // 2. Buat Trigger (Logika penomoran otomatis 'sub1', 'sub2'...)
-        // Kita copy logika dari file subkegiatan.sql Anda
-        DB::unprepared('
-            CREATE TRIGGER `tg_subkegiatan_before_insert` BEFORE INSERT ON `subkegiatan`
-            FOR EACH ROW BEGIN
-                DECLARE max_id INT DEFAULT 0;
-                
-                -- Ambil angka tertinggi dari ID yang ada (misal sub10 -> 10)
-                SELECT MAX(CAST(SUBSTRING(id, 4) AS UNSIGNED)) INTO max_id FROM subkegiatan;
-                
-                IF max_id IS NULL THEN
-                    SET max_id = 0;
-                END IF;
-                
-                -- Set ID baru (misal sub11)
-                SET NEW.id = CONCAT("sub", max_id + 1);
-            END
-        ');
+        // 2. Buat Trigger (Hanya dijalankan jika database yang digunakan adalah MySQL)
+        if (DB::connection()->getDriverName() === 'mysql') {
+            DB::unprepared('
+                CREATE TRIGGER `tg_subkegiatan_before_insert` BEFORE INSERT ON `subkegiatan`
+                FOR EACH ROW BEGIN
+                    DECLARE max_id INT DEFAULT 0;
+                    
+                    -- Ambil angka tertinggi dari ID yang ada (misal sub10 -> 10)
+                    SELECT MAX(CAST(SUBSTRING(id, 4) AS UNSIGNED)) INTO max_id FROM subkegiatan;
+                    
+                    IF max_id IS NULL THEN
+                        SET max_id = 0;
+                    END IF;
+                    
+                    -- Set ID baru (misal sub11)
+                    SET NEW.id = CONCAT("sub", max_id + 1);
+                END
+            ');
+        }
     }
 
     public function down(): void
     {
-        // Hapus trigger dulu baru tabel
-        DB::unprepared('DROP TRIGGER IF EXISTS `tg_subkegiatan_before_insert`');
+        // Hapus trigger HANYA JIKA menggunakan MySQL
+        if (DB::connection()->getDriverName() === 'mysql') {
+            DB::unprepared('DROP TRIGGER IF EXISTS `tg_subkegiatan_before_insert`');
+        }
+        
+        // Hapus Tabel
         Schema::dropIfExists('subkegiatan');
     }
 };
