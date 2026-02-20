@@ -55,42 +55,9 @@ class KelompokPenugasanTest extends TestCase
         return $penugasan;
     }
 
-    /**
-     * PENGUJIAN 1: STORE ANGGOTA & CEK DUPLIKASI (400)
-     */
-    public function test_tambah_anggota_berhasil_dan_gagal_jika_mitra_sudah_ada_di_tim()
-    {
-        $admin = $this->authenticateAdmin();
-        $penugasan = $this->siapkanDataInduk($admin);
-        $mitra = Mitra::create(['nama_lengkap' => 'Budi', 'nik' => '111', 'nomor_hp' => '081']);
-
-        // 1. Tambah Mitra Budi ke Penugasan (SUKSES)
-        $response1 = $this->postJson('/api/kelompok-penugasan', [
-            'id_penugasan' => $penugasan->id,
-            'id_mitra'     => $mitra->id,
-            'kode_jabatan' => 'PCL',
-            'volume_tugas' => 1
-        ]);
-
-        $response1->assertStatus(201)
-                  ->assertJsonPath('status', 'success');
-
-        // 2. Coba tambahkan Budi LAGI ke Penugasan yang sama (GAGAL 400)
-        $response2 = $this->postJson('/api/kelompok-penugasan', [
-            'id_penugasan' => $penugasan->id,
-            'id_mitra'     => $mitra->id, // Duplikat di penugasan yang sama
-            'kode_jabatan' => 'PCL',
-            'volume_tugas' => 2
-        ]);
-
-        // Membuktikan validasi $exists di controller bekerja
-        $response2->assertStatus(400)
-                  ->assertJsonPath('message', 'Mitra ini sudah ada dalam tim penugasan tersebut.');
-    }
-
-    /**
-     * PENGUJIAN 2: CEK FORMAT MAP (INDEX)
-     */
+    /* ==============================================================
+       PENGUJIAN FUNGSI INDEX
+    ============================================================== */
     public function test_index_mengembalikan_format_data_yang_dimanipulasi_dengan_benar()
     {
         $admin = $this->authenticateAdmin();
@@ -116,9 +83,52 @@ class KelompokPenugasanTest extends TestCase
         $this->assertEquals(5, $data['volume_tugas']);
     }
 
-    /**
-     * PENGUJIAN 3: UPDATE & DELETE ANGGOTA
-     */
+    /* ==============================================================
+       PENGUJIAN FUNGSI STORE
+    ============================================================== */
+    public function test_tambah_anggota_berhasil_dan_gagal_jika_mitra_sudah_ada_di_tim()
+    {
+        $admin = $this->authenticateAdmin();
+        $penugasan = $this->siapkanDataInduk($admin);
+        $mitra = Mitra::create(['nama_lengkap' => 'Budi', 'nik' => '111', 'nomor_hp' => '081']);
+
+        // 1. Tambah Mitra Budi ke Penugasan (SUKSES)
+        $response1 = $this->postJson('/api/kelompok-penugasan', [
+            'id_penugasan' => $penugasan->id,
+            'id_mitra'     => $mitra->id,
+            'kode_jabatan' => 'PCL',
+            'volume_tugas' => 1
+        ]);
+
+        $response1->assertStatus(201)
+                  ->assertJsonPath('status', 'success');
+
+        // 2. Coba tambahkan Budi LAGI ke Penugasan yang sama (GAGAL 400 DUPLIKAT)
+        $response2 = $this->postJson('/api/kelompok-penugasan', [
+            'id_penugasan' => $penugasan->id,
+            'id_mitra'     => $mitra->id, 
+            'kode_jabatan' => 'PCL',
+            'volume_tugas' => 2
+        ]);
+
+        $response2->assertStatus(400)
+                  ->assertJsonPath('message', 'Mitra ini sudah ada dalam tim penugasan tersebut.');
+    }
+
+    public function test_tambah_anggota_gagal_karena_validasi()
+    {
+        $this->authenticateAdmin();
+
+        // Mengirim request kosong untuk memicu error 422
+        $response = $this->postJson('/api/kelompok-penugasan', []);
+
+        $response->assertStatus(422)
+                 ->assertJsonStructure(['errors' => ['id_penugasan', 'id_mitra', 'kode_jabatan', 'volume_tugas']]);
+    }
+
+    /* ==============================================================
+       PENGUJIAN FUNGSI UPDATE & DESTROY
+    ============================================================== */
     public function test_update_volume_dan_hapus_anggota_berhasil()
     {
         $admin = $this->authenticateAdmin();
@@ -151,5 +161,24 @@ class KelompokPenugasanTest extends TestCase
                        ->assertJsonPath('message', 'Mitra berhasil dihapus dari penugasan.');
                        
         $this->assertDatabaseMissing('kelompok_penugasan', ['id' => $anggota->id]);
+    }
+
+    public function test_update_dan_hapus_anggota_gagal_karena_tidak_ditemukan()
+    {
+        $this->authenticateAdmin();
+
+        // Gunakan ID sembarang yang pasti tidak ada di database
+        $idNgawur = 99999;
+
+        // 1. Update Not Found (404)
+        $responseUpdate = $this->putJson('/api/kelompok-penugasan/' . $idNgawur, [
+            'kode_jabatan' => 'PCL',
+            'volume_tugas' => 10
+        ]);
+        $responseUpdate->assertStatus(404)->assertJsonPath('message', 'Data tidak ditemukan');
+
+        // 2. Delete Not Found (404)
+        $responseDelete = $this->deleteJson('/api/kelompok-penugasan/' . $idNgawur);
+        $responseDelete->assertStatus(404)->assertJsonPath('message', 'Data tidak ditemukan');
     }
 }

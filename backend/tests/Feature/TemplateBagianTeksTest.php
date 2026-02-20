@@ -68,4 +68,24 @@ class TemplateBagianTeksTest extends TestCase
             'isi_teks'     => 'Teks Pembuka Diperbarui'
         ]);
     }
+
+    /**
+     * PENGUJIAN FUNGSI: Relasi template() di Model
+     * INI YANG AKAN MEMBUAT COVERAGE MODEL MENJADI 100%
+     */
+    public function test_model_template_bagian_teks_relation()
+    {
+        $templateMaster = MasterTemplateSPK::create(['nama_template' => 'Template Uji Relasi']);
+        
+        $bagianTeks = TemplateBagianTeks::create([
+            'template_id' => $templateMaster->id,
+            'jenis_bagian' => 'penutup',
+            'isi_teks' => 'Demikian surat ini dibuat...'
+        ]);
+
+        // Pastikan relasi mengembalikan instance dari MasterTemplateSPK
+        $this->assertInstanceOf(MasterTemplateSPK::class, $bagianTeks->template);
+        // Pastikan ID relasinya cocok
+        $this->assertEquals($templateMaster->id, $bagianTeks->template->id);
+    }
 }

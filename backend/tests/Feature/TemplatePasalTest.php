@@ -60,4 +60,26 @@ class TemplatePasalTest extends TestCase
         $response->assertStatus(200);
         $this->assertDatabaseMissing('template_pasal', ['id' => $pasal->id]);
     }
+
+    /**
+     * PENGUJIAN FUNGSI: Relasi template() di Model
+     * INI YANG AKAN MEMBUAT COVERAGE MODEL MENJADI 100%
+     */
+    public function test_model_template_pasal_relation()
+    {
+        $templateMaster = MasterTemplateSPK::create(['nama_template' => 'Template Uji Pasal']);
+        
+        $pasal = TemplatePasal::create([
+            'template_id' => $templateMaster->id,
+            'nomor_pasal' => '3',
+            'judul_pasal' => 'Ketentuan Lainnya',
+            'isi_pasal'   => 'Ini isi pasal pengujian...',
+            'urutan'      => 3
+        ]);
+
+        // Pastikan relasi mengembalikan instance dari MasterTemplateSPK
+        $this->assertInstanceOf(MasterTemplateSPK::class, $pasal->template);
+        // Pastikan ID relasinya cocok
+        $this->assertEquals($templateMaster->id, $pasal->template->id);
+    }
 }
